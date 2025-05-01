@@ -109,10 +109,10 @@ response = client.responses.create(
     input=prompt
 )
 
-print(response)
-print("\n*************\n")
-print(response.output_text)
+#print(response)
+#print("\n*************\n")
+#print(response.output_text)
 
-pdf = MarkdownPdf(toc_level=2, optimize=True)
+pdf = MarkdownPdf(toc_level=1)
 pdf.add_section(Section(response.output_text))
 pdf.save("huntreport.pdf")
