@@ -1,0 +1,27 @@
+[Unit]
+Description=PEAK Research Assistant Service
+After=network.target
+
+[Service]
+# Set the working directory where the script and input files are located
+WorkingDirectory=/path/to/your/project
+
+# Command to initialize pyenv and activate the virtual environment
+ExecStart=/bin/bash -c "source ~/.bashrc && pyenv activate peak-assistant && python run_endpoint.py team-config-gpt-4.1.json \
+    --ssl-certfile cert.pem \
+    --ssl-keyfile key.pem \
+    --env-file ../.env"
+
+# Restart the service automatically if it crashes
+Restart=always
+RestartSec=5
+
+# Environment variables (if needed)
+Environment="PYTHONUNBUFFERED=1"
+
+# User and group to run the service
+User=your-username
+Group=your-group
+
+[Install]
+WantedBy=multi-user.target
