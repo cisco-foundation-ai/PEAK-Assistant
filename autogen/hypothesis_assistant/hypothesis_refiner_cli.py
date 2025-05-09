@@ -8,7 +8,7 @@ import asyncio  # Import asyncio for running async functions
 
 from autogen_agentchat.messages import TextMessage
 from autogen_ext.models.openai import AzureOpenAIChatCompletionClient
-from autogen_agentchat.agents import AssistantAgent
+from autogen_agentchat.agents import AssistantAgent, UserProxyAgent
 from autogen_agentchat.base import TaskResult
 from autogen_agentchat.conditions import TextMentionTermination
 from autogen_agentchat.teams import RoundRobinGroupChat
@@ -26,7 +26,7 @@ def find_dotenv_file():
         current_dir = current_dir.parent
     return None  # No .env file found
 
-async def refiner(hypothesis: str, user_context: str, research_document: str, verbose: bool = False) -> str:
+async def refiner(hypothesis: str, user_context: str, research_document: str, automated: bool = False, verbose: bool = False) -> str:
     """
     Threat hunting hypothesis refiner agent that combines user input, a markdown document, and its own prompt
     to generate output using an OpenAI model on Azure.
@@ -72,7 +72,7 @@ async def refiner(hypothesis: str, user_context: str, research_document: str, ve
         is specific enough, whether it is relevant to the research document, and whether it is actionable. 
         
         For each input hypothesis, if you believe it is a "good" hypothesis, you will return the hypothesis as-is, 
-        followed by the string "YYY-HYPOTHESIS-ACCEPTED-YYY" on a new line. For "good" hypotheses, do not
+        followed by the string "YYY-HYPOTHESIS-CANDIDATE-YYY" on a new line. For "good" hypotheses, do not
         include any additional commentary or notes of your own. If the hypothesis is not a good
         hypothesis, you will return a list of up to 5 reasons why you believe it is not a good hypothesis and 
         what the user could do to correct these issues. Do not improve the hypothesis yourself.
@@ -96,6 +96,9 @@ async def refiner(hypothesis: str, user_context: str, research_document: str, ve
         system_message=refiner_system_prompt
     )
 
+    if automated:
+        critic_system_prompt = critic_system_prompt.replace("YYY-HYPOTHESIS-CANDIDATE-YYY", "YYY-HYPOTHESIS-ACCEPTED-YYY")
+
     # Create the critic agent.
     critic_agent = AssistantAgent(
         "critic",
@@ -103,11 +106,23 @@ async def refiner(hypothesis: str, user_context: str, research_document: str, ve
         system_message=critic_system_prompt
     )
 
+    if not automated:
+        # Put the human in the loop
+        human_feedback = UserProxyAgent(
+            "human_feedback"
+        ) 
+        agent_list = [critic_agent, human_feedback, refiner_agent]
+    else:
+        agent_list = [critic_agent, refiner_agent]
+
     # Define a termination condition that stops the task if the critic approves.
     text_termination = TextMentionTermination("YYY-HYPOTHESIS-ACCEPTED-YYY")
 
     # Create a team with the primary and critic agents.
-    team = RoundRobinGroupChat([critic_agent, refiner_agent], termination_condition=text_termination)
+    team = RoundRobinGroupChat(
+        agent_list,
+        termination_condition=text_termination
+    )
 
     messages = [
         TextMessage(content=f"Here is the user's hypothesis: {hypothesis}\n", source="user"),
@@ -138,7 +153,15 @@ if __name__ == "__main__":
     parser.add_argument('-r', '--research', help='Path to the research document (markdown file)', required=True)
     parser.add_argument('-c', '--context', help='Additional context or guidelines', required=False, default="")
     parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output', default=False)
+    parser.add_argument('-a', '--automated', action='store_true', help='Enable automated mode', default=False)
+
+    # Parse the arguments
     args = parser.parse_args()
+
+    # Enforce verbose behavior based on the automated flag
+    if not args.automated:
+        # Force verbose to True if not in automated mode
+        args.verbose = True
 
     # Load environment variables
     if args.environment:
@@ -173,15 +196,19 @@ if __name__ == "__main__":
             hypothesis=args.hypothesis, 
             user_context=args.context, 
             research_document=research_data,
+            automated=args.automated,
             verbose=args.verbose
         )
     )
 
-    # Extract the refined hypothesis
-    refined_hypothesis = messages.messages[-1].content
+    # Find the final message from the "critic" agent using next() and a generator expression
+    refined_hypothesis_message = next(
+        (message.content for message in reversed(messages.messages) if message.source == "critic"),
+        None  # Default value if no "critic" message is found
+    )
 
     # Remove the trailing "YYY-HYPOTHESIS-ACCEPTED-YYY" string
-    refined_hypothesis = refined_hypothesis.replace("YYY-HYPOTHESIS-ACCEPTED-YYY", "").strip()
+    refined_hypothesis = refined_hypothesis_message.replace("YYY-HYPOTHESIS-ACCEPTED-YYY", "").strip()
 
     # Print the refined hypothesis
     print("Refined Hypothesis:")
