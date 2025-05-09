@@ -168,15 +168,21 @@ if __name__ == "__main__":
         exit(1)
 
     # Run the hypothesizer asynchronously
-    messages = asyncio.run(refiner(
-        hypothesis=args.hypothesis, 
-        user_context=args.context, 
-        research_document=research_data,
-        verbose=args.verbose
-        ))
+    messages = asyncio.run(
+        refiner(
+            hypothesis=args.hypothesis, 
+            user_context=args.context, 
+            research_document=research_data,
+            verbose=args.verbose
+        )
+    )
 
+    # Extract the refined hypothesis
     refined_hypothesis = messages.messages[-1].content
 
-    print("\n======================\n")
+    # Remove the trailing "YYY-HYPOTHESIS-ACCEPTED-YYY" string
+    refined_hypothesis = refined_hypothesis.replace("YYY-HYPOTHESIS-ACCEPTED-YYY", "").strip()
+
+    # Print the refined hypothesis
     print("Refined Hypothesis:")
     print(refined_hypothesis)
