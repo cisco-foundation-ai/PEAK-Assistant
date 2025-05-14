@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 
 import os
-import argparse 
-from pathlib import Path 
+import argparse
+from pathlib import Path
 from dotenv import load_dotenv
-import asyncio  # Import asyncio for running async functions
+import asyncio
 
 from autogen_core.models import UserMessage, SystemMessage
 from autogen_ext.models.openai import AzureOpenAIChatCompletionClient
-from azure.identity import DefaultAzureCredential
 
 def find_dotenv_file():
     """Search for a .env file in current directory and parent directories"""

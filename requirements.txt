@@ -1,6 +1,7 @@
-flask
-requests
 python-dotenv
-openai
 markdown-pdf
 tavily-python
+autogen
+autogen-agentchat
+autogen-ext
+openai
