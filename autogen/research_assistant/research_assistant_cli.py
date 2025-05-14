@@ -195,7 +195,7 @@ async def researcher(technique: str, verbose: bool = True) -> str:
         Always cite your sources and include links for further reading.
     """
 
-    critic_system_prompt = """
+    research_critic_system_prompt = """
         You are an expert research verification specialist and expert cybersecurity 
         threat hunter. Your job is to critically evaluate the research findings
         provided by the research assistant. Your goal is to ensure that the
@@ -263,7 +263,8 @@ async def researcher(technique: str, verbose: bool = True) -> str:
 
         Format the output as a simple Markdown report. Be sure to include these sections:
         - A brief descriptive title. This should just be the name of the technique, 
-          if there is one in common use. Otherwise, make up something short.
+          if there is one in common use. Otherwise, make up something short. (e.g., 
+          "Kerberoasting", "Lateral Movement via SMB", "Credential Dumping")
         - The relevant MITRE ATT&CK ids & URLs. If there are multiple ATT&CK ids, list 
           them in the order they are most commonly used in the attack lifecycle.
         - A brief description of why this technique is used. Call this section "Overview".
@@ -272,7 +273,7 @@ async def researcher(technique: str, verbose: bool = True) -> str:
           most commonly associated with this technique. If this technique is in wide 
           use by many threat actors, just note that instead. Call this section "Threat Actors".
         - A detailed description of how the technqique is performed, written for a 
-          knowledgable technical audience. Include example commands or code, as 
+          knowledgable technical audience. Include example log entries, commands, or code, as 
           appropriate. Explain things in enough detail that a technically knowledgable 
           threat hunter or red teamer could replicate the process step-by-step. 
           Include details about what each step does and why. Call this section 
@@ -297,18 +298,22 @@ async def researcher(technique: str, verbose: bool = True) -> str:
           Call this section "Published Hunts".
         - A brief list of tools threat actors commonly use to perform this technique. 
           Call this section "Commonly-Used Tools".
-        - A list of references to the URLs you found most helpful, including a 
-          sentence about why each was included on the list. If a MITRE ATT&CK entry 
+        - A numbered list of references to all the sourcesq you consulted, including a 
+          sentence summarizing the notable information or reason why hunters
+          might want to consult the reference. If a MITRE ATT&CK entry 
           is included, be sure to list it first. If a MITRE CAPEC entry is included, 
-          list it second. For all entries in this section, YOU MUST INCLUDE A URL. 
-          If you do not have a URL, do not include the entry. Include at least 5 
-          entries if feasible, but more is better. Call this section "References".
+          list it second. For everything else, list them in the order of helpfulness,
+          most helpful or most relevant first. For all entries in this section, 
+          YOU MUST INCLUDE A URL. If you do not have a URL, do not include the entry. 
+          Call this section "References".
         - A section listing any other information that would be helpful to a 
           threat hunter but that did not fall under any other section. Call this section 
           "Other Information".
 
         Always include each of these sections, even if the section is blank. 
-        Just write "N/A" if you don't have anything to put in that section.
+        Just write "N/A" if you don't have anything to put in that section. The title
+        should be a first-level header (i.e., # Title). The sections should be second-level
+        headers (i.e., ## Section Title). 
 
         Do not include any type of conclusion or summary at the end of the report. 
         Just end after the final section.
@@ -323,11 +328,47 @@ async def researcher(technique: str, verbose: bool = True) -> str:
         completeness. Remember that your audience is highly technical and needs a 
         lot of detail. Include code snippets, log entries, or detection rules where 
         applicable.
-
-        Your report should end with the word "YYY-TERMINATE-YYY" to signal the end of the 
-        conversation.
     """
 
+    summary_critic_system_prompt = """
+        You are a world class cybersecurity threat hunter. Your job is to evaluate 
+        the summary research report provided by the summarizer agent. Your goal is to 
+        ensure that the report is complete, accurate, and provides everything necessary
+        for a threat hunter to begin planning their hunt for this technique.
+    
+        Ensure the report answers ALL of the following questions (not necessarily
+        in this order):
+        1. What is the short, commonly-accepted name for the technique (not just 
+           the ATT&CK ID)?
+        2. What are the relevant MITRE ATT&CK IDs and their URLs, if applicable?
+        3. Why do threat actors use this technique or behavior?
+        4. How is this technique or behavior performed? Provide extremely detailed, technical 
+           instructions suitable for experienced threat hunters. As for more detail if
+           necessary.
+        5. How can this technique or behavior be detected?
+        6. What datasets or types of data are typically required to detect or hunt 
+           for this activity?
+        7. Are there any published threat hunting methodologies for this technique 
+           or behavior?
+        8. What tools are commonly used by threat actors to perform this technique 
+           or behavior?
+        9. Are there specific threat actors known to use this technique or is 
+           it widely used by many threat actors?        
+
+        Remember that we are providing a report to an expert audence of threat hunters
+        and researchers. The report should be comprehensive, well-structured, and
+        technically rigorous, with a high level of detail. Don't hesitate to ask for 
+        more detail if you think it is needed. If necessary, you may also ask for additional
+        research to be performed to fill in gaps in the report.
+
+        If the report is complete and meets the quality standards, simply return the string 
+        "YYY-TERMINATE-YYY" on a line by itself. Do not include any other text, nor try to 
+        summarize the report. If the report is not complete or does not meet the 
+        quality standards, you should provide feedback to the summarizer agent and
+        ask it to revise the report. You should also provide a list of the specific
+        criteria that the report does not meet, and ask the summarizer agent to revise
+        the report to meet those criteria.
+    """
     selector_prompt = """
         You are coordinating a research team by selecting the team member to speak/act next. 
         The following team member roles are available:
@@ -336,22 +377,38 @@ async def researcher(technique: str, verbose: bool = True) -> str:
 
         The following describes the roles:
             - search_agent: performs web searches and analyzes information.
-            - critic_agent: evaluates progress, ensures completeness, and 
+            - research_critic_agent: evaluates progress, ensures completeness, and 
               suggests new research avenues.
             - summarizer_agent: provides a detailed markdown summary of the research
               as a report to the user.
+            - summary_critic_agent: evaluates the summary and ensures it meets 
+              the user's needs.
 
         Given the current context, select the most appropriate next speaker.
-            The search agent should search and analyze.
-            The critic should evaluate progress and guide the research (select this role when there is a need to verify/evaluate progress). 
+            - The search agent should search for and analyze information from
+              the Internet.
+            - The research critic should evaluate progress and guide the research 
+              (select this role when there is a need to verify/evaluate progress 
+              of the research). 
+            - The summarizer agent should summarize the research findings (select 
+              this role when the research is complete and approved by the critic agent).
+            - The summary critic agent should evaluate the report from the summarizer
+              and ensure it meets the user's needs. 
+
         You should ONLY select the summarizer agent role if the research is complete and 
         it has been approved by the critic agent. NEVER call the summarizer agent directly 
-        after the search agent.
+        after the search agent. The summary critic agent CAN ask for more research, in
+        which case you should select the search agent role. 
+
+        No matter what, you must ALWAYS finish the converstation with a call to the 
+        summary critic agent. You may have to call it multiple times to ensure the 
+        resulting report is the best it can be.
 
         Base your selection on:
             1. Current stage of research
             2. Last speaker's findings or suggestions
             3. Need for verification vs need for new information
+            4. The need for addtional detail in the research or the report, if necessary
         Read the following conversation. 
         Then select the next role from {participants} to play. Only return the role.
 
@@ -376,10 +433,10 @@ async def researcher(technique: str, verbose: bool = True) -> str:
         system_message=search_system_prompt
     )
 
-    critic_agent = AssistantAgent(
-        "critic",
+    research_critic_agent = AssistantAgent(
+        "research_critic",
         model_client=az_model_client,
-        system_message=critic_system_prompt
+        system_message=research_critic_system_prompt
     )
 
     summarizer_agent = AssistantAgent(
@@ -388,13 +445,19 @@ async def researcher(technique: str, verbose: bool = True) -> str:
         system_message=summarizer_system_prompt
     )
 
+    summary_critic_agent = AssistantAgent(
+        "summary_critic",
+        model_client=az_model_client,
+        system_message=summary_critic_system_prompt
+    )
+
     # Define a termination condition that stops the task once the summarizer
     # agent has completed its task
     text_termination = TextMentionTermination("YYY-TERMINATE-YYY")
 
     # Create a team 
     team = SelectorGroupChat(
-        participants=[search_agent, critic_agent, summarizer_agent],
+        participants=[search_agent, research_critic_agent, summarizer_agent, summary_critic_agent],
         model_client=az_model_client,
         termination_condition=text_termination,
         selector_prompt=selector_prompt
@@ -456,12 +519,11 @@ if __name__ == "__main__":
         )
     )
 
-    report = messages.messages[-1].content
-
-    # Remove the final "YYY-TERMINATE-YYY" string generated by the AI agents
-    report = re.sub(r'\s*YYY-TERMINATE-YYY\s*$', '', report).strip()
-
-#    print(report)
+    # Find the final message from the "summarizer" agent using next() and a generator expression
+    report = next(
+        (message.content for message in reversed(messages.messages) if message.source == "summarizer"),
+        None  # Default value if no "critic" message is found
+    )
 
     # Extract the title from the report (assuming the first line is the title)
     title = report.splitlines()[0] if report else "untitled_report"
