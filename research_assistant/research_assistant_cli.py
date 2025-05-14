@@ -2,31 +2,21 @@
 
 import os
 import argparse
-import json
 import asyncio
 import re
 from pathlib import Path
 import warnings
 from dotenv import load_dotenv
 from markdown_pdf import MarkdownPdf, Section
-from markdownify import markdownify as md_to_text
-
-from typing import List, Dict, Optional
-import httpx
-from bs4 import BeautifulSoup
-from urllib.parse import urljoin
-import html2text
 
 from tavily import TavilyClient
 
 from autogen_agentchat.messages import TextMessage
 from autogen_ext.models.openai import AzureOpenAIChatCompletionClient
-from autogen_agentchat.agents import AssistantAgent, UserProxyAgent
-from autogen_agentchat.base import TaskResult
+from autogen_agentchat.agents import AssistantAgent
 from autogen_agentchat.conditions import TextMentionTermination
 from autogen_agentchat.teams import SelectorGroupChat
 from autogen_agentchat.ui import Console 
-from autogen_core import CancellationToken
 
 def find_dotenv_file():
     """Search for a .env file in current directory and parent directories"""
