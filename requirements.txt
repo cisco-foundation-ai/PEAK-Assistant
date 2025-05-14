@@ -3,3 +3,4 @@ requests
 python-dotenv
 openai
 markdown-pdf
+tavily-python
