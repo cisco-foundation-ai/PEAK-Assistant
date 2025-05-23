@@ -434,4 +434,7 @@ def debug_info():
 if __name__ == '__main__':
     # Create templates directory if it doesn't exist
     os.makedirs(os.path.join(os.path.dirname(__file__), 'templates'), exist_ok=True)
-    app.run(debug=True, port=8000)
+    # TLS/SSL context: expects cert.pem and key.pem in the UI directory
+    context = (os.path.join(os.path.dirname(__file__), 'cert.pem'),
+               os.path.join(os.path.dirname(__file__), 'key.pem'))
+    app.run(debug=True, port=8000, ssl_context=context)
