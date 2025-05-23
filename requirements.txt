@@ -1,3 +1,7 @@
+flask==2.3.2
+flask-session>=0.5.0
+# For production deployment (optional, not needed for local dev)
+gunicorn>=21.0.0
 python-dotenv
 markdown-pdf
 tavily-python
@@ -5,3 +9,5 @@ autogen
 autogen-agentchat
 autogen-ext
 openai
+markdown
+fpdf

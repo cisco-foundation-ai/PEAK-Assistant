@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Session Debug Page</h2>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h3 class="card-title">Session Data</h3>
+    </div>
+    <div class="card-body">
+        <pre id="session-data" class="bg-light p-3 rounded">Loading...</pre>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h4>Test Saving Hypothesis</h4>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="test-hypo-input" class="form-label">Enter a test hypothesis:</label>
+                    <textarea id="test-hypo-input" class="form-control" rows="3">This is a test hypothesis</textarea>
+                </div>
+                <button id="test-save-btn" class="btn btn-primary">Save Hypothesis</button>
+                <div id="test-result" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h4>Actions</h4>
+            </div>
+            <div class="card-body">
+                <button id="refresh-btn" class="btn btn-secondary mb-2">Refresh Session Data</button>
+                <button id="clear-session-btn" class="btn btn-danger mb-2">Clear Session</button>
+                <hr/>
+                <a href="/research" class="btn btn-outline-primary mb-2">Go to Research</a>
+                <a href="/hypothesis" class="btn btn-outline-primary mb-2">Go to Hypothesis</a>
+                <a href="/refinement" class="btn btn-outline-primary mb-2">Go to Refinement</a>
+                <a href="/able-table" class="btn btn-outline-primary mb-2">Go to ABLE Table</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+// Load session data
+function loadSessionData() {
+    fetch('/api/debug-info')
+    .then(response => response.json())
+    .then(data => {
+        document.getElementById('session-data').textContent = JSON.stringify(data.session_data, null, 2);
+    })
+    .catch(error => {
+        document.getElementById('session-data').textContent = 'Error loading session data: ' + error.message;
+    });
+}
+
+// Initial load
+loadSessionData();
+
+// Refresh button
+document.getElementById('refresh-btn').addEventListener('click', loadSessionData);
+
+// Test saving hypothesis
+document.getElementById('test-save-btn').addEventListener('click', function() {
+    const hypothesis = document.getElementById('test-hypo-input').value.trim();
+    const resultEl = document.getElementById('test-result');
+    
+    if (!hypothesis) {
+        resultEl.innerHTML = '<div class="alert alert-warning">Please enter a hypothesis.</div>';
+        return;
+    }
+    
+    resultEl.innerHTML = '<div class="alert alert-info">Saving hypothesis...</div>';
+    
+    fetch('/api/save-hypothesis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hypothesis: hypothesis })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            resultEl.innerHTML = '<div class="alert alert-success">Hypothesis saved successfully!</div>';
+            loadSessionData(); // Refresh session data
+        } else {
+            resultEl.innerHTML = '<div class="alert alert-danger">Error: ' + data.error + '</div>';
+        }
+    })
+    .catch(error => {
+        resultEl.innerHTML = '<div class="alert alert-danger">Error: ' + error.message + '</div>';
+    });
+});
+
+// Clear session
+document.getElementById('clear-session-btn').addEventListener('click', function() {
+    if (confirm('Are you sure you want to clear the session data?')) {
+        fetch('/api/debug-info', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                loadSessionData();
+                document.getElementById('test-result').innerHTML = 
+                    '<div class="alert alert-success">Session cleared successfully!</div>';
+            } else {
+                document.getElementById('test-result').innerHTML = 
+                    '<div class="alert alert-danger">Error clearing session: ' + data.error + '</div>';
+            }
+        })
+        .catch(error => {
+            document.getElementById('test-result').innerHTML = 
+                '<div class="alert alert-danger">Error: ' + error.message + '</div>';
+        });
+    }
+});
+{% endblock %}

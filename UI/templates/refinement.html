@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Hypothesis Refinement Phase</h2>
+
+<div id="no-hypothesis-warning" class="alert alert-warning mb-4" style="display: none;">
+    <strong>Note:</strong> No hypothesis found. Please generate a hypothesis in the Hypothesis Phase first.
+</div>
+
+<h3>Hypothesis Refinement (Optional)</h3>
+
+<div id="current-hypo-container" style="display: none;">
+    <h4>Current Hypothesis</h4>
+    <div id="current-hypo-content" class="border rounded p-3 mb-4"></div>
+</div>
+
+<div class="form-check form-switch mb-3">
+    <input class="form-check-input" type="checkbox" id="refine-checkbox" checked>
+    <label class="form-check-label" for="refine-checkbox">
+        Refine hypothesis automatically?
+    </label>
+</div>
+
+<div id="refine-btn-container">
+    <button id="refine-btn" class="btn btn-primary mb-3">Refine Hypothesis</button>
+</div>
+
+<div id="refined-hypo-container" style="display: none;">
+    <h4>Refined Hypothesis</h4>
+    <div id="refined-hypo-content" class="border rounded p-3"></div>
+</div>
+{% endblock %}
+
+{% block script %}
+// Function to update all hypothesis displays
+function updateHypothesisDisplay(currentHypothesis, refinedHypothesis) {
+    // Update current hypothesis display
+    const currentContainer = document.getElementById('current-hypo-container');
+    const currentContent = document.getElementById('current-hypo-content');
+    if (currentHypothesis) {
+        renderMarkdown(currentHypothesis, currentContent);
+        currentContainer.style.display = 'block';
+    } else {
+        currentContainer.style.display = 'none';
+    }
+
+    // Update refined hypothesis display
+    const refinedContainer = document.getElementById('refined-hypo-container');
+    const refinedContent = document.getElementById('refined-hypo-content');
+    if (refinedHypothesis) {
+        renderMarkdown(refinedHypothesis, refinedContent);
+        refinedContainer.style.display = 'block';
+    } else {
+        refinedContainer.style.display = 'none';
+    }
+}
+
+// Initialize from session data
+fetch('/api/debug-info')
+.then(response => response.json())
+.then(data => {
+    // Check if we have a hypothesis
+    if (!data.session_data || !data.session_data.hypothesis) {
+        document.getElementById('no-hypothesis-warning').style.display = 'block';
+        // Add more detailed debug info if in debug mode
+        if (document.getElementById('debug-mode').checked) {
+            const debugInfo = document.createElement('div');
+            debugInfo.className = 'alert alert-info mt-2';
+            debugInfo.innerHTML = '<strong>Debug Info:</strong> No hypothesis found in session data. Session contains: <pre>' + 
+                JSON.stringify(data.session_data, null, 2) + '</pre>';
+            document.getElementById('no-hypothesis-warning').appendChild(debugInfo);
+        }
+    } else {
+        updateHypothesisDisplay(data.session_data.hypothesis, data.session_data.refined_hypothesis);
+        // Debug info
+        if (document.getElementById('debug-mode').checked) {
+            console.log('Hypothesis from session:', data.session_data.hypothesis);
+            if (data.session_data.refined_hypothesis) {
+                console.log('Refined hypothesis from session:', data.session_data.refined_hypothesis);
+            }
+        }
+    }
+});
+
+// Refine hypothesis
+const refineBtn = document.getElementById('refine-btn');
+refineBtn.addEventListener('click', function() {
+    hideError();
+    showLoading('Refining hypothesis...');
+    const retryCount = document.getElementById('retry-count').value;
+    const verboseMode = document.getElementById('verbose-mode')?.checked || false;
+    const refineAuto = document.getElementById('refine-checkbox').checked;
+    fetch('/api/refine', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            retry_count: retryCount,
+            refine: refineAuto,
+            verbose_mode: verboseMode
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        if (data.success) {
+            fetch('/api/debug-info')
+            .then(response => response.json())
+            .then(sessionData => {
+                updateHypothesisDisplay(sessionData.session_data.hypothesis, sessionData.session_data.refined_hypothesis);
+            });
+        } else {
+            let errorDetail = data.detail || null;
+            if (data.error.includes('OpenAI API internal server error')) {
+                showError(
+                    'OpenAI API internal server error. This is an issue with OpenAI\'s servers, not with your code. Maximum retry attempts reached. \n\nTip: You can try again later, proceed with your current hypothesis, or increase the retry count.',
+                    errorDetail
+                );
+            } else {
+                showError('Error refining hypothesis: ' + data.error, errorDetail);
+            }
+        }
+    })
+    .catch(error => {
+        hideLoading();
+        showError('Network error: ' + error.message);
+    });
+});
+{% endblock %}

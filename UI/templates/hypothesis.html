@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Hypothesis Phase</h2>
+
+<div id="no-research-warning" class="alert alert-warning mb-4" style="display: none;">
+    <strong>Note:</strong> No research report found. Please generate a research report in the Research Phase first.
+</div>
+
+<h3>Hypothesis</h3>
+<div class="mb-4">
+    <div class="form-check form-check-inline">
+        <input class="form-check-input" type="radio" name="hypoMode" id="hypoModeAuto" value="auto" checked>
+        <label class="form-check-label" for="hypoModeAuto">Select from list</label>
+    </div>
+    <div class="form-check form-check-inline">
+        <input class="form-check-input" type="radio" name="hypoMode" id="hypoModeManual" value="manual">
+        <label class="form-check-label" for="hypoModeManual">Input manually</label>
+    </div>
+</div>
+
+<div id="hypo-auto-section">
+    <button id="get-hypos-btn" class="btn btn-primary mb-3">Get Hypotheses Suggestions</button>
+    <div id="hypo-select-container" style="display: none;">
+        <label for="hypo-select" class="form-label">Select a hypothesis:</label>
+        <select id="hypo-select" class="form-select mb-3"></select>
+    </div>
+</div>
+
+<div id="hypo-manual-section" style="display: none;">
+    <div class="mb-3">
+        <label for="hypo-input" class="form-label">Enter your hypothesis:</label>
+        <textarea id="hypo-input" class="form-control" rows="4"></textarea>
+    </div>
+    <button id="submit-hypo-btn" class="btn btn-primary mb-3">Submit Hypothesis</button>
+</div>
+
+<div id="current-hypo-container" style="display: none;">
+    <h4>Current Hypothesis</h4>
+    <div id="current-hypo-content" class="border rounded p-3"></div>
+</div>
+{% endblock %}
+
+{% block script %}
+// Toggle hypothesis input mode
+document.querySelectorAll('input[name="hypoMode"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        if (this.value === 'auto') {
+            document.getElementById('hypo-auto-section').style.display = 'block';
+            document.getElementById('hypo-manual-section').style.display = 'none';
+        } else {
+            document.getElementById('hypo-auto-section').style.display = 'none';
+            document.getElementById('hypo-manual-section').style.display = 'block';
+        }
+    });
+});
+
+// Get hypotheses suggestions
+document.getElementById('get-hypos-btn').addEventListener('click', function() {
+    hideError();
+    showLoading('Getting hypotheses...');
+    
+    const retryCount = document.getElementById('retry-count').value;
+    const verboseMode = document.getElementById('verbose-mode')?.checked || false;
+    
+    fetch('/api/hypothesize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            retry_count: retryCount,
+            verbose_mode: verboseMode
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        
+        if (data.success) {
+            const selectElement = document.getElementById('hypo-select');
+            selectElement.innerHTML = '';
+            
+            // Add options to select
+            data.hypotheses.forEach(hypo => {
+                const option = document.createElement('option');
+                option.value = hypo;
+                option.textContent = hypo.substring(0, 100) + (hypo.length > 100 ? '...' : '');
+                selectElement.appendChild(option);
+            });
+            
+            // Show the select container
+            document.getElementById('hypo-select-container').style.display = 'block';
+            
+            // Set current hypothesis to the first one
+            if (data.hypotheses.length > 0) {
+                updateCurrentHypothesis(data.hypotheses[0]);
+            }
+            
+            // Add change event to select
+            selectElement.addEventListener('change', function() {
+                updateCurrentHypothesis(this.value);
+            });
+        } else {
+            let errorDetail = data.detail || null;
+            if (data.error.includes('OpenAI API internal server error')) {
+                showError(
+                    'OpenAI API internal server error. This is an issue with OpenAI\'s servers, not with your code. Maximum retry attempts reached. \n\nTip: You can try again later or increase the retry count.',
+                    errorDetail
+                );
+            } else {
+                showError('Error generating hypotheses: ' + data.error, errorDetail);
+            }
+        }
+    })
+    .catch(error => {
+        hideLoading();
+        showError('Network error: ' + error.message);
+    });
+});
+
+// Submit manual hypothesis
+document.getElementById('submit-hypo-btn').addEventListener('click', function() {
+    const hypothesis = document.getElementById('hypo-input').value.trim();
+    if (!hypothesis) {
+        showError('Please enter a hypothesis.');
+        return;
+    }
+    
+    updateCurrentHypothesis(hypothesis);
+    hideError();
+});
+
+// Function to update and display the current hypothesis
+function updateCurrentHypothesis(hypothesis) {
+    if (!hypothesis) return;
+    
+    // Update UI
+    const container = document.getElementById('current-hypo-container');
+    const content = document.getElementById('current-hypo-content');
+    
+    renderMarkdown(hypothesis, content);
+    container.style.display = 'block';
+    
+    // Save to session via API
+    fetch('/api/save-hypothesis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            hypothesis: hypothesis
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (!data.success) {
+            console.warn('Failed to save hypothesis to session:', data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error saving hypothesis:', error);
+    });
+}
+
+// Initialize from session data
+fetch('/api/debug-info')
+.then(response => response.json())
+.then(data => {
+    // Check if we have a research report
+    if (!data.session_data || !data.session_data.report_md) {
+        document.getElementById('no-research-warning').style.display = 'block';
+    }
+    
+    // Load hypotheses if available
+    if (data.session_data && data.session_data.hypotheses) {
+        const selectElement = document.getElementById('hypo-select');
+        selectElement.innerHTML = '';
+        
+        data.session_data.hypotheses.forEach(hypo => {
+            const option = document.createElement('option');
+            option.value = hypo;
+            option.textContent = hypo.substring(0, 100) + (hypo.length > 100 ? '...' : '');
+            selectElement.appendChild(option);
+        });
+        
+        document.getElementById('hypo-select-container').style.display = 'block';
+        
+        // Add change event to select
+        selectElement.addEventListener('change', function() {
+            updateCurrentHypothesis(this.value);
+        });
+    }
+    
+    // Show current hypothesis if available
+    if (data.session_data && data.session_data.hypothesis) {
+        updateCurrentHypothesis(data.session_data.hypothesis);
+    }
+});
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="text-center mt-5">
+    <h1>PEAK Assistant UI</h1>
+    <p class="lead">Welcome to the PEAK Assistant user interface.</p>
+    <p>This tool helps cybersecurity professionals research and develop threat hunting hypotheses.</p>
+    <a href="/research" class="btn btn-primary btn-lg mt-3">Start Research</a>
+</div>
+
+<div class="row mt-5">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Research</h5>
+                <p class="card-text">Generate detailed research reports on threat actor techniques.</p>
+                <a href="/research" class="btn btn-outline-primary">Go to Research</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Hypothesis</h5>
+                <p class="card-text">Develop hypotheses based on research findings.</p>
+                <a href="/hypothesis" class="btn btn-outline-primary">Go to Hypothesis</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Refinement</h5>
+                <p class="card-text">Refine and improve your threat hunting hypotheses.</p>
+                <a href="/refinement" class="btn btn-outline-primary">Go to Refinement</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">ABLE Table</h5>
+                <p class="card-text">Create ABLE Tables to guide your threat hunting activities.</p>
+                <a href="/able-table" class="btn btn-outline-primary">Go to ABLE Table</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

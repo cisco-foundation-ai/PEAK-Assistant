@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>ABLE Table Phase</h2>
+
+<div id="no-hypothesis-warning" class="alert alert-warning mb-4" style="display: none;">
+    <strong>Note:</strong> No hypothesis found. Please generate a hypothesis in the Hypothesis Phase first.
+</div>
+
+<h3>ABLE Table</h3>
+
+<div id="final-hypo-container" style="display: none;">
+    <h4>Final Hypothesis</h4>
+    <div id="final-hypo-content" class="border rounded p-3 mb-4"></div>
+</div>
+
+<button id="generate-able-btn" class="btn btn-primary mb-4">Generate ABLE Table</button>
+
+<div id="able-table-container" style="display: none;">
+    <div id="able-table-content" class="border rounded p-3 mb-3"></div>
+    
+    <div class="btn-group">
+        <button id="download-md-btn" class="btn btn-outline-secondary">Download as Markdown</button>
+        <button id="download-pdf-btn" class="btn btn-outline-secondary">Download as PDF</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+// Generate ABLE table
+document.getElementById('generate-able-btn').addEventListener('click', function() {
+    hideError();
+    showLoading('Generating ABLE Table...');
+    
+    const retryCount = document.getElementById('retry-count').value;
+    const verboseMode = document.getElementById('verbose-mode')?.checked || false;
+    
+    fetch('/api/able-table', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            retry_count: retryCount,
+            verbose_mode: verboseMode
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        
+        if (data.success) {
+            const tableContainer = document.getElementById('able-table-container');
+            const tableContent = document.getElementById('able-table-content');
+            
+            renderMarkdown(data.able_table, tableContent);
+            tableContainer.style.display = 'block';
+            
+            // Save to local variables for download buttons
+            window.currentAbleTable = data.able_table;
+        } else {
+            let errorDetail = data.detail || null;
+            if (data.error.includes('OpenAI API internal server error')) {
+                showError(
+                    'OpenAI API internal server error. This is an issue with OpenAI\'s servers, not with your code. Maximum retry attempts reached. \n\nTip: You can try again later, refine your hypothesis to be more specific, or increase the retry count.',
+                    errorDetail
+                );
+            } else {
+                showError('Error generating ABLE table: ' + data.error, errorDetail);
+            }
+        }
+    })
+    .catch(error => {
+        hideLoading();
+        showError('Network error: ' + error.message);
+    });
+});
+
+// Download buttons
+document.getElementById('download-md-btn').addEventListener('click', function() {
+    if (!window.currentAbleTable) return;
+    
+    fetch('/api/download/markdown', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            content: window.currentAbleTable,
+            filename: 'able_table.md'
+        })
+    })
+    .then(response => response.blob())
+    .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = 'able_table.md';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+    });
+});
+
+document.getElementById('download-pdf-btn').addEventListener('click', function() {
+    if (!window.currentAbleTable) return;
+    
+    fetch('/api/download/pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            content: window.currentAbleTable,
+            filename: 'able_table.pdf'
+        })
+    })
+    .then(response => response.blob())
+    .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = 'able_table.pdf';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+    });
+});
+
+// Initialize from session data
+fetch('/api/debug-info')
+.then(response => response.json())
+.then(data => {
+    // Check if we have a hypothesis
+    if (!data.session_data || !data.session_data.hypothesis) {
+        document.getElementById('no-hypothesis-warning').style.display = 'block';
+    } else {
+        // Display the final hypothesis
+        const container = document.getElementById('final-hypo-container');
+        const content = document.getElementById('final-hypo-content');
+        
+        renderMarkdown(data.session_data.hypothesis, content);
+        container.style.display = 'block';
+    }
+    
+    // Load ABLE table if available
+    if (data.session_data && data.session_data.able_table_md) {
+        const tableContainer = document.getElementById('able-table-container');
+        const tableContent = document.getElementById('able-table-content');
+        
+        renderMarkdown(data.session_data.able_table_md, tableContent);
+        tableContainer.style.display = 'block';
+        
+        window.currentAbleTable = data.session_data.able_table_md;
+    }
+});
+{% endblock %}

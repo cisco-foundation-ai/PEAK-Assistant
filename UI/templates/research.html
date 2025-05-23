@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Research Phase</h2>
+
+<div class="row mb-4">
+    <div class="col-md-9">
+        <input type="text" id="topic-input" class="form-control" placeholder="Enter a topic, threat actor technique, or behavior...">
+    </div>
+    <div class="col-md-3">
+        <button id="generate-btn" class="btn btn-primary w-100">Generate Research Report</button>
+    </div>
+</div>
+
+<div id="report-container" style="display: none;">
+    <h3>Research Report</h3>
+    <div id="report-content" class="border rounded p-3 mb-3"></div>
+    
+    <div class="btn-group">
+        <button id="download-md-btn" class="btn btn-outline-secondary">Download as Markdown</button>
+        <button id="download-pdf-btn" class="btn btn-outline-secondary">Download as PDF</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+document.getElementById('generate-btn').addEventListener('click', function() {
+    const topic = document.getElementById('topic-input').value.trim();
+    if (!topic) {
+        showError('Please enter a topic to research.');
+        return;
+    }
+    
+    hideError();
+    showLoading('Generating research report... (this may take several minutes)');
+    
+    // Get settings
+    const retryCount = document.getElementById('retry-count').value;
+    const verboseMode = document.getElementById('verbose-mode')?.checked || false;
+    
+    fetch('/api/research', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            topic: topic,
+            retry_count: retryCount,
+            verbose_mode: verboseMode
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        
+        if (data.success) {
+            const reportContainer = document.getElementById('report-container');
+            const reportContent = document.getElementById('report-content');
+            
+            renderMarkdown(data.report, reportContent);
+            reportContainer.style.display = 'block';
+            
+            // Save to local variables for download buttons
+            window.currentReport = data.report;
+        } else {
+            let errorDetail = data.detail || null;
+            if (data.error.includes('OpenAI API internal server error')) {
+                showError(
+                    'OpenAI API internal server error. This is an issue with OpenAI\'s servers, not with your code. Maximum retry attempts reached. \n\nTip: You can try reducing the complexity of your query, trying a different topic, or increasing the retry count.',
+                    errorDetail
+                );
+            } else {
+                showError('Error generating research report: ' + data.error, errorDetail);
+            }
+        }
+    })
+    .catch(error => {
+        hideLoading();
+        showError('Network error: ' + error.message);
+    });
+});
+
+// Allow pressing Enter in the topic input to submit
+const topicInput = document.getElementById('topic-input');
+topicInput.addEventListener('keydown', function(event) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        document.getElementById('generate-btn').click();
+    }
+});
+
+// Download buttons
+document.getElementById('download-md-btn').addEventListener('click', function() {
+    if (!window.currentReport) return;
+    
+    fetch('/api/download/markdown', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            content: window.currentReport,
+            filename: 'research_report.md'
+        })
+    })
+    .then(response => response.blob())
+    .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = 'research_report.md';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+    });
+});
+
+document.getElementById('download-pdf-btn').addEventListener('click', function() {
+    if (!window.currentReport) return;
+    
+    fetch('/api/download/pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            content: window.currentReport,
+            filename: 'research_report.pdf'
+        })
+    })
+    .then(response => response.blob())
+    .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = 'research_report.pdf';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+    });
+});
+
+// Initialize from session data
+fetch('/api/debug-info')
+.then(response => response.json())
+.then(data => {
+    if (data.session_data && data.session_data.report_md) {
+        const reportContainer = document.getElementById('report-container');
+        const reportContent = document.getElementById('report-content');
+        
+        renderMarkdown(data.session_data.report_md, reportContent);
+        reportContainer.style.display = 'block';
+        
+        window.currentReport = data.session_data.report_md;
+    }
+    
+    if (data.session_data && data.session_data.last_topic) {
+        document.getElementById('topic-input').value = data.session_data.last_topic;
+    }
+});
+{% endblock %}

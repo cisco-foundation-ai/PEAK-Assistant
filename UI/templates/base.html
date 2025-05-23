@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PEAK Assistant UI</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        .sidebar {
+            min-height: 100vh;
+            background-color: #f8f9fa;
+            border-right: 1px solid #e9ecef;
+            padding: 20px;
+        }
+        .content {
+            padding: 20px;
+        }
+        .spinner-border {
+            width: 1rem;
+            height: 1rem;
+            vertical-align: text-bottom;
+        }
+        .debug-section {
+            border-top: 1px solid #e9ecef;
+            margin-top: 20px;
+            padding-top: 20px;
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+        }
+        #error-message {
+            display: none;
+            margin-top: 15px;
+        }
+        #loading-indicator {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 col-lg-2 sidebar">
+                <h3 class="mb-4">PEAK Assistant</h3>
+                <ul class="nav flex-column">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/research">Research</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/hypothesis">Hypothesis</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/refinement">Refinement</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/able-table">ABLE Table</a>
+                    </li>
+                </ul>
+                
+                <div class="mt-4">
+                    <label for="retry-count" class="form-label">API retry attempts:</label>
+                    <input type="number" id="retry-count" class="form-control" value="3" min="1" max="5">
+                </div>
+                
+                <div class="form-check mt-3">
+                    <input class="form-check-input" type="checkbox" id="verbose-mode">
+                    <label class="form-check-label" for="verbose-mode">
+                        Verbose mode
+                    </label>
+                    <small class="form-text text-muted d-block">Shows detailed processing steps</small>
+                </div>
+                
+                <div class="form-check mt-3">
+                    <input class="form-check-input" type="checkbox" id="debug-mode">
+                    <label class="form-check-label" for="debug-mode">
+                        Debug mode
+                    </label>
+                </div>
+                
+                <div id="debug-panel" style="display: none;" class="debug-section">
+                    <h5>Debug Tools</h5>
+                    <button id="test-connection-btn" class="btn btn-sm btn-outline-secondary mt-2">Test API Connection</button>
+                    <div id="connection-result" class="mt-2"></div>
+                    
+                    <div class="mt-3">
+                        <button id="show-debug-info-btn" class="btn btn-sm btn-outline-secondary">Show Debug Info</button>
+                        <div id="debug-info" class="mt-2" style="display: none;"></div>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <a href="/debug" class="btn btn-sm btn-outline-info">Session Debug Page</a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Main content -->
+            <div class="col-md-9 col-lg-10 content">
+                {% block content %}{% endblock %}
+                
+                <!-- Error message box -->
+                <div id="error-message" class="alert alert-danger">
+                    <h5>Error</h5>
+                    <p id="error-text"></p>
+                    <div id="error-details" style="display: none;">
+                        <hr>
+                        <h6>Technical Details</h6>
+                        <pre id="error-detail-text"></pre>
+                    </div>
+                    <button id="show-error-details" class="btn btn-sm btn-outline-danger mt-2">Show Details</button>
+                </div>
+                
+                <!-- Loading indicator -->
+                <div id="loading-indicator" class="alert alert-info">
+                    <div class="d-flex align-items-center">
+                        <div class="spinner-border me-2" role="status"></div>
+                        <span id="loading-text">Processing...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Common utility functions
+        function showLoading(message = "Processing...") {
+            document.getElementById('loading-text').innerText = message;
+            document.getElementById('loading-indicator').style.display = 'block';
+        }
+        
+        function hideLoading() {
+            document.getElementById('loading-indicator').style.display = 'none';
+        }
+        
+        function showError(message, detail = null) {
+            document.getElementById('error-text').innerText = message;
+            const errorMessage = document.getElementById('error-message');
+            errorMessage.style.display = 'block';
+            
+            const errorDetails = document.getElementById('error-details');
+            const errorDetailText = document.getElementById('error-detail-text');
+            
+            if (detail) {
+                errorDetailText.innerText = detail;
+                document.getElementById('show-error-details').style.display = 'block';
+            } else {
+                document.getElementById('show-error-details').style.display = 'none';
+                errorDetails.style.display = 'none';
+            }
+            
+            hideLoading();
+            
+            // Scroll to error
+            errorMessage.scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        function hideError() {
+            document.getElementById('error-message').style.display = 'none';
+        }
+        
+        function renderMarkdown(markdown, targetElement) {
+            if (typeof markdown === 'string') {
+                targetElement.innerHTML = marked.parse(markdown);
+            }
+        }
+        
+        // Toggle debug panel
+        document.getElementById('debug-mode').addEventListener('change', function() {
+            document.getElementById('debug-panel').style.display = this.checked ? 'block' : 'none';
+        });
+        
+        // Show error details button
+        document.getElementById('show-error-details').addEventListener('click', function() {
+            const details = document.getElementById('error-details');
+            if (details.style.display === 'none') {
+                details.style.display = 'block';
+                this.innerText = 'Hide Details';
+            } else {
+                details.style.display = 'none';
+                this.innerText = 'Show Details';
+            }
+        });
+        
+        // Test connection button
+        document.getElementById('test-connection-btn').addEventListener('click', function() {
+            const resultElement = document.getElementById('connection-result');
+            resultElement.innerHTML = '<div class="spinner-border" role="status"></div> Testing connection...';
+            
+            fetch('/api/test-connection', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    resultElement.innerHTML = '<div class="alert alert-success">✅ Connection successful!</div>';
+                    resultElement.innerHTML += `<pre>${data.message}</pre>`;
+                } else {
+                    resultElement.innerHTML = '<div class="alert alert-danger">❌ Connection failed!</div>';
+                    resultElement.innerHTML += `<pre>${data.error}</pre>`;
+                }
+            })
+            .catch(error => {
+                resultElement.innerHTML = '<div class="alert alert-danger">❌ Connection failed!</div>';
+                resultElement.innerHTML += `<pre>${error.message}</pre>`;
+            });
+        });
+        
+        // Show debug info button
+        document.getElementById('show-debug-info-btn').addEventListener('click', function() {
+            const infoElement = document.getElementById('debug-info');
+            
+            if (infoElement.style.display === 'none') {
+                infoElement.innerHTML = '<div class="spinner-border" role="status"></div> Loading debug info...';
+                infoElement.style.display = 'block';
+                this.innerText = 'Hide Debug Info';
+                
+                fetch('/api/debug-info')
+                .then(response => response.json())
+                .then(data => {
+                    infoElement.innerHTML = '<h6>Environment Variables</h6>';
+                    infoElement.innerHTML += `<pre>${JSON.stringify(data.environment, null, 2)}</pre>`;
+                    
+                    infoElement.innerHTML += '<h6>System Info</h6>';
+                    infoElement.innerHTML += `<pre>${JSON.stringify(data.system_info, null, 2)}</pre>`;
+                    
+                    infoElement.innerHTML += '<h6>Session Data</h6>';
+                    infoElement.innerHTML += `<pre>${JSON.stringify(data.session_data, null, 2)}</pre>`;
+                })
+                .catch(error => {
+                    infoElement.innerHTML = `<div class="alert alert-danger">Error loading debug info: ${error.message}</div>`;
+                });
+            } else {
+                infoElement.style.display = 'none';
+                this.innerText = 'Show Debug Info';
+            }
+        });
+        
+        // Add page-specific JavaScript
+        {% block script %}{% endblock %}
+    </script>
+</body>
+</html>
