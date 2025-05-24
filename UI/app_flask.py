@@ -209,13 +209,14 @@ def save_hypothesis():
     """Save a hypothesis to the session without refinement"""
     data = request.json
     hypothesis = data.get('hypothesis')
-    
     if not hypothesis:
         return jsonify({'success': False, 'error': 'No hypothesis provided'}), 400
-    
+    prev_hypo = session.get('hypothesis')
     # Store in session
     session['hypothesis'] = hypothesis
-    session.pop('refined_hypothesis', None)  # Clear any previous refinement
+    # Only clear refined_hypothesis if the hypothesis actually changed
+    if prev_hypo != hypothesis:
+        session.pop('refined_hypothesis', None)
     return jsonify({'success': True})
 
 @app.route('/api/refine', methods=['POST'])
@@ -382,6 +383,11 @@ def download_pdf():
         download_name=filename
     )
 
+@app.route('/clear-session', methods=['POST'])
+def clear_session():
+    session.clear()
+    return jsonify({'success': True})
+
 # ===== Page Routes =====
 
 @app.route('/')
@@ -394,7 +400,9 @@ def research_page():
 
 @app.route('/hypothesis')
 def hypothesis_page():
-    return render_template('hypothesis.html')
+    # Only use the current (editable) hypothesis, never the refined one
+    hypo = session.get('hypothesis', '')
+    return render_template('hypothesis.html', current_hypothesis=hypo)
 
 @app.route('/refinement')
 def refinement_page():
@@ -403,6 +411,10 @@ def refinement_page():
 @app.route('/able-table')
 def able_table_page():
     return render_template('able_table.html')
+
+@app.route('/research-plan')
+def research_plan_page():
+    return render_template('research_plan.html')
 
 @app.route('/help')
 def help_page():

@@ -49,16 +49,22 @@
                 <h3 class="mb-4"><a href="/" style="text-decoration: none; color: inherit;">PEAK Assistant</a></h3>
                 <ul class="nav flex-column">
                     <li class="nav-item">
-                        <a class="nav-link" href="/research">Research</a>
+                        <a class="nav-link" href="/research">Topic Research</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/hypothesis">Hypothesis</a>
+                        <a class="nav-link" href="/hypothesis">Hypothesis Generation</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/refinement">Refinement</a>
+                        <a class="nav-link" href="/refinement">Hypothesis Refinement (Optional)</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/able-table">ABLE Table</a>
+                        <a class="nav-link" href="/able-table">Generate ABLE Table</a>
+                    </li>
+                    <li class="nav-item mt-3 mb-2">
+                        <a class="btn btn-success w-100 fw-bold" href="/research-plan" style="font-size:1.1rem;">Generate Hunt Plan</a>
+                    </li>
+                    <li class="nav-item mb-2">
+                        <button id="clear-everything-btn" class="btn btn-danger w-100 fw-bold" style="font-size:1.1rem;">Clear Everything and Start Over</button>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="/help">Help</a>
@@ -215,6 +221,34 @@
             }
         });
         
+        // Clear Everything button logic
+        document.addEventListener('DOMContentLoaded', function() {
+            const clearBtn = document.getElementById('clear-everything-btn');
+            if (clearBtn) {
+                clearBtn.addEventListener('click', function() {
+                    if (confirm('Are you sure you want to clear everything and start over? This will erase all your progress.')) {
+                        showLoading('Clearing session...');
+                        fetch('/clear-session', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                        })
+                        .then(response => {
+                            hideLoading();
+                            if (response.ok) {
+                                window.location.href = '/';
+                            } else {
+                                showError('Failed to clear session. Please try again.');
+                            }
+                        })
+                        .catch(() => {
+                            hideLoading();
+                            showError('Failed to clear session. Please try again.');
+                        });
+                    }
+                });
+            }
+        });
+
         // Add page-specific JavaScript
         {% block script %}{% endblock %}
     </script>

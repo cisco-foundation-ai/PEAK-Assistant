@@ -1,47 +1,73 @@
 {% extends "base.html" %}
 
 {% block content %}
+<style>
+    /* Make all main page boxes the same height */
+    .main-phase-card {
+        min-height: 320px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+    .main-phase-card .card-body {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        height: 100%;
+    }
+</style>
 <div class="text-center mt-5">
     <h1>PEAK Assistant UI</h1>
     <p class="lead">Welcome to the PEAK Assistant user interface.</p>
     <p>This tool helps cybersecurity professionals research and develop threat hunting hypotheses.</p>
-    <a href="/research" class="btn btn-primary btn-lg mt-3">Start Research</a>
+    <a href="/research" class="btn btn-primary btn-lg mt-3">Start Topic Research</a>
 </div>
 
-<div class="row mt-5">
-    <div class="col-md-3">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">Research</h5>
-                <p class="card-text">Generate detailed research reports on threat actor techniques.</p>
-                <a href="/research" class="btn btn-outline-primary">Go to Research</a>
+<div class="container mt-5">
+    <div class="row justify-content-center g-4">
+        <div class="col-12 col-sm-6 col-md-4 col-lg-3 d-flex">
+            <div class="card main-phase-card w-100">
+                <div class="card-body">
+                    <h5 class="card-title">Topic Research</h5>
+                    <p class="card-text">Generate detailed research reports on threat actor techniques, behaviors, or topics.</p>
+                    <a href="/research" class="btn btn-outline-primary mt-auto">Go to Topic Research</a>
+                </div>
             </div>
         </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">Hypothesis</h5>
-                <p class="card-text">Develop hypotheses based on research findings.</p>
-                <a href="/hypothesis" class="btn btn-outline-primary">Go to Hypothesis</a>
+        <div class="col-12 col-sm-6 col-md-4 col-lg-3 d-flex">
+            <div class="card main-phase-card w-100">
+                <div class="card-body">
+                    <h5 class="card-title">Hypothesis Generation</h5>
+                    <p class="card-text">Develop hypotheses based on your research findings.</p>
+                    <a href="/hypothesis" class="btn btn-outline-primary mt-auto">Go to Hypothesis Generation</a>
+                </div>
             </div>
         </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">Refinement</h5>
-                <p class="card-text">Refine and improve your threat hunting hypotheses.</p>
-                <a href="/refinement" class="btn btn-outline-primary">Go to Refinement</a>
+        <div class="col-12 col-sm-6 col-md-4 col-lg-3 d-flex">
+            <div class="card main-phase-card w-100">
+                <div class="card-body">
+                    <h5 class="card-title">Hypothesis Refinement (Optional)</h5>
+                    <p class="card-text">Refine and improve your threat hunting hypotheses (optional step).</p>
+                    <a href="/refinement" class="btn btn-outline-primary mt-auto">Go to Hypothesis Refinement</a>
+                </div>
             </div>
         </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">ABLE Table</h5>
-                <p class="card-text">Create ABLE Tables to guide your threat hunting activities.</p>
-                <a href="/able-table" class="btn btn-outline-primary">Go to ABLE Table</a>
+        <div class="col-12 col-sm-6 col-md-4 col-lg-3 d-flex">
+            <div class="card main-phase-card w-100">
+                <div class="card-body">
+                    <h5 class="card-title">Generate ABLE Table</h5>
+                    <p class="card-text">Create ABLE Tables to guide your threat hunting activities.</p>
+                    <a href="/able-table" class="btn btn-outline-primary mt-auto">Go to ABLE Table</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-md-4 col-lg-3 d-flex">
+            <div class="card main-phase-card border-success w-100">
+                <div class="card-body">
+                    <h5 class="card-title text-success fw-bold">Generate Hunt Plan</h5>
+                    <p class="card-text">Combine your research, hypothesis, and ABLE table into a single, formatted hunt plan. Download as Markdown or PDF.</p>
+                    <a href="/research-plan" class="btn btn-success mt-auto fw-bold">Go to Hunt Plan</a>
+                </div>
             </div>
         </div>
     </div>

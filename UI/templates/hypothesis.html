@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2>Hypothesis Phase</h2>
+<h2>Hypothesis Generation</h2>
 
 <div class="container mt-4">
     <div class="d-flex justify-content-end mb-2">
@@ -52,11 +52,18 @@
 
 <div id="current-hypo-container" style="display: none;">
     <h4>Current Hypothesis</h4>
-    <div id="current-hypo-content" class="border rounded p-3"></div>
+    <div class="input-group mb-2">
+        <textarea id="current-hypo-edit" class="form-control" rows="4" style="resize: vertical;"></textarea>
+        <button id="save-current-hypo-btn" class="btn btn-primary" type="button">Save</button>
+    </div>
+    <div id="current-hypo-saved-msg" class="text-success mb-2" style="display:none;">Saved!</div>
 </div>
 {% endblock %}
 
 {% block script %}
+// Add this at the top of the script block to get the server-passed value
+window.currentHypothesisFromServer = "{{ current_hypothesis|e }}";
+
 // Toggle hypothesis input mode
 document.querySelectorAll('input[name="hypoMode"]').forEach(radio => {
     radio.addEventListener('change', function() {
@@ -119,7 +126,23 @@ document.getElementById('get-hypos-btn').addEventListener('click', function() {
             
             // Add change event to select
             selectElement.addEventListener('change', function() {
-                updateCurrentHypothesis(this.value);
+                const selectedHypo = this.value;
+                fetch('/api/save-hypothesis', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ hypothesis: selectedHypo })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        updateCurrentHypothesis(selectedHypo);
+                    } else {
+                        showError('Failed to save hypothesis: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    showError('Failed to save hypothesis: ' + error.message);
+                });
             });
         } else {
             let errorDetail = data.detail || null;
@@ -146,42 +169,66 @@ document.getElementById('submit-hypo-btn').addEventListener('click', function() 
         showError('Please enter a hypothesis.');
         return;
     }
-    
-    updateCurrentHypothesis(hypothesis);
-    hideError();
-});
-
-// Function to update and display the current hypothesis
-function updateCurrentHypothesis(hypothesis) {
-    if (!hypothesis) return;
-    
-    // Update UI
-    const container = document.getElementById('current-hypo-container');
-    const content = document.getElementById('current-hypo-content');
-    
-    renderMarkdown(hypothesis, content);
-    container.style.display = 'block';
-    
-    // Save to session via API
+    // Save to session
     fetch('/api/save-hypothesis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-            hypothesis: hypothesis
-        })
+        body: JSON.stringify({ hypothesis: hypothesis })
     })
     .then(response => response.json())
     .then(data => {
-        if (!data.success) {
-            console.warn('Failed to save hypothesis to session:', data.error);
+        if (data.success) {
+            updateCurrentHypothesis(hypothesis);
+            hideError();
+        } else {
+            showError('Failed to save hypothesis: ' + (data.error || 'Unknown error'));
         }
     })
     .catch(error => {
-        console.error('Error saving hypothesis:', error);
+        showError('Failed to save hypothesis: ' + error.message);
     });
-    
+});
+
+// Always show the current hypothesis container if there is a hypothesis
+function updateCurrentHypothesis(hypothesis) {
+    if (!hypothesis) return;
+    const container = document.getElementById('current-hypo-container');
+    const textarea = document.getElementById('current-hypo-edit');
+    textarea.value = hypothesis;
+    container.style.display = 'block';
     // Store the original markdown in a global variable
     window.originalHypothesisMarkdown = hypothesis;
+}
+
+// Save button logic for editable hypothesis
+const saveBtn = document.getElementById('save-current-hypo-btn');
+const savedMsg = document.getElementById('current-hypo-saved-msg');
+if (saveBtn) {
+    saveBtn.addEventListener('click', function() {
+        const newHypo = document.getElementById('current-hypo-edit').value.trim();
+        if (!newHypo) {
+            showError('Hypothesis cannot be empty.');
+            return;
+        }
+        fetch('/api/save-hypothesis', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ hypothesis: newHypo })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                window.originalHypothesisMarkdown = newHypo;
+                savedMsg.style.display = 'block';
+                setTimeout(() => { savedMsg.style.display = 'none'; }, 1200);
+            } else {
+                showError('Failed to save hypothesis: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            showError('Failed to save hypothesis: ' + error.message);
+        });
+    });
 }
 
 // Reusable download handler
@@ -227,12 +274,10 @@ fetch('/api/debug-info')
     if (!data.session_data || !data.session_data.report_md) {
         document.getElementById('no-research-warning').style.display = 'block';
     }
-    
     // Load hypotheses if available
     if (data.session_data && data.session_data.hypotheses) {
         const selectElement = document.getElementById('hypo-select');
         selectElement.innerHTML = '';
-        
         // Filter out blank/empty hypotheses
         const hypos = data.session_data.hypotheses.filter(h => h.trim() !== '');
         hypos.forEach((hypo, idx) => {
@@ -242,18 +287,38 @@ fetch('/api/debug-info')
             option.className = getHypoBgClass(idx);
             selectElement.appendChild(option);
         });
-        
         document.getElementById('hypo-select-container').style.display = 'block';
-        
         // Add change event to select
         selectElement.addEventListener('change', function() {
-            updateCurrentHypothesis(this.value);
+            const selectedHypo = this.value;
+            fetch('/api/save-hypothesis', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ hypothesis: selectedHypo })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    updateCurrentHypothesis(selectedHypo);
+                } else {
+                    showError('Failed to save hypothesis: ' + (data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                showError('Failed to save hypothesis: ' + error.message);
+            });
         });
     }
-    
-    // Show current hypothesis if available
+    // Show current hypothesis if available (only use session['hypothesis'] or server-passed value)
+    let currentHypothesis = null;
+    if (window.currentHypothesisFromServer && window.currentHypothesisFromServer.trim() !== "") {
+        currentHypothesis = window.currentHypothesisFromServer;
+    }
     if (data.session_data && data.session_data.hypothesis) {
-        updateCurrentHypothesis(data.session_data.hypothesis);
+        currentHypothesis = data.session_data.hypothesis;
+    }
+    if (currentHypothesis && currentHypothesis.trim() !== "") {
+        updateCurrentHypothesis(currentHypothesis);
     }
 });
 {% endblock %}

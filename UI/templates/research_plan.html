@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Generate Hunt Plan</h2>
+<p class="mb-4">This phase combines your Topic Research, Hypothesis, and ABLE Table into a single, shareable hunt plan. You can review the combined document below and download it as Markdown or PDF.</p>
+
+<div class="d-flex justify-content-end mb-3">
+    <form id="download-plan-markdown-form" method="post">
+        <input type="hidden" name="content" id="plan-markdown-content">
+        <input type="hidden" name="filename" value="hunt_plan.md">
+        <button type="submit" class="btn btn-outline-primary btn-sm">Download Markdown</button>
+    </form>
+    <form id="download-plan-pdf-form" method="post" class="ms-2">
+        <input type="hidden" name="content" id="plan-pdf-content">
+        <input type="hidden" name="filename" value="hunt_plan.pdf">
+        <button type="submit" class="btn btn-outline-secondary btn-sm">Download PDF</button>
+    </form>
+</div>
+
+<div id="plan-container" class="border rounded p-3 bg-light">
+    <div id="plan-content"></div>
+</div>
+{% endblock %}
+
+{% block script %}
+function handleDownload(formId, contentId, apiUrl, filename) {
+    const form = document.getElementById(formId);
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const content = window.currentPlanMarkdown;
+        form.querySelector('input[name="content"]').value = content;
+        fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: content, filename: filename })
+        })
+        .then(response => {
+            if (!response.ok) throw new Error('Download failed');
+            return response.blob();
+        })
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        })
+        .catch(error => {
+            showError('Download failed: ' + error.message);
+        });
+    });
+}
+
+handleDownload('download-plan-markdown-form', 'plan-content', '/api/download/markdown', 'hunt_plan.md');
+handleDownload('download-plan-pdf-form', 'plan-content', '/api/download/pdf', 'hunt_plan.pdf');
+
+// Fetch and combine the research, hypothesis, and ABLE table from session
+fetch('/api/debug-info')
+.then(response => response.json())
+.then(data => {
+    let plan = '';
+    const session = data.session_data || {};
+    if (session.report_md) {
+        plan += '# Topic Research\n\n' + session.report_md.trim() + '\n\n';
+    }
+    if (session.refined_hypothesis || session.hypothesis) {
+        plan += '# Hypothesis\n\n' + (session.refined_hypothesis || session.hypothesis).trim() + '\n\n';
+    }
+    if (session.able_table_md) {
+        plan += '# ABLE Table\n\n' + session.able_table_md.trim() + '\n';
+    }
+    if (!plan) {
+        plan = 'No research, hypothesis, or ABLE table found in your session.';
+    }
+    window.currentPlanMarkdown = plan;
+    renderMarkdown(plan, document.getElementById('plan-content'));
+});
+{% endblock %}
