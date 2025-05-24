@@ -13,6 +13,7 @@ from pathlib import Path
 from functools import wraps
 from markdown_pdf import MarkdownPdf, Section
 from flask_session import Session
+from werkzeug.utils import secure_filename
 
 # --- Utility functions ---
 def find_dotenv_file():
@@ -121,6 +122,11 @@ app.config['SESSION_PERMANENT'] = False
 app.config['SESSION_USE_SIGNER'] = True
 app.config['SESSION_KEY_PREFIX'] = 'peak_assistant_'
 Session(app)  # Initialize Flask-Session
+
+ALLOWED_UPLOAD_EXTENSIONS = {'.md', '.txt'}
+UPLOAD_FOLDER = os.path.join(tempfile.gettempdir(), 'peak_uploads')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # ===== API Routes =====
 
@@ -270,7 +276,8 @@ async def refine():
 @async_action
 async def able_table():
     data = request.json
-    hypothesis = data.get('hypothesis') or session.get('hypothesis', '')
+    # Use refined hypothesis if available, else fallback to original
+    hypothesis = data.get('hypothesis') or session.get('refined_hypothesis') or session.get('hypothesis', '')
     report_md = data.get('report_md') or session.get('report_md', '')
     retry_count = int(data.get('retry_count', 3))
     # verbose_mode is ignored for able_table, as it is not supported
@@ -298,6 +305,43 @@ async def able_table():
             }), 500
         else:
             return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/upload-report', methods=['POST'])
+def upload_report():
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'No file part'}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'success': False, 'error': 'No selected file'}), 400
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ALLOWED_UPLOAD_EXTENSIONS:
+        return jsonify({'success': False, 'error': 'Invalid file type'}), 400
+    filename = secure_filename(file.filename)
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    file.save(filepath)
+    with open(filepath, 'r', encoding='utf-8') as f:
+        content = f.read()
+    session['report_md'] = content
+    session['last_topic'] = '[Uploaded]'
+    return jsonify({'success': True, 'report': content})
+
+@app.route('/api/upload-able-table', methods=['POST'])
+def upload_able_table():
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'No file part'}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'success': False, 'error': 'No selected file'}), 400
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ALLOWED_UPLOAD_EXTENSIONS:
+        return jsonify({'success': False, 'error': 'Invalid file type'}), 400
+    filename = secure_filename(file.filename)
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    file.save(filepath)
+    with open(filepath, 'r', encoding='utf-8') as f:
+        content = f.read()
+    session['able_table_md'] = content
+    return jsonify({'success': True, 'able_table': content})
 
 @app.route('/api/download/markdown', methods=['POST', 'GET'])
 def download_markdown():

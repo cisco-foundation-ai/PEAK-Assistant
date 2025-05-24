@@ -12,6 +12,16 @@
     </div>
 </div>
 
+<div class="row mb-4">
+    <div class="col-md-12">
+        <form id="upload-report-form" enctype="multipart/form-data" class="d-flex align-items-center">
+            <input type="file" id="upload-report-file" name="file" accept=".md,.txt" style="display:none;">
+            <button type="button" class="btn btn-outline-success btn-sm me-2" onclick="document.getElementById('upload-report-file').click();">Upload Report</button>
+            <span id="upload-report-filename" class="ms-2 text-muted"></span>
+        </form>
+    </div>
+</div>
+
 <div id="report-container" style="display: none;">
     <div class="container mt-4">
         <div class="d-flex justify-content-end mb-2">
@@ -138,6 +148,65 @@ function handleDownload(formId, contentId, apiUrl, filename, isMarkdown = true) 
 
 handleDownload('download-markdown-form', 'report-content', '/api/download/markdown', 'report.md');
 handleDownload('download-pdf-form', 'report-content', '/api/download/pdf', 'report.pdf', false);
+
+// Upload logic
+document.getElementById('upload-report-file').addEventListener('change', function() {
+    const fileInput = this;
+    if (!fileInput.files.length) return;
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    showLoading('Uploading report...');
+    fetch('/api/upload-report', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        if (data.success) {
+            window.originalReportMarkdown = data.report;
+            // Optionally, re-render the report in the UI here
+            location.reload();
+        } else {
+            showError('Upload failed: ' + data.error);
+        }
+    })
+    .catch(error => {
+        hideLoading();
+        showError('Upload failed: ' + error.message);
+    });
+});
+
+// Upload report logic
+const uploadInput = document.getElementById('upload-report-file');
+const uploadForm = document.getElementById('upload-report-form');
+const uploadFilename = document.getElementById('upload-report-filename');
+uploadInput.addEventListener('change', function() {
+    if (!uploadInput.files.length) return;
+    const formData = new FormData();
+    formData.append('file', uploadInput.files[0]);
+    showLoading('Uploading report...');
+    fetch('/api/upload-report', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        if (data.success) {
+            uploadFilename.textContent = uploadInput.files[0].name + ' uploaded!';
+            window.originalReportMarkdown = data.report;
+            // Optionally, re-render the report in the UI here
+            location.reload();
+        } else {
+            showError('Upload failed: ' + data.error);
+        }
+    })
+    .catch(error => {
+        hideLoading();
+        showError('Upload failed: ' + error.message);
+    });
+});
 
 // Initialize from session data
 fetch('/api/debug-info')

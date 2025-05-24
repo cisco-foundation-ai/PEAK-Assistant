@@ -3,6 +3,16 @@
 {% block content %}
 <h2>ABLE Table Phase</h2>
 
+<div class="row mb-4">
+    <div class="col-md-12">
+        <form id="upload-able-table-form" enctype="multipart/form-data" class="d-flex align-items-center">
+            <input type="file" id="upload-able-table-file" name="file" accept=".md,.txt" style="display:none;">
+            <button type="button" class="btn btn-outline-success btn-sm me-2" onclick="document.getElementById('upload-able-table-file').click();">Upload ABLE Table</button>
+            <span id="upload-able-table-filename" class="ms-2 text-muted"></span>
+        </form>
+    </div>
+</div>
+
 <div id="no-hypothesis-warning" class="alert alert-warning mb-4" style="display: none;">
     <strong>Note:</strong> No hypothesis found. Please generate a hypothesis in the Hypothesis Phase first.
 </div>
@@ -120,30 +130,90 @@ function handleDownload(formId, contentId, apiUrl, filename) {
 handleDownload('download-markdown-form', 'able-table-content', '/api/download/markdown', 'able_table.md');
 handleDownload('download-pdf-form', 'able-table-content', '/api/download/pdf', 'able_table.pdf');
 
+// Upload ABLE table
+document.getElementById('upload-able-table-file').addEventListener('change', function() {
+    const fileInput = this;
+    if (!fileInput.files.length) return;
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    showLoading('Uploading ABLE table...');
+    fetch('/api/upload-able-table', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        if (data.success) {
+            window.originalAbleTableMarkdown = data.able_table;
+            // Optionally, re-render the table in the UI here
+            location.reload();
+        } else {
+            showError('Upload failed: ' + data.error);
+        }
+    })
+    .catch(error => {
+        hideLoading();
+        showError('Upload failed: ' + error.message);
+    });
+});
+
+// Upload ABLE Table logic
+const uploadAbleInput = document.getElementById('upload-able-table-file');
+const uploadAbleForm = document.getElementById('upload-able-table-form');
+const uploadAbleFilename = document.getElementById('upload-able-table-filename');
+uploadAbleInput.addEventListener('change', function() {
+    if (!uploadAbleInput.files.length) return;
+    const formData = new FormData();
+    formData.append('file', uploadAbleInput.files[0]);
+    showLoading('Uploading ABLE table...');
+    fetch('/api/upload-able-table', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        if (data.success) {
+            uploadAbleFilename.textContent = uploadAbleInput.files[0].name + ' uploaded!';
+            window.originalAbleTableMarkdown = data.able_table;
+            location.reload();
+        } else {
+            showError('Upload failed: ' + data.error);
+        }
+    })
+    .catch(error => {
+        hideLoading();
+        showError('Upload failed: ' + error.message);
+    });
+});
+
 // Initialize from session data
 fetch('/api/debug-info')
 .then(response => response.json())
 .then(data => {
-    // Check if we have a hypothesis
-    if (!data.session_data || !data.session_data.hypothesis) {
+    // Check if we have a refined hypothesis or fallback to original
+    let hypothesis = '';
+    if (data.session_data && data.session_data.refined_hypothesis) {
+        hypothesis = data.session_data.refined_hypothesis;
+    } else if (data.session_data && data.session_data.hypothesis) {
+        hypothesis = data.session_data.hypothesis;
+    }
+    if (!hypothesis) {
         document.getElementById('no-hypothesis-warning').style.display = 'block';
     } else {
-        // Display the final hypothesis
+        // Display the final (refined) hypothesis
         const container = document.getElementById('final-hypo-container');
         const content = document.getElementById('final-hypo-content');
-        
-        renderMarkdown(data.session_data.hypothesis, content);
+        renderMarkdown(hypothesis, content);
         container.style.display = 'block';
     }
-    
     // Load ABLE table if available
     if (data.session_data && data.session_data.able_table_md) {
         const tableContainer = document.getElementById('able-table-container');
         const tableContent = document.getElementById('able-table-content');
-        
         renderMarkdown(data.session_data.able_table_md, tableContent);
         tableContainer.style.display = 'block';
-        
         window.currentAbleTable = data.session_data.able_table_md;
         window.originalAbleTableMarkdown = data.session_data.able_table_md; // Store the original markdown
     }
