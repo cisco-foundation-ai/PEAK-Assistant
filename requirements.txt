@@ -1,5 +1,7 @@
 flask==2.3.2
 flask-session>=0.5.0
+Flask-Session
+Flask-SQLAlchemy
 # For production deployment (optional, not needed for local dev)
 gunicorn>=21.0.0
 python-dotenv

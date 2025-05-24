@@ -14,6 +14,8 @@ from functools import wraps
 from markdown_pdf import MarkdownPdf, Section
 from flask_session import Session
 from werkzeug.utils import secure_filename
+from flask_sqlalchemy import SQLAlchemy
+from datetime import timedelta
 
 # --- Utility functions ---
 def find_dotenv_file():
@@ -115,13 +117,25 @@ from able_assistant.able_assistant_cli import able_table as async_able_table
 app = Flask(__name__)
 app.secret_key = os.urandom(24)  # For session management
 
-# Configure server-side session storage
-app.config['SESSION_TYPE'] = 'filesystem'
-app.config['SESSION_FILE_DIR'] = os.path.join(tempfile.gettempdir(), 'flask_session')
+# Set session to be permanent and expire after 24 hours
+app.config['SESSION_PERMANENT'] = True
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
+
+# Configure SQLAlchemy for session storage
+app.config['SESSION_TYPE'] = 'sqlalchemy'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///peak_sessions.db'
+app.config['SESSION_SQLALCHEMY_TABLE'] = 'sessions'
 app.config['SESSION_PERMANENT'] = False
 app.config['SESSION_USE_SIGNER'] = True
 app.config['SESSION_KEY_PREFIX'] = 'peak_assistant_'
+
+db = SQLAlchemy(app)
+app.config['SESSION_SQLALCHEMY'] = db
 Session(app)  # Initialize Flask-Session
+
+# Create the session table if it doesn't exist
+with app.app_context():
+    db.create_all()
 
 ALLOWED_UPLOAD_EXTENSIONS = {'.md', '.txt'}
 UPLOAD_FOLDER = os.path.join(tempfile.gettempdir(), 'peak_uploads')
