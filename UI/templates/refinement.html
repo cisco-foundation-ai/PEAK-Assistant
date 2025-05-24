@@ -25,6 +25,21 @@
     <button id="refine-btn" class="btn btn-primary mb-3">Refine Hypothesis</button>
 </div>
 
+<div class="container mt-4">
+    <div class="d-flex justify-content-end mb-2">
+        <form id="download-markdown-form" method="post">
+            <input type="hidden" name="content" id="markdown-content">
+            <input type="hidden" name="filename" value="refined_hypothesis.md">
+            <button type="submit" class="btn btn-outline-primary btn-sm">Download Markdown</button>
+        </form>
+        <form id="download-pdf-form" method="post" class="ms-2">
+            <input type="hidden" name="content" id="pdf-content">
+            <input type="hidden" name="filename" value="refined_hypothesis.pdf">
+            <button type="submit" class="btn btn-outline-secondary btn-sm">Download PDF</button>
+        </form>
+    </div>
+</div>
+
 <div id="refined-hypo-container" style="display: none;">
     <h4>Refined Hypothesis</h4>
     <div id="refined-hypo-content" class="border rounded p-3"></div>

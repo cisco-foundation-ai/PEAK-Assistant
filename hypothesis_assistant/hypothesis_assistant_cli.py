@@ -42,33 +42,16 @@ async def hypothesizer(user_input: str, research_document: str) -> str:
         2. Extract relevant information from the research document.
         3. Combine both to generate clear, actionable, testable hypotheses.
 
-        Respond with a list of potential hypotheses, along with any relevant 
+        Respond with a list of potential hunting hypotheses, along with any relevant 
         details or considerations, such as where on the network the hypothesis 
         could be tested (e.g., "on the endpoint", "on the network", 
         "on the SMTP servers", "Internet-facing services", etc.) and typical datasets or 
         types of data that would be necessary to test the hypothesis.
 
-        Your output should be a Markdown document, with one section per hypothesis. 
-        The title of the document should be "Suggested Hypotheses for Hunting (BEHAVIOR)",
-        where "BEHAVIOR" is the behavior or technique being researched. (e.g., "Suggested
-        Hypotheses for Hunting Credential Dumping"). That would be the first level header.
-
-        Each section should include:
-        - A title for the hypothesis. This should be the 2nd-level header (e.g., the 
-          title of the section).
-        - The actual hypothesis. Call this section "Hypothesis".
-        - Test locations or systems. Call this section "Test Locations".
-        - Datasets or types of data needed for testing. Call this section "Data".
-        - Any other relevant details or considerations. Call this section 
-          "Notes & Considerations".
-
-        Do not include any other text or explanations outside of the sections
-        and headers. The first line of the output should be the title of the document (the 
-        1st level header) with no other text before it. When finished with the final 
-        hypothesis section, end the document and do not include any summary or ask for 
-        more work.
-    
-        The output should be a well-structured Markdown document.
+        Your output should be a list of hypotheses, each on a line by itself. There
+        should be no additional text, explanations, or formatting. Include at least
+        three hypotheses, but feel free to generate more if you can.
+        
         If you cannot generate a hypothesis, please say "No hypothesis could be generated."
     """
 

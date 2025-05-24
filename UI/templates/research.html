@@ -13,13 +13,22 @@
 </div>
 
 <div id="report-container" style="display: none;">
+    <div class="container mt-4">
+        <div class="d-flex justify-content-end mb-2">
+            <form id="download-markdown-form" method="post">
+                <input type="hidden" name="content" id="markdown-content">
+                <input type="hidden" name="filename" value="report.md">
+                <button type="submit" class="btn btn-outline-primary btn-sm">Download Markdown</button>
+            </form>
+            <form id="download-pdf-form" method="post" class="ms-2">
+                <input type="hidden" name="content" id="pdf-content">
+                <input type="hidden" name="filename" value="report.pdf">
+                <button type="submit" class="btn btn-outline-secondary btn-sm">Download PDF</button>
+            </form>
+        </div>
+    </div>
     <h3>Research Report</h3>
     <div id="report-content" class="border rounded p-3 mb-3"></div>
-    
-    <div class="btn-group">
-        <button id="download-md-btn" class="btn btn-outline-secondary">Download as Markdown</button>
-        <button id="download-pdf-btn" class="btn btn-outline-secondary">Download as PDF</button>
-    </div>
 </div>
 {% endblock %}
 

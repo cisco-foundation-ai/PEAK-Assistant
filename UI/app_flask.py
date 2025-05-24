@@ -63,31 +63,6 @@ async def retry_api_call(func, *args, max_retries=3, **kwargs):
     if last_exception:
         raise last_exception
 
-async def async_test_connection():
-    """Test if we can connect to Azure OpenAI API and get a response"""
-    # Import necessary libraries here to avoid circular imports
-    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-    from autogen_ext.models.openai import AzureOpenAIChatCompletionClient
-    from autogen_core.models import SystemMessage, UserMessage
-    
-    # Create a fresh client for testing
-    client = AzureOpenAIChatCompletionClient(
-        azure_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT"),
-        model=os.getenv("AZURE_OPENAI_MODEL"),
-        api_version=os.getenv("AZURE_OPENAI_API_VERSION"),
-        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-        api_key=os.getenv("AZURE_OPENAI_API_KEY")
-    )
-    
-    # In newer version of autogen, UserMessage requires a 'source' field
-    messages = [
-        SystemMessage(content="You are a helpful assistant."),
-        UserMessage(content="Hello, please respond with a very short message if you're working.", source="user")
-    ]
-    
-    response = await client.create(messages)
-    return response.content
-
 def extract_report_md(messages):
     # Try to extract the research report markdown from agent output
     report_md = None
@@ -148,15 +123,6 @@ app.config['SESSION_KEY_PREFIX'] = 'peak_assistant_'
 Session(app)  # Initialize Flask-Session
 
 # ===== API Routes =====
-
-@app.route('/api/test-connection', methods=['POST'])
-@async_action
-async def test_connection():
-    try:
-        response = await async_test_connection()
-        return jsonify({'success': True, 'message': response})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/research', methods=['POST'])
 @async_action
@@ -396,6 +362,10 @@ def refinement_page():
 @app.route('/able-table')
 def able_table_page():
     return render_template('able_table.html')
+
+@app.route('/help')
+def help_page():
+    return render_template('help.html')
 
 @app.route('/debug')
 def debug_page():

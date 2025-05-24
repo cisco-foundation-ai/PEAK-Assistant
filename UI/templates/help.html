@@ -1,0 +1,56 @@
+<!-- Help page for PEAK Assistant -->
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Help &amp; User Guide</h2>
+<p>Welcome to the PEAK Assistant! This tool guides you through a structured research and hypothesis workflow. Here’s what you need to know for each phase:</p>
+
+<div class="card mb-4">
+  <div class="card-header"><strong>1. Research Phase</strong></div>
+  <div class="card-body">
+    <ul>
+      <li><strong>What to do:</strong> Enter a research topic or question you want to investigate.</li>
+      <li><strong>What happens:</strong> The assistant will gather and summarize relevant information.</li>
+      <li><strong>Your role:</strong> Review the generated research report for accuracy and completeness.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header"><strong>2. Hypothesis Phase</strong></div>
+  <div class="card-body">
+    <ul>
+      <li><strong>What to do:</strong> Use the research report to generate possible hypotheses.</li>
+      <li><strong>What happens:</strong> The assistant will suggest hypotheses based on the research.</li>
+      <li><strong>Your role:</strong> Select or edit a hypothesis to move forward with.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header"><strong>3. Refinement Phase</strong></div>
+  <div class="card-body">
+    <ul>
+      <li><strong>What to do:</strong> Refine your chosen hypothesis for clarity and testability.</li>
+      <li><strong>What happens:</strong> The assistant will help critique and improve your hypothesis.</li>
+      <li><strong>Your role:</strong> Accept, further edit, or re-refine the hypothesis as needed.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header"><strong>4. ABLE Table Phase</strong></div>
+  <div class="card-body">
+    <ul>
+      <li><strong>What to do:</strong> Generate an "ABLE Table" to plan how to test your hypothesis.</li>
+      <li><strong>What happens:</strong> The assistant will create a table outlining Actions, Barriers, Levers, and Evidence.</li>
+      <li><strong>Your role:</strong> Review and adjust the table to fit your research plan.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="alert alert-info">
+  <strong>Tip:</strong> You can always return to any phase using the sidebar navigation. For best results, provide clear and specific input at each step.
+</div>
+
+{% endblock %}

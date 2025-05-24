@@ -3,6 +3,21 @@
 {% block content %}
 <h2>Hypothesis Phase</h2>
 
+<div class="container mt-4">
+    <div class="d-flex justify-content-end mb-2">
+        <form id="download-markdown-form" method="post">
+            <input type="hidden" name="content" id="markdown-content">
+            <input type="hidden" name="filename" value="hypothesis.md">
+            <button type="submit" class="btn btn-outline-primary btn-sm">Download Markdown</button>
+        </form>
+        <form id="download-pdf-form" method="post" class="ms-2">
+            <input type="hidden" name="content" id="pdf-content">
+            <input type="hidden" name="filename" value="hypothesis.pdf">
+            <button type="submit" class="btn btn-outline-secondary btn-sm">Download PDF</button>
+        </form>
+    </div>
+</div>
+
 <div id="no-research-warning" class="alert alert-warning mb-4" style="display: none;">
     <strong>Note:</strong> No research report found. Please generate a research report in the Research Phase first.
 </div>
@@ -11,11 +26,11 @@
 <div class="mb-4">
     <div class="form-check form-check-inline">
         <input class="form-check-input" type="radio" name="hypoMode" id="hypoModeAuto" value="auto" checked>
-        <label class="form-check-label" for="hypoModeAuto">Select from list</label>
+        <label class="form-check-label" for="hypoModeAuto">Generate hypotheses for me</label>
     </div>
     <div class="form-check form-check-inline">
         <input class="form-check-input" type="radio" name="hypoMode" id="hypoModeManual" value="manual">
-        <label class="form-check-label" for="hypoModeManual">Input manually</label>
+        <label class="form-check-label" for="hypoModeManual">Let me input my own hypothesis</label>
     </div>
 </div>
 
@@ -23,7 +38,7 @@
     <button id="get-hypos-btn" class="btn btn-primary mb-3">Get Hypotheses Suggestions</button>
     <div id="hypo-select-container" style="display: none;">
         <label for="hypo-select" class="form-label">Select a hypothesis:</label>
-        <select id="hypo-select" class="form-select mb-3"></select>
+        <select id="hypo-select" class="form-select mb-3" size="6" style="height:auto;"></select>
     </div>
 </div>
 
@@ -55,6 +70,11 @@ document.querySelectorAll('input[name="hypoMode"]').forEach(radio => {
     });
 });
 
+// Utility: alternate background colors for dropdown
+function getHypoBgClass(idx) {
+    return idx % 2 === 0 ? 'bg-light' : 'bg-white';
+}
+
 // Get hypotheses suggestions
 document.getElementById('get-hypos-btn').addEventListener('click', function() {
     hideError();
@@ -79,11 +99,13 @@ document.getElementById('get-hypos-btn').addEventListener('click', function() {
             const selectElement = document.getElementById('hypo-select');
             selectElement.innerHTML = '';
             
-            // Add options to select
-            data.hypotheses.forEach(hypo => {
+            // Filter out blank/empty hypotheses
+            const hypos = data.hypotheses.filter(h => h.trim() !== '');
+            hypos.forEach((hypo, idx) => {
                 const option = document.createElement('option');
                 option.value = hypo;
-                option.textContent = hypo.substring(0, 100) + (hypo.length > 100 ? '...' : '');
+                option.textContent = hypo;
+                option.className = getHypoBgClass(idx);
                 selectElement.appendChild(option);
             });
             
@@ -91,8 +113,8 @@ document.getElementById('get-hypos-btn').addEventListener('click', function() {
             document.getElementById('hypo-select-container').style.display = 'block';
             
             // Set current hypothesis to the first one
-            if (data.hypotheses.length > 0) {
-                updateCurrentHypothesis(data.hypotheses[0]);
+            if (hypos.length > 0) {
+                updateCurrentHypothesis(hypos[0]);
             }
             
             // Add change event to select
@@ -173,10 +195,13 @@ fetch('/api/debug-info')
         const selectElement = document.getElementById('hypo-select');
         selectElement.innerHTML = '';
         
-        data.session_data.hypotheses.forEach(hypo => {
+        // Filter out blank/empty hypotheses
+        const hypos = data.session_data.hypotheses.filter(h => h.trim() !== '');
+        hypos.forEach((hypo, idx) => {
             const option = document.createElement('option');
             option.value = hypo;
-            option.textContent = hypo.substring(0, 100) + (hypo.length > 100 ? '...' : '');
+            option.textContent = hypo;
+            option.className = getHypoBgClass(idx);
             selectElement.appendChild(option);
         });
         

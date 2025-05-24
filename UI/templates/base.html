@@ -46,7 +46,7 @@
         <div class="row">
             <!-- Sidebar -->
             <div class="col-md-3 col-lg-2 sidebar">
-                <h3 class="mb-4">PEAK Assistant</h3>
+                <h3 class="mb-4"><a href="/" style="text-decoration: none; color: inherit;">PEAK Assistant</a></h3>
                 <ul class="nav flex-column">
                     <li class="nav-item">
                         <a class="nav-link" href="/research">Research</a>
@@ -59,6 +59,9 @@
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="/able-table">ABLE Table</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/help">Help</a>
                     </li>
                 </ul>
                 
@@ -84,14 +87,10 @@
                 
                 <div id="debug-panel" style="display: none;" class="debug-section">
                     <h5>Debug Tools</h5>
-                    <button id="test-connection-btn" class="btn btn-sm btn-outline-secondary mt-2">Test API Connection</button>
-                    <div id="connection-result" class="mt-2"></div>
-                    
                     <div class="mt-3">
                         <button id="show-debug-info-btn" class="btn btn-sm btn-outline-secondary">Show Debug Info</button>
                         <div id="debug-info" class="mt-2" style="display: none;"></div>
                     </div>
-                    
                     <div class="mt-3">
                         <a href="/debug" class="btn btn-sm btn-outline-info">Session Debug Page</a>
                     </div>
@@ -184,31 +183,6 @@
                 details.style.display = 'none';
                 this.innerText = 'Show Details';
             }
-        });
-        
-        // Test connection button
-        document.getElementById('test-connection-btn').addEventListener('click', function() {
-            const resultElement = document.getElementById('connection-result');
-            resultElement.innerHTML = '<div class="spinner-border" role="status"></div> Testing connection...';
-            
-            fetch('/api/test-connection', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    resultElement.innerHTML = '<div class="alert alert-success">✅ Connection successful!</div>';
-                    resultElement.innerHTML += `<pre>${data.message}</pre>`;
-                } else {
-                    resultElement.innerHTML = '<div class="alert alert-danger">❌ Connection failed!</div>';
-                    resultElement.innerHTML += `<pre>${data.error}</pre>`;
-                }
-            })
-            .catch(error => {
-                resultElement.innerHTML = '<div class="alert alert-danger">❌ Connection failed!</div>';
-                resultElement.innerHTML += `<pre>${error.message}</pre>`;
-            });
         });
         
         // Show debug info button
