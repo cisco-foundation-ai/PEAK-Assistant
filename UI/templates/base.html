@@ -105,6 +105,20 @@
             
             <!-- Main content -->
             <div class="col-md-9 col-lg-10 content">
+                {% block nav %}
+                <div class="d-flex justify-content-end align-items-center mb-3">
+                  {% if prev_phase_url %}
+                    <a href="{{ prev_phase_url }}" class="btn btn-link text-decoration-none me-2">
+                      <span aria-hidden="true">&#8592;</span> Prev: {{ prev_phase_name }}
+                    </a>
+                  {% endif %}
+                  {% if next_phase_url %}
+                    <a href="{{ next_phase_url }}" class="btn btn-link text-decoration-none">
+                      Next: {{ next_phase_name }} <span aria-hidden="true">&#8594;</span>
+                    </a>
+                  {% endif %}
+                </div>
+                {% endblock %}
                 {% block content %}{% endblock %}
                 
                 <!-- Error message box -->

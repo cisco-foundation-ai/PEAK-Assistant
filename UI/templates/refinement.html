@@ -1,5 +1,12 @@
 {% extends "base.html" %}
 
+{% set prev_phase_url = "/hypothesis" %}
+{% set prev_phase_name = "Hypothesis Generation" %}
+{% set next_phase_url = "/able-table" %}
+{% set next_phase_name = "Generate ABLE Table" %}
+
+{% block nav %}{{ super() }}{% endblock %}
+
 {% block content %}
 <h2>Hypothesis Refinement (Optional)</h2>
 

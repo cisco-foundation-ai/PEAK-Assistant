@@ -1,5 +1,12 @@
 {% extends "base.html" %}
 
+{% set prev_phase_url = "/refinement" %}
+{% set prev_phase_name = "Hypothesis Refinement (Optional)" %}
+{% set next_phase_url = "/research-plan" %}
+{% set next_phase_name = "Generate Hunt Plan" %}
+
+{% block nav %}{{ super() }}{% endblock %}
+
 {% block content %}
 <h2>Generate ABLE Table</h2>
 

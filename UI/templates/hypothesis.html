@@ -1,5 +1,12 @@
 {% extends "base.html" %}
 
+{% set prev_phase_url = "/research" %}
+{% set prev_phase_name = "Topic Research" %}
+{% set next_phase_url = "/refinement" %}
+{% set next_phase_name = "Hypothesis Refinement (Optional)" %}
+
+{% block nav %}{{ super() }}{% endblock %}
+
 {% block content %}
 <h2>Hypothesis Generation</h2>
 

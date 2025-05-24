@@ -1,5 +1,12 @@
 {% extends "base.html" %}
 
+{% set prev_phase_url = "/able-table" %}
+{% set prev_phase_name = "Generate ABLE Table" %}
+{% set next_phase_url = None %}
+{% set next_phase_name = None %}
+
+{% block nav %}{{ super() }}{% endblock %}
+
 {% block content %}
 <h2>Generate Hunt Plan</h2>
 <p class="mb-4">This phase combines your Topic Research, Hypothesis, and ABLE Table into a single, shareable hunt plan. You can review the combined document below and download it as Markdown or PDF.</p>
