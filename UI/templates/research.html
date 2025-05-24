@@ -69,6 +69,7 @@ document.getElementById('generate-btn').addEventListener('click', function() {
             
             // Save to local variables for download buttons
             window.currentReport = data.report;
+            window.originalReportMarkdown = data.report; // Store the original markdown
         } else {
             let errorDetail = data.detail || null;
             if (data.error.includes('OpenAI API internal server error')) {
@@ -96,54 +97,47 @@ topicInput.addEventListener('keydown', function(event) {
     }
 });
 
-// Download buttons
-document.getElementById('download-md-btn').addEventListener('click', function() {
-    if (!window.currentReport) return;
-    
-    fetch('/api/download/markdown', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-            content: window.currentReport,
-            filename: 'research_report.md'
+// Download logic
+function handleDownload(formId, contentId, apiUrl, filename, isMarkdown = true) {
+    const form = document.getElementById(formId);
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        // Use .textContent for plain text, .innerText for visible text, .innerHTML for HTML
+        // To get the original markdown, store it in a JS variable when rendering
+        let content;
+        if (window.originalReportMarkdown) {
+            content = window.originalReportMarkdown;
+        } else {
+            content = document.getElementById(contentId).innerText;
+        }
+        form.querySelector('input[name="content"]').value = content;
+        fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: content, filename: filename })
         })
-    })
-    .then(response => response.blob())
-    .then(blob => {
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = 'research_report.md';
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
+        .then(response => {
+            if (!response.ok) throw new Error('Download failed');
+            return response.blob();
+        })
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        })
+        .catch(error => {
+            showError('Download failed: ' + error.message);
+        });
     });
-});
+}
 
-document.getElementById('download-pdf-btn').addEventListener('click', function() {
-    if (!window.currentReport) return;
-    
-    fetch('/api/download/pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-            content: window.currentReport,
-            filename: 'research_report.pdf'
-        })
-    })
-    .then(response => response.blob())
-    .then(blob => {
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = 'research_report.pdf';
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-    });
-});
+handleDownload('download-markdown-form', 'report-content', '/api/download/markdown', 'report.md');
+handleDownload('download-pdf-form', 'report-content', '/api/download/pdf', 'report.pdf', false);
 
 // Initialize from session data
 fetch('/api/debug-info')
@@ -157,6 +151,7 @@ fetch('/api/debug-info')
         reportContainer.style.display = 'block';
         
         window.currentReport = data.session_data.report_md;
+        window.originalReportMarkdown = data.session_data.report_md; // Store the original markdown
     }
     
     if (data.session_data && data.session_data.last_topic) {

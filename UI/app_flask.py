@@ -299,18 +299,17 @@ async def able_table():
         else:
             return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/download/markdown', methods=['POST'])
+@app.route('/api/download/markdown', methods=['POST', 'GET'])
 def download_markdown():
-    data = request.json
+    if request.method == 'GET':
+        return jsonify({'success': False, 'error': 'GET not supported. Use POST.'}), 405
+    data = request.json or request.form
     content = data.get('content')
     filename = data.get('filename', 'download.md')
-    
     if not content:
         return jsonify({'success': False, 'error': 'No content provided'}), 400
-    
     buffer = io.BytesIO(content.encode('utf-8'))
     buffer.seek(0)
-    
     return send_file(
         buffer,
         mimetype='text/markdown',
@@ -318,22 +317,20 @@ def download_markdown():
         download_name=filename
     )
 
-@app.route('/api/download/pdf', methods=['POST'])
+@app.route('/api/download/pdf', methods=['POST', 'GET'])
 def download_pdf():
-    data = request.json
+    if request.method == 'GET':
+        return jsonify({'success': False, 'error': 'GET not supported. Use POST.'}), 405
+    data = request.json or request.form
     content = data.get('content')
     filename = data.get('filename', 'download.pdf')
-    
     if not content:
         return jsonify({'success': False, 'error': 'No content provided'}), 400
-    
-    # Convert markdown to PDF
     pdf = MarkdownPdf()
     pdf.add_section(Section(content, toc=False))
     pdf_buffer = io.BytesIO()
     pdf.save(pdf_buffer)
     pdf_buffer.seek(0)
-    
     return send_file(
         pdf_buffer,
         mimetype='application/pdf',

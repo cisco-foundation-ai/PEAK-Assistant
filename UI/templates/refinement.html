@@ -65,6 +65,8 @@ function updateHypothesisDisplay(currentHypothesis, refinedHypothesis) {
     if (refinedHypothesis) {
         renderMarkdown(refinedHypothesis, refinedContent);
         refinedContainer.style.display = 'block';
+        // Store the original markdown in a global variable
+        window.originalRefinedHypothesisMarkdown = refinedHypothesis;
     } else {
         refinedContainer.style.display = 'none';
     }
@@ -140,4 +142,39 @@ refineBtn.addEventListener('click', function() {
         showError('Network error: ' + error.message);
     });
 });
+
+// Handle downloads
+function handleDownload(formId, contentId, apiUrl, filename) {
+    const form = document.getElementById(formId);
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const content = window.originalRefinedHypothesisMarkdown || document.getElementById(contentId).innerText;
+        form.querySelector('input[name="content"]').value = content;
+        fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: content, filename: filename })
+        })
+        .then(response => {
+            if (!response.ok) throw new Error('Download failed');
+            return response.blob();
+        })
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        })
+        .catch(error => {
+            showError('Download failed: ' + error.message);
+        });
+    });
+}
+
+handleDownload('download-markdown-form', 'refined-hypo-content', '/api/download/markdown', 'refined_hypothesis.md');
+handleDownload('download-pdf-form', 'refined-hypo-content', '/api/download/pdf', 'refined_hypothesis.pdf');
 {% endblock %}

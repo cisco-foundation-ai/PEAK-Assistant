@@ -179,7 +179,45 @@ function updateCurrentHypothesis(hypothesis) {
     .catch(error => {
         console.error('Error saving hypothesis:', error);
     });
+    
+    // Store the original markdown in a global variable
+    window.originalHypothesisMarkdown = hypothesis;
 }
+
+// Reusable download handler
+function handleDownload(formId, contentId, apiUrl, filename) {
+    const form = document.getElementById(formId);
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const content = window.originalHypothesisMarkdown;
+        form.querySelector('input[name="content"]').value = content;
+        fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: content, filename: filename })
+        })
+        .then(response => {
+            if (!response.ok) throw new Error('Download failed');
+            return response.blob();
+        })
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        })
+        .catch(error => {
+            showError('Download failed: ' + error.message);
+        });
+    });
+}
+
+handleDownload('download-markdown-form', 'current-hypo-content', '/api/download/markdown', 'hypothesis.md');
+handleDownload('download-pdf-form', 'current-hypo-content', '/api/download/pdf', 'hypothesis.pdf');
 
 // Initialize from session data
 fetch('/api/debug-info')
