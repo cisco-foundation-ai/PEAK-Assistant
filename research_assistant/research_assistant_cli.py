@@ -42,7 +42,8 @@ def generate_unique_filename(title, extension):
 
 async def tavily_search(
     query: str,
-    max_results: int = 15
+    max_results: int = 15,
+    raw_content: bool = False
 ):
     tavily_client = TavilyClient(
         api_key=os.getenv("TAVILY_API_KEY")
@@ -52,7 +53,7 @@ async def tavily_search(
         query=query,
         max_results=max_results,
         search_depth="advanced",
-        include_raw_content=True,
+        include_raw_content=raw_content
     )
 
     return search_results
