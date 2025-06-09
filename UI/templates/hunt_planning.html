@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
-{% set prev_phase_url = "/able-table" %}
-{% set prev_phase_name = "Generate ABLE Table" %}
+{% set prev_phase_url = "/data-discovery" %}
+{% set prev_phase_name = "Data Discovery" %}
 {% set next_phase_url = None %}
 {% set next_phase_name = None %}
 
@@ -9,7 +9,7 @@
 
 {% block content %}
 <h2>Generate Hunt Plan</h2>
-<p class="mb-4">This phase combines your Topic Research, Hypothesis, and ABLE Table into a single, shareable hunt plan. You can review the combined document below and download it as Markdown or PDF.</p>
+<p class="mb-4">This phase combines your Topic Research, Hypothesis, ABLE Table, and Data Sources into a complete, shareable hunt plan. You can review the combined document below and download it as Markdown or PDF.</p>
 
 <div class="d-flex justify-content-end mb-3">
     <form id="download-plan-markdown-form" method="post">
@@ -26,6 +26,14 @@
 
 <div id="plan-container" class="border rounded p-3 bg-light">
     <div id="plan-content"></div>
+    <div class="navigation-buttons mt-4 d-flex justify-content-between">
+        <a href="{{ url_for('data_discovery_page') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-1"></i> Prev: Data Discovery
+        </a>
+        <div>
+            <!-- This is the final phase, no next button needed -->
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -77,10 +85,13 @@ fetch('/api/debug-info')
         plan += '# Hypothesis\n\n' + (session.refined_hypothesis || session.hypothesis).trim() + '\n\n';
     }
     if (session.able_table_md) {
-        plan += '# ABLE Table\n\n' + session.able_table_md.trim() + '\n';
+        plan += '# ABLE Table\n\n' + session.able_table_md.trim() + '\n\n';
+    }
+    if (session.data_sources_md) {
+        plan += '# Data Sources\n\n' + session.data_sources_md.trim() + '\n';
     }
     if (!plan) {
-        plan = 'No research, hypothesis, or ABLE table found in your session.';
+        plan = 'No research, hypothesis, ABLE table, or data sources found in your session.';
     }
     window.currentPlanMarkdown = plan;
     renderMarkdown(plan, document.getElementById('plan-content'));

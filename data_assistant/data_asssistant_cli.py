@@ -27,6 +27,7 @@ def find_dotenv_file():
 async def identify_data_sources(
     hypothesis: str = None, 
     research_document: str = None,
+    able_info: str = None,
     verbose: bool = False
 ) -> str:
     """
@@ -116,6 +117,7 @@ async def identify_data_sources(
     messages = [
         TextMessage(content=f"Here is the research document:\n{research_document}\n", source="user"),
         TextMessage(content=f"Here is the hypothesis: {hypothesis}\n", source="user"),
+        TextMessage(content=f"The Actor, Behavior, Location and Evidence (ABLE) information is as follows: {able_info}", source="user"),
         TextMessage(content=f"Splunk server URL: {os.getenv('SPLUNK_SERVER_URL')}\n", source="system"),
         TextMessage(content=f"Splunk MCP user: {os.getenv('SPLUNK_MCP_USER')}\n", source="system"),
         TextMessage(content=f"Splunk MCP password: {os.getenv('SPLUNK_MCP_PASSWD')}\n", source="system")
@@ -179,6 +181,7 @@ if __name__ == "__main__":
     parser.add_argument('-e', '--environment', help='Path to specific .env file to use')
     parser.add_argument('-r', '--research', help='Path to the research document (markdown file)', required=True)
     parser.add_argument('-y', '--hypothesis', help='The hunting hypothesis', required=True)
+    parser.add_argument('-a', '--able_info', help='The Actor, Behavior, Location and Evidence (ABLE) information', required=False, default=None)
     parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output', default=False)
     args = parser.parse_args()
 
@@ -209,9 +212,28 @@ if __name__ == "__main__":
         print(f"Error reading research document: {e}")
         exit(1)
 
+    # Read the contents of the ABLE information if provided
+    able_info = None
+    if args.able_info:
+        try:
+            with open(args.able_info, 'r', encoding='utf-8') as file:
+                able_info = file.read()
+        except FileNotFoundError:
+            print(f"Error: ABLE information file '{args.able_info}' not found")
+            exit(1)
+        except Exception as e:
+            print(f"Error reading ABLE information: {e}")
+            exit(1)
+
     # Run the hypothesizer asynchronously
-    data_sources = asyncio.run(identify_data_sources(args.hypothesis, research_data, verbose=args.verbose))
-#    print(data_sources)
+    data_sources = asyncio.run(
+        identify_data_sources(
+            hypothesis=args.hypothesis, 
+            research_document=research_data, 
+            able_info=able_info,
+            verbose=args.verbose
+        )
+    )
 
     # Find the final message from the "critic" agent using next() and a generator expression
     data_sources_message = next(

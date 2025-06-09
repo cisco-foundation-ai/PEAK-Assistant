@@ -108,24 +108,38 @@ load_env_defaults()
 
 # Add the parent directory to sys.path so we can import our modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+# Suppress asyncio event loop closure warnings from background HTTP cleanup
+import warnings
+import logging
+
+# Set up logging to suppress HTTP client cleanup errors
+logging.getLogger("httpx").setLevel(logging.ERROR)
+logging.getLogger("httpcore").setLevel(logging.ERROR)
+logging.getLogger("asyncio").setLevel(logging.ERROR)
+
+# Suppress specific warnings about event loop closure
+warnings.filterwarnings("ignore", message=".*Event loop is closed.*")
+warnings.filterwarnings("ignore", message=".*Task exception was never retrieved.*")
+
 from research_assistant.research_assistant_cli import researcher as async_researcher
 from hypothesis_assistant.hypothesis_assistant_cli import hypothesizer as async_hypothesizer
 from hypothesis_assistant.hypothesis_refiner_cli import refiner as async_refiner
 from able_assistant.able_assistant_cli import able_table as async_able_table
+from data_assistant.data_asssistant_cli import identify_data_sources as async_identify_data_sources
 
 # Initialize Flask app
 app = Flask(__name__)
 app.secret_key = os.urandom(24)  # For session management
 
-# Set session to be permanent and expire after 24 hours
-app.config['SESSION_PERMANENT'] = True
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
+# Configure sessions to be temporary (don't persist across app restarts)
+app.config['SESSION_PERMANENT'] = False
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=1)  # Short lifetime for temporary sessions
 
 # Configure SQLAlchemy for session storage
 app.config['SESSION_TYPE'] = 'sqlalchemy'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///peak_sessions.db'
 app.config['SESSION_SQLALCHEMY_TABLE'] = 'sessions'
-app.config['SESSION_PERMANENT'] = False
 app.config['SESSION_USE_SIGNER'] = True
 app.config['SESSION_KEY_PREFIX'] = 'peak_assistant_'
 
@@ -321,6 +335,66 @@ async def able_table():
         else:
             return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/data-discovery', methods=['GET', 'POST'])
+@async_action
+async def data_discovery():
+    if request.method == 'GET':
+        # Return existing data sources from session
+        return jsonify({
+            'data_sources_md': session.get('data_sources_md', ''),
+            'success': True
+        })
+    
+    data = request.json
+    # Use refined hypothesis if available, else fallback to original
+    hypothesis = data.get('hypothesis') or session.get('refined_hypothesis') or session.get('hypothesis', '')
+    report_md = data.get('report_md') or session.get('report_md', '')
+    able_table_md = data.get('able_table_md') or session.get('able_table_md', '')
+    retry_count = int(data.get('retry_count', 3))
+    verbose_mode = data.get('verbose_mode', False)
+    
+    if not hypothesis:
+        return jsonify({'success': False, 'error': 'No hypothesis provided'}), 400
+    
+    if not report_md:
+        return jsonify({'success': False, 'error': 'No research report available'}), 400
+    
+    try:
+        result = await retry_api_call(
+            async_identify_data_sources, 
+            hypothesis, 
+            report_md,
+            able_info=able_table_md,
+            verbose=verbose_mode,
+            max_retries=retry_count
+        )
+        # Extract the final message from the "Data_Discovery_Agent" similar to CLI version
+        data_sources_md = None
+        if hasattr(result, 'messages'):
+            data_sources_md = next(
+                (message.content for message in reversed(result.messages) if getattr(message, 'source', None) == "Data_Discovery_Agent"),
+                None
+            )
+        if not data_sources_md:
+            if hasattr(result, 'content'):
+                data_sources_md = result.content
+            else:
+                data_sources_md = str(result)
+        
+        # Store in session
+        session['data_sources_md'] = data_sources_md
+        return jsonify({'success': True, 'data_sources': data_sources_md})
+    except Exception as e:
+        error_msg = str(e)
+        if "500" in error_msg and "Internal server error" in error_msg:
+            return jsonify({
+                'success': False, 
+                'error': 'OpenAI API internal server error. Maximum retry attempts reached.',
+                'detail': str(e)
+            }), 500
+        else:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/upload-report', methods=['POST'])
 def upload_report():
     if 'file' not in request.files:
@@ -357,6 +431,24 @@ def upload_able_table():
         content = f.read()
     session['able_table_md'] = content
     return jsonify({'success': True, 'able_table': content})
+
+@app.route('/api/upload-data-sources', methods=['POST'])
+def upload_data_sources():
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'No file part'}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'success': False, 'error': 'No selected file'}), 400
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ALLOWED_UPLOAD_EXTENSIONS:
+        return jsonify({'success': False, 'error': 'Invalid file type'}), 400
+    filename = secure_filename(file.filename)
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    file.save(filepath)
+    with open(filepath, 'r', encoding='utf-8') as f:
+        content = f.read()
+    session['data_sources_md'] = content
+    return jsonify({'success': True, 'data_sources': content})
 
 @app.route('/api/download/markdown', methods=['POST', 'GET'])
 def download_markdown():
@@ -426,9 +518,13 @@ def refinement_page():
 def able_table_page():
     return render_template('able_table.html')
 
-@app.route('/research-plan')
-def research_plan_page():
-    return render_template('research_plan.html')
+@app.route('/data-discovery')
+def data_discovery_page():
+    return render_template('data_discovery.html')
+
+@app.route('/hunt-planning')
+def hunt_planning_page():
+    return render_template('hunt_planning.html')
 
 @app.route('/help')
 def help_page():
@@ -471,7 +567,13 @@ def debug_info():
 if __name__ == '__main__':
     # Create templates directory if it doesn't exist
     os.makedirs(os.path.join(os.path.dirname(__file__), 'templates'), exist_ok=True)
+    
     # TLS/SSL context: expects cert.pem and key.pem in the UI directory
     context = (os.path.join(os.path.dirname(__file__), 'cert.pem'),
                os.path.join(os.path.dirname(__file__), 'key.pem'))
+    
+    print("Note: You may see 'Task exception was never retrieved' errors related to HTTP client cleanup.")
+    print("These are harmless and don't affect the application functionality.")
+    print("")
+    
     app.run(debug=True, port=8000, ssl_context=context)

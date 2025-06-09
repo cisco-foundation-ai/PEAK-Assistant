@@ -2,8 +2,8 @@
 
 {% set prev_phase_url = "/refinement" %}
 {% set prev_phase_name = "Hypothesis Refinement (Optional)" %}
-{% set next_phase_url = "/research-plan" %}
-{% set next_phase_name = "Generate Hunt Plan" %}
+{% set next_phase_url = "/data-discovery" %}
+{% set next_phase_name = "Data Discovery" %}
 
 {% block nav %}{{ super() }}{% endblock %}
 
@@ -50,7 +50,14 @@
 
 <div id="able-table-container" style="display: none;">
     <div id="able-table-content" class="border rounded p-3 mb-3"></div>
-</div>
+</div>    <div class="navigation-buttons mt-4 d-flex justify-content-between">
+        <a href="{{ url_for('refinement_page') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-1"></i> Prev: Hypothesis Refinement (Optional)
+        </a>
+        <a href="{{ url_for('data_discovery_page') }}" class="btn btn-outline-primary" id="next-phase-link">
+            Next: Data Discovery <i class="fas fa-arrow-right ms-1"></i>
+        </a>
+    </div>
 {% endblock %}
 
 {% block script %}

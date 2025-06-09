@@ -95,10 +95,18 @@
                         <a class="nav-link" href="/refinement">Hypothesis Refinement (Optional)</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/able-table">Generate ABLE Table</a>
+                        <a class="nav-link {{ 'active' if request.path == url_for('able_table_page') else '' }}" href="{{ url_for('able_table_page') }}">
+                            <i class="fas fa-table me-2"></i>Generate ABLE Table
+                        </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link {{ 'active' if request.path == url_for('data_discovery_page') else '' }}" href="{{ url_for('data_discovery_page') }}">
+                            <i class="fas fa-search-location me-2"></i>Data Discovery
+                        </a>
+                    </li>
+                    <!-- Only the green button for Generate Hunt Plan - no regular nav-link -->
                     <li class="nav-item mt-3 mb-2">
-                        <a class="btn btn-success w-100 fw-bold" href="/research-plan" style="font-size:1.1rem;">Generate Hunt Plan</a>
+                        <a class="btn btn-success w-100 fw-bold" href="/hunt-planning" style="font-size:1.1rem;">Generate Hunt Plan</a>
                     </li>
                     <li class="nav-item mb-2">
                         <button id="clear-everything-btn" class="btn btn-danger w-100 fw-bold" style="font-size:1.1rem;">Clear Everything and Start Over</button>

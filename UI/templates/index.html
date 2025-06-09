@@ -62,11 +62,20 @@
             </div>
         </div>
         <div class="col-12 col-sm-6 col-md-4 col-lg-3 d-flex">
+            <div class="card main-phase-card w-100">
+                <div class="card-body">
+                    <h5 class="card-title">Data Discovery</h5>
+                    <p class="card-text">Identify relevant data sources for your hunt.</p>
+                    <a href="{{ url_for('data_discovery_page') }}" class="btn btn-outline-primary mt-auto">Go to Data Discovery</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-sm-6 col-md-4 col-lg-3 d-flex">
             <div class="card main-phase-card border-success w-100">
                 <div class="card-body">
                     <h5 class="card-title text-success fw-bold">Generate Hunt Plan</h5>
                     <p class="card-text">Combine your research, hypothesis, and ABLE table into a single, formatted hunt plan. Download as Markdown or PDF.</p>
-                    <a href="/research-plan" class="btn btn-success mt-auto fw-bold">Go to Hunt Plan</a>
+                    <a href="/hunt-planning" class="btn btn-success mt-auto fw-bold">Go to Hunt Plan</a>
                 </div>
             </div>
         </div>
