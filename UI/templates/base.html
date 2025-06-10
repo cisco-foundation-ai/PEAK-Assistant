@@ -105,6 +105,10 @@
             font-size: 0.9rem;
             color: #6c757d;
         }
+        .btn-hunt-planning-disabled-color {
+            background-color: #146c43 !important; /* Bootstrap's darker success shade for a "duskier green" */
+            border-color: #13653f !important; /* Slightly darker border */
+        }
     </style>
 </head>
 <body>
@@ -145,7 +149,7 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link btn btn-success text-white mt-1 mb-1 w-100" href="/hunt-planning">
+                            <a id="hunt-planning-btn" class="nav-link btn btn-success text-white mt-1 mb-1 w-100" href="/hunt-planning">
                                 Hunt Planning
                             </a>
                         </li>
@@ -417,7 +421,17 @@
                     .then(data => {
                         hideLoading();
                         if (data.success) {
-                            // Show a success message using a toast or simple alert
+                            // Clear relevant sessionStorage items
+                            sessionStorage.removeItem('report_md');
+                            sessionStorage.removeItem('last_topic');
+                            sessionStorage.removeItem('hypotheses');
+                            sessionStorage.removeItem('current_hypothesis'); // For hypothesis.html
+                            sessionStorage.removeItem('refined_hypothesis'); // For refinement.html
+                            sessionStorage.removeItem('able_table_md'); // For able_table.html
+                            sessionStorage.removeItem('data_sources_md'); // For data_discovery.html
+                            sessionStorage.removeItem('currentPlanMarkdown'); // For hunt_planning.html
+                            // Add any other sessionStorage keys used by other pages here
+
                             alert('Session cleared successfully. The page will now reload.');
                             window.location.reload();
                         } else {
@@ -430,6 +444,44 @@
                     });
                 }
             });
+        }
+
+        // Function to check prerequisites for Hunt Planning button and style it
+        function checkHuntPlanningPrerequisites() {
+            const huntPlanningBtn = document.getElementById('hunt-planning-btn');
+            if (!huntPlanningBtn) {
+                return; // Button not found, do nothing
+            }
+
+            const researchDone = sessionStorage.getItem('report_md')?.trim();
+            const hypothesisDone = sessionStorage.getItem('refined_hypothesis')?.trim() || sessionStorage.getItem('current_hypothesis')?.trim();
+            const ableDone = sessionStorage.getItem('able_table_md')?.trim();
+            const discoveryDone = sessionStorage.getItem('data_sources_md')?.trim();
+
+            const allPrerequisitesMet = researchDone && hypothesisDone && ableDone && discoveryDone;
+
+            if (allPrerequisitesMet) {
+                huntPlanningBtn.classList.remove('disabled'); 
+                huntPlanningBtn.classList.remove('btn-hunt-planning-disabled-color');
+                // Ensure btn-success is present if it was somehow removed (it shouldn't be with this logic)
+                if (!huntPlanningBtn.classList.contains('btn-success')) {
+                     huntPlanningBtn.classList.add('btn-success');
+                }
+            } else {
+                huntPlanningBtn.classList.add('disabled'); 
+                // btn-success might be kept for other stylings (padding, font, etc.)
+                // but our custom class will override background/border due to !important.
+                huntPlanningBtn.classList.add('btn-hunt-planning-disabled-color'); 
+            }
+        }
+
+        // Call this function when the page loads.
+        // Ensures DOM is ready before trying to access elements.
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', checkHuntPlanningPrerequisites);
+        } else {
+            // DOMContentLoaded has already fired
+            checkHuntPlanningPrerequisites();
         }
 
         // Add page-specific JavaScript

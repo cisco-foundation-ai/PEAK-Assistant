@@ -88,11 +88,16 @@ document.addEventListener('DOMContentLoaded', function() {
             renderMarkdown(refinedHypothesis, refinedHypoContent);
             refinedHypoContainer.style.display = 'block';
             downloadRefinedHypoActionsContainer.style.display = 'flex';
+            sessionStorage.setItem('refined_hypothesis', refinedHypothesis);
         } else {
             refinedHypoContainer.style.display = 'none';
             downloadRefinedHypoActionsContainer.style.display = 'none';
             window.currentRefinedHypothesisMarkdown = ''; // Clear if not present
             refinedHypoContent.dataset.rawMarkdown = '';
+            sessionStorage.removeItem('refined_hypothesis');
+        }
+        if (typeof checkHuntPlanningPrerequisites === 'function') {
+            checkHuntPlanningPrerequisites();
         }
     }
 
@@ -120,8 +125,20 @@ document.addEventListener('DOMContentLoaded', function() {
         hideError();
         showLoading('Refining hypothesis...');
         
-        const retryCount = document.getElementById('retry-count').value;
-        const verboseMode = document.getElementById('debug-mode')?.checked || false;
+        let retryCount = 3; // Default value
+        const storedRetryCount = localStorage.getItem('retry-count-page');
+        if (storedRetryCount) {
+            const parsedRetryCount = parseInt(storedRetryCount, 10);
+            if (!isNaN(parsedRetryCount)) {
+                retryCount = parsedRetryCount;
+            } else {
+                console.warn('Invalid retry count in localStorage for refinement, using default (3).');
+            }
+        }
+
+        const storedVerboseMode = localStorage.getItem('debug-mode-page');
+        const verboseMode = storedVerboseMode === 'true';
+        
         const refineOption = refineCheckbox.checked;
 
         fetch('/api/refine', {

@@ -96,8 +96,16 @@ document.addEventListener('DOMContentLoaded', function() {
         hideError();
         showLoading('Getting hypotheses...');
         
-        const retryCount = document.getElementById('retry-count').value;
-        const verboseMode = document.getElementById('debug-mode')?.checked || false;
+        let retryCount = 3; // Default value
+        const storedRetryCount = localStorage.getItem('retry-count-page');
+        if (storedRetryCount) {
+            const parsedRetryCount = parseInt(storedRetryCount, 10);
+            if (!isNaN(parsedRetryCount)) {
+                retryCount = parsedRetryCount;
+            } else {
+                console.warn('Invalid retry count in localStorage for hypothesis, using default (3).');
+            }
+        }
         
         fetch('/api/hypothesize', {
             method: 'POST',
@@ -208,12 +216,18 @@ document.addEventListener('DOMContentLoaded', function() {
         currentHypoEdit.dataset.rawMarkdown = hypothesis; // Update for download helper
 
         if (hypothesis.trim() !== '') {
+            sessionStorage.setItem('current_hypothesis', hypothesis);
+            sessionStorage.removeItem('refined_hypothesis'); // New current hypothesis invalidates refinement
             currentHypoContainer.style.display = 'block';
             downloadHypoActionsContainer.style.display = 'flex'; // Show download button
         } else {
+            sessionStorage.removeItem('current_hypothesis');
             // Optionally hide if empty, or leave it, depending on desired UX
             // currentHypoContainer.style.display = 'none';
             // downloadHypoActionsContainer.style.display = 'none';
+        }
+        if (typeof checkHuntPlanningPrerequisites === 'function') {
+            checkHuntPlanningPrerequisites();
         }
     }
     

@@ -72,8 +72,19 @@ document.addEventListener('DOMContentLoaded', function() {
         hideError();
         showLoading('Generating research report... (this may take several minutes)');
         
-        const retryCount = document.getElementById('retry-count').value;
-        const verboseMode = document.getElementById('debug-mode')?.checked || false;
+        let retryCount = 3; // Default value
+        const storedRetryCount = localStorage.getItem('retry-count-page');
+        if (storedRetryCount) {
+            const parsedRetryCount = parseInt(storedRetryCount, 10);
+            if (!isNaN(parsedRetryCount)) {
+                retryCount = parsedRetryCount;
+            } else {
+                console.warn('Invalid retry count in localStorage, using default (3).');
+            }
+        }
+
+        const storedVerboseMode = localStorage.getItem('debug-mode-page');
+        const verboseMode = storedVerboseMode === 'true';
         
         fetch('/api/research', {
             method: 'POST',

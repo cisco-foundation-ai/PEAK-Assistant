@@ -87,11 +87,16 @@ document.addEventListener('DOMContentLoaded', function() {
             renderMarkdown(sessionData.able_table_md, ableTableContent);
             ableTableContainer.style.display = 'block';
             downloadAbleActionsContainer.style.display = 'flex';
+            sessionStorage.setItem('able_table_md', sessionData.able_table_md);
         } else {
             ableTableContainer.style.display = 'none';
             downloadAbleActionsContainer.style.display = 'none';
             window.currentAbleTableMarkdown = '';
             ableTableContent.dataset.rawMarkdown = '';
+            sessionStorage.removeItem('able_table_md');
+        }
+        if (typeof checkHuntPlanningPrerequisites === 'function') {
+            checkHuntPlanningPrerequisites();
         }
     }
 
@@ -118,15 +123,22 @@ document.addEventListener('DOMContentLoaded', function() {
         hideError();
         showLoading('Generating ABLE Table...');
         
-        const retryCount = document.getElementById('retry-count').value;
-        // const verboseMode = document.getElementById('debug-mode')?.checked || false; // ABLE table doesn't use verbose
+        let retryCount = 3; // Default value
+        const storedRetryCount = localStorage.getItem('retry-count-page');
+        if (storedRetryCount) {
+            const parsedRetryCount = parseInt(storedRetryCount, 10);
+            if (!isNaN(parsedRetryCount)) {
+                retryCount = parsedRetryCount;
+            } else {
+                console.warn('Invalid retry count in localStorage for ABLE table, using default (3).');
+            }
+        }
         
         fetch('/api/able-table', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 retry_count: retryCount
-                // verbose_mode: verboseMode 
             })
         })
         .then(response => response.json())

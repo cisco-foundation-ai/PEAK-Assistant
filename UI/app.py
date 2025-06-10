@@ -489,6 +489,40 @@ def download_pdf():
         download_name=filename
     )
 
+@app.route('/api/hunt-plan', methods=['GET'])
+def get_hunt_plan():
+    """Generate hunt plan by concatenating all session data"""
+    plan = ''
+    
+    # Add research report
+    report_md = session.get('report_md', '')
+    if report_md:
+        plan += '# Topic Research\n\n' + report_md.strip() + '\n\n'
+    
+    # Add hypothesis (prefer refined over original)
+    hypothesis = session.get('refined_hypothesis') or session.get('hypothesis', '')
+    if hypothesis:
+        plan += '# Hypothesis\n\n' + hypothesis.strip() + '\n\n'
+    
+    # Add ABLE table
+    able_table_md = session.get('able_table_md', '')
+    if able_table_md:
+        plan += '# ABLE Table\n\n' + able_table_md.strip() + '\n\n'
+    
+    # Add data sources
+    data_sources_md = session.get('data_sources_md', '')
+    if data_sources_md:
+        plan += '# Data Sources\n\n' + data_sources_md.strip() + '\n'
+    
+    if not plan.strip():
+        plan = 'No research, hypothesis, ABLE table, or data sources found in your session. Please complete previous steps.'
+    
+    return jsonify({
+        'success': True,
+        'hunt_plan': plan.strip(),
+        'has_content': bool(plan.strip() and plan.strip() != 'No research, hypothesis, ABLE table, or data sources found in your session. Please complete previous steps.')
+    })
+
 @app.route('/clear-session', methods=['POST'])
 def clear_session():
     session.clear()

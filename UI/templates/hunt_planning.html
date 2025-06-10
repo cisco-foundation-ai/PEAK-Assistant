@@ -27,57 +27,68 @@
         <!-- Removed bottom navigation bar from here -->
     </div>
 </div>
+</div>
 {% endblock %}
 
 {% block script %}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
+// Hunt planning page script - executed after base template DOMContentLoaded
+setTimeout(function() {
     const planContentDiv = document.getElementById('plan-content');
     
     // Ensure this global variable is available for setupDownloadButton
     window.currentPlanMarkdown = '';
 
-    // Fetch and combine the research, hypothesis, ABLE table, and data sources from session
-    fetch('/api/debug-info')
-    .then(response => response.json())
+    // Add immediate visual feedback
+    planContentDiv.innerHTML = '<p class="text-info">Fetching hunt plan data...</p>';
+
+    // Fetch the hunt plan from the dedicated endpoint
+    fetch('/api/hunt-plan')
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+    })
     .then(data => {
-        let plan = '';
-        const session = data.session_data || {};
-        if (session.report_md) {
-            plan += '# Topic Research\n\n' + session.report_md.trim() + '\n\n';
-        }
-        if (session.refined_hypothesis || session.hypothesis) {
-            plan += '# Hypothesis\n\n' + (session.refined_hypothesis || session.hypothesis).trim() + '\n\n';
-        }
-        if (session.able_table_md) {
-            plan += '# ABLE Table\n\n' + session.able_table_md.trim() + '\n\n';
-        }
-        if (session.data_sources_md) {
-            plan += '# Data Sources\n\n' + session.data_sources_md.trim() + '\n';
-        }
-        
-        if (!plan.trim()) {
-            plan = 'No research, hypothesis, ABLE table, or data sources found in your session. Please complete previous steps.';
-            planContentDiv.innerHTML = `<p class="text-muted">${plan}</p>`;
+        if (data.success) {
+            const plan = data.hunt_plan;
+            if (data.has_content) {
+                // Use the renderMarkdown function from base.html
+                if (typeof renderMarkdown === 'function') {
+                    renderMarkdown(plan, planContentDiv);
+                } else if (typeof marked !== 'undefined') {
+                    // Fallback if renderMarkdown is not available
+                    planContentDiv.innerHTML = marked.parse(plan);
+                } else {
+                    // Last resort fallback
+                    planContentDiv.innerHTML = '<pre>' + plan + '</pre>';
+                }
+            } else {
+                planContentDiv.innerHTML = `<p class="text-muted">${plan}</p>`;
+            }
+            
+            window.currentPlanMarkdown = plan;
+            planContentDiv.setAttribute('data-raw-markdown', plan);
+            
+            // Setup the download button
+            if (typeof setupDownloadButton === 'function') {
+                setupDownloadButton('plan-content', 'hunt_plan', 'download-plan-actions-container');
+            }
         } else {
-            renderMarkdown(plan, planContentDiv);
+            throw new Error(data.error || 'Failed to fetch hunt plan');
         }
-        
-        window.currentPlanMarkdown = plan;
-        planContentDiv.setAttribute('data-raw-markdown', plan);
-        
-        // Setup the download button
-        setupDownloadButton('plan-content', 'hunt_plan', 'download-plan-actions-container');
     })
     .catch(error => {
         console.error('Error fetching hunt plan data:', error);
-        const errorMessage = 'Failed to load hunt plan data. Please try again later.';
+        const errorMessage = 'Failed to load hunt plan data: ' + error.message;
         planContentDiv.innerHTML = `<p class="text-danger">${errorMessage}</p>`;
-        window.currentPlanMarkdown = errorMessage; // Set error message for potential download
+        window.currentPlanMarkdown = errorMessage;
         planContentDiv.setAttribute('data-raw-markdown', errorMessage);
-        // Still setup download button, it will allow downloading the error message or an empty file if preferred
-        setupDownloadButton('plan-content', 'hunt_plan', 'download-plan-actions-container');
+        
+        // Still setup download button if function is available
+        if (typeof setupDownloadButton === 'function') {
+            setupDownloadButton('plan-content', 'hunt_plan', 'download-plan-actions-container');
+        }
     });
-});
-</script>
+}, 500); // Wait a bit longer to ensure base template is fully loaded
 {% endblock %}

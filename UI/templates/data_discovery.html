@@ -87,11 +87,16 @@ document.addEventListener('DOMContentLoaded', function() {
         contentDiv.setAttribute('data-raw-markdown', markdown); // Update data attribute
         if (markdown && markdown.trim()) {
             renderMarkdown(markdown, contentDiv);
+            sessionStorage.setItem('data_sources_md', markdown);
         } else {
             contentDiv.innerHTML = '<p class="text-muted">Data sources will appear here...</p>';
+            sessionStorage.removeItem('data_sources_md');
         }
         // Initialize download button after content is updated
         setupDownloadButton('data-sources-content', 'data-sources', 'download-data-actions-container');
+        if (typeof checkHuntPlanningPrerequisites === 'function') {
+            checkHuntPlanningPrerequisites();
+        }
     }
 
     function showLoading(isLoading) {
