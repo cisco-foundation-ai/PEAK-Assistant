@@ -1,7 +1,0 @@
-Splunk hints:
-    If you encounter base64-encoded data, and if you decide that you must decode it,
-    you can use the following sample command as a reference:
-        | makeresults
-        | eval encoded="bnByb2Mg"
-        | code field=encoded method=base64 action=decode destfield=decoded
-        | table encoded, decoded

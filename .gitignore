@@ -180,3 +180,4 @@ cython_debug/
 *.pem
 *.json
 *.log 
+context.txt
