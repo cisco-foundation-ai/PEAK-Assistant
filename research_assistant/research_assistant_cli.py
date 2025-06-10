@@ -58,7 +58,11 @@ async def tavily_search(
 
     return search_results
 
-async def researcher(technique: str, verbose: bool = True) -> str:
+async def researcher(
+        technique: str = None, 
+        local_context: str = None,
+        verbose: bool = True
+) -> str:
     """
     Threat hunting report creator.
     """
@@ -360,6 +364,7 @@ async def researcher(technique: str, verbose: bool = True) -> str:
 
     messages = [
         TextMessage(content=f"Research this technique: {technique}\n", source="user"),
+        TextMessage(content=f"Additional local context: {local_context}\n", source="user"),
     ]
 
     try:
@@ -385,6 +390,7 @@ if __name__ == "__main__":
     # Set up argument parser
     parser = argparse.ArgumentParser(description='Generate a threat hunting report for a specific technique')
     parser.add_argument('-t', '--technique', required=True, help='The cybersecurity technique to research')
+    parser.add_argument('-c', '--local_context', help='Additional local context to consider', required=False, default=None)
     parser.add_argument('-e', '--environment', help='Path to specific .env file to use')
     parser.add_argument('-f', '--format', choices=['pdf', 'markdown'], default='markdown', help='Output report format: pdf or markdown')
     parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
@@ -406,10 +412,24 @@ if __name__ == "__main__":
         else:
             print("Warning: No .env file found in current or parent directories")
 
-    # Run the hypothesizer asynchronously
+    # Read the contents of the local context if provided
+    local_context = None
+    if args.local_context:
+        try:
+            with open(args.local_context, 'r', encoding='utf-8') as file:
+                local_context = file.read()
+        except FileNotFoundError:
+            print(f"Error: Local context file '{args.local_context}' not found")
+            exit(1)
+        except Exception as e:
+            print(f"Error reading local context: {e}")
+            exit(1)
+
+    # Run the researcher asynchronously
     messages = asyncio.run(
         researcher(
             technique=args.technique,
+            local_context=local_context,
             verbose=args.verbose
         )
     )

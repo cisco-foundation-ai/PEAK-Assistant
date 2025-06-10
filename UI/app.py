@@ -187,11 +187,14 @@ async def research():
     if not topic:
         return jsonify({'success': False, 'error': 'No topic provided'}), 400
     
+    local_context = session.get('local-context', '')  # Get local context from session
+
     try:
         # Use the agent framework
         messages = await retry_api_call(
             async_researcher, 
             topic, 
+            local_context=local_context,  # Pass local context
             verbose=verbose_mode,
             max_retries=retry_count
         )
@@ -223,12 +226,15 @@ async def hypothesize():
     
     if not report_md:
         return jsonify({'success': False, 'error': 'No research report available'}), 400
+
+    local_context = session.get('local-context', '')  # Get local context from session
     
     try:
         hypos = await retry_api_call(
             async_hypothesizer, 
             report_md, 
-            report_md,
+            report_md,  # This seems to be duplicated, raw_text is the second param
+            local_context=local_context,  # Pass local context
             max_retries=retry_count
         )
         
@@ -284,12 +290,13 @@ async def refine():
         return jsonify({'success': True, 'refined_hypothesis': hypothesis})
     
     verbose_mode = data.get('verbose_mode', False)
-    
+    local_context = session.get('local-context', '')  # Get local context from session
+
     try:
         refined = await retry_api_call(
             async_refiner, 
             hypothesis, 
-            '', 
+            local_context,  # Pass local context as positional argument
             report_md, 
             automated=True,
             verbose=verbose_mode,
@@ -331,12 +338,15 @@ async def able_table():
     
     if not hypothesis:
         return jsonify({'success': False, 'error': 'No hypothesis provided'}), 400
+
+    local_context = session.get('local-context', '')  # Get local context from session
     
     try:
         able_md = await retry_api_call(
             async_able_table, 
             hypothesis, 
             report_md,
+            local_context=local_context,  # Pass local context
             max_retries=retry_count
         )
         # Store in session

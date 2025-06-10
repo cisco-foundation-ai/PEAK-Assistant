@@ -19,7 +19,11 @@ def find_dotenv_file():
         current_dir = current_dir.parent
     return None  # No .env file found
 
-async def hypothesizer(user_input: str, research_document: str) -> str:
+async def hypothesizer(
+        user_input: str = None, 
+        research_document: str = None,
+        local_context: str = None
+) -> str:
     """
     Hypothesizer agent that combines user input, a markdown document, and its own prompt
     to generate output using an OpenAI model on Azure.
@@ -58,7 +62,8 @@ async def hypothesizer(user_input: str, research_document: str) -> str:
     messages = [
         SystemMessage(content=system_prompt),
         UserMessage(content=f"Here is the research document:\n{research_document}\n", source="user"),
-        UserMessage(content=f"Here is the user's input: {user_input}\n", source="user")
+        UserMessage(content=f"Here is the user's input: {user_input}\n", source="user"),
+        UserMessage(content=f"Additional local context: {local_context}\n", source="user"),
     ]
 
     az_model_client = AzureOpenAIChatCompletionClient(
@@ -86,6 +91,8 @@ if __name__ == "__main__":
     parser.add_argument('-e', '--environment', help='Path to specific .env file to use')
     parser.add_argument('-r', '--research', help='Path to the research document (markdown file)', required=True)
     parser.add_argument('-u', '--user_input', help='User input for hypothesis generation', required=False, default="")
+    parser.add_argument('-c', '--local_context', help='Additional local context to consider', required=False, default=None)
+
     args = parser.parse_args()
 
     # Load environment variables
@@ -115,6 +122,25 @@ if __name__ == "__main__":
         print(f"Error reading research document: {e}")
         exit(1)
 
+    # Read the contents of the local context if provided
+    local_context = None
+    if args.local_context:
+        try:
+            with open(args.local_context, 'r', encoding='utf-8') as file:
+                local_context = file.read()
+        except FileNotFoundError:
+            print(f"Error: Local context file '{args.local_context}' not found")
+            exit(1)
+        except Exception as e:
+            print(f"Error reading local context: {e}")
+            exit(1)
+
     # Run the hypothesizer asynchronously
-    hypotheses = asyncio.run(hypothesizer(args.user_input, research_data))
+    hypotheses = asyncio.run(
+        hypothesizer(
+            user_input=args.user_input, 
+            research_document=research_data,
+            local_context=local_context
+        )
+    )
     print(hypotheses)
