@@ -8,7 +8,12 @@
 {% block nav %}{{ super() }}{% endblock %}
 
 {% block content %}
-<h2>Hypothesis Generation</h2>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">Hypothesis Generation</h2>
+    <div id="download-hypo-actions-container" style="display: none;">
+        <!-- Download button will be inserted here by script -->
+    </div>
+</div>
 
 <div id="no-research-warning" class="alert alert-warning mb-4" style="display: none;">
     <strong>Note:</strong> No research report found. Please generate a research report in the Research Phase first.
@@ -40,11 +45,6 @@
         <textarea id="hypo-input" class="form-control" rows="4"></textarea>
     </div>
     <button id="submit-hypo-btn" class="btn btn-primary mb-3">Submit Hypothesis</button>
-</div>
-
-<!-- Container for the combined download button -->
-<div id="download-hypo-actions-container" class="d-flex justify-content-end mb-2" style="display: none;">
-    <!-- Download button will be inserted here by script -->
 </div>
 
 <div id="current-hypo-container" style="display: none;">

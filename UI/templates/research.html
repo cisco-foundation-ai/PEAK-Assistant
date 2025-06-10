@@ -10,7 +10,12 @@
 {% block nav %}{{ super() }}{% endblock %}
 
 {% block content %}
-<h2>Topic Research</h2>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">Topic Research</h2>
+    <div id="report-actions-container" style="display: none;">
+        <!-- Download button will be inserted here by script -->
+    </div>
+</div>
 <p class="mb-4">Enter a topic, threat actor technique, or behavior to generate a research report. You can also upload an existing report.</p>
 
 <div class="row mb-3">
@@ -34,12 +39,7 @@
     </div>
 </div>
 
-<div id="report-actions-container" class="d-flex justify-content-end mb-2" style="display: none;">
-    <!-- Download button will be inserted here by script -->
-</div>
-
 <div id="report-container" style="display: none;">
-    <h3>Research Report</h3>
     <div id="report-content" class="border rounded p-3 mb-3" data-raw-markdown=""></div>
 </div>
 

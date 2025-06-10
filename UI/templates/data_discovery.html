@@ -2,13 +2,12 @@
 
 {% block title %}Data Discovery - PEAK Assistant{% endblock %}
 
-{% block nav %}
-    {% set prev_phase_url = url_for('able_table_page') %}
-    {% set prev_phase_name = "Generate ABLE Table" %}
-    {% set next_phase_url = url_for('hunt_planning_page') %}
-    {% set next_phase_name = "Generate Hunt Plan" %}
-    {{ super() }}
-{% endblock %}
+{% set prev_phase_url = "/able-table" %}
+{% set prev_phase_name = "ABLE Table" %}
+{% set next_phase_url = "/hunt-planning" %}
+{% set next_phase_name = "Generate Hunt Plan" %}
+
+{% block nav %}{{ super() }}{% endblock %}
 
 {% block content %}
 <style>
@@ -25,9 +24,14 @@
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center">
         <h1>Data Discovery</h1>
-        <span id="loading-spinner" class="spinner-border text-primary" role="status" style="display: none;">
-            <span class="visually-hidden">Loading...</span>
-        </span>
+        <div class="d-flex align-items-center">
+            <div id="download-data-actions-container" style="display: none;">
+                <!-- Download button will be inserted here by script -->
+            </div>
+            <span id="loading-spinner" class="spinner-border text-primary ms-2" role="status" style="display: none;">
+                <span class="visually-hidden">Loading...</span>
+            </span>
+        </div>
     </div>
     <p>Identify potential data sources based on the research report, hypothesis, and ABLE table.</p>
 
@@ -54,7 +58,6 @@
             <i class="fas fa-upload me-1"></i> Upload Data Sources (MD/TXT)
         </button>
         <input type="file" id="data-sources-file-input" style="display: none;" accept=".md,.txt">
-        <div id="download-data-actions-container"></div>
     </div>
 
     <div class="mb-3">
@@ -94,9 +97,58 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         // Initialize download button after content is updated
         setupDownloadButton('data-sources-content', 'data-sources', 'download-data-actions-container');
+        
+        // Show download button container only when content is available
+        const downloadContainer = document.getElementById('download-data-actions-container');
+        if (downloadContainer) {
+            if (markdown && markdown.trim()) {
+                downloadContainer.style.display = 'block';
+                console.log('Data Discovery: Download button shown for content:', markdown.substring(0, 100));
+            } else {
+                downloadContainer.style.display = 'none';
+                console.log('Data Discovery: Download button hidden - no content');
+            }
+        } else {
+            console.error('Data Discovery: Download container not found');
+        }
+        
         if (typeof checkHuntPlanningPrerequisites === 'function') {
             checkHuntPlanningPrerequisites();
         }
+        // Also check navigation button state
+        checkNavigationButtonState();
+    }
+
+    function checkNavigationButtonState() {
+        // Check if hunt planning prerequisites are met (same logic as base template)
+        const researchDone = sessionStorage.getItem('report_md')?.trim();
+        const hypothesisDone = sessionStorage.getItem('refined_hypothesis')?.trim() || sessionStorage.getItem('current_hypothesis')?.trim();
+        const ableDone = sessionStorage.getItem('able_table_md')?.trim();
+        const discoveryDone = sessionStorage.getItem('data_sources_md')?.trim();
+
+        const allPrerequisitesMet = researchDone && hypothesisDone && ableDone && discoveryDone;
+        
+        // Find the navigation button (hunt planning "next" button)
+        const navButtons = document.querySelectorAll('.top-navigation .btn-outline-primary');
+        navButtons.forEach(btn => {
+            if (btn.href && btn.href.includes('/hunt-planning')) {
+                if (!allPrerequisitesMet) {
+                    btn.classList.add('disabled');
+                    btn.style.opacity = '0.6';
+                    btn.style.cursor = 'not-allowed';
+                    btn.addEventListener('click', function(e) {
+                        if (this.classList.contains('disabled')) {
+                            e.preventDefault();
+                            return false;
+                        }
+                    });
+                } else {
+                    btn.classList.remove('disabled');
+                    btn.style.opacity = '';
+                    btn.style.cursor = '';
+                }
+            }
+        });
     }
 
     function showLoading(isLoading) {
@@ -128,15 +180,15 @@ document.addEventListener('DOMContentLoaded', function() {
         if (data.data_sources_md) {
             updateContent(data.data_sources_md);
         } else {
-            // Ensure download button is set up even if no initial content
-            setupDownloadButton('data-sources-content', 'data-sources', 'download-data-actions-container');
+            // Check navigation button state even if no content
+            checkNavigationButtonState();
         }
         // Note: No fallback to sessionStorage to prevent stale data from persisting
     })
     .catch(error => {
         console.warn('Could not load existing data sources:', error);
-        // Ensure download button is set up even if fetch fails
-        setupDownloadButton('data-sources-content', 'data-sources', 'download-data-actions-container');
+        // Check navigation button state even if fetch fails
+        checkNavigationButtonState();
     });
 
     // Check for prerequisites and show warnings if missing

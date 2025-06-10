@@ -8,7 +8,12 @@
 {% block nav %}{{ super() }}{% endblock %}
 
 {% block content %}
-<h2>Generate ABLE Table</h2>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">Generate ABLE Table</h2>
+    <div id="download-able-actions-container" style="display: none;">
+        <!-- Download button will be inserted here by script -->
+    </div>
+</div>
 <p class="mb-4">This phase generates an ABLE (Activity, Behavior, Linkages, Environment) table based on the final hypothesis. You can also upload an existing ABLE table.</p>
 
 <div id="no-hypothesis-warning" class="alert alert-warning mb-4" style="display: none;">
@@ -33,13 +38,7 @@
     </div>
 </div>
 
-<!-- Container for the combined download button -->
-<div id="download-able-actions-container" class="d-flex justify-content-end mb-2" style="display: none;">
-    <!-- Download button will be inserted here by script -->
-</div>
-
 <div id="able-table-container" style="display: none;">
-    <h3>ABLE Table</h3>
     <div id="able-table-content" class="border rounded p-3 mb-3" data-raw-markdown=""></div>
 </div>
 

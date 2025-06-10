@@ -12,12 +12,13 @@
 
 {% block content %}
 <div class="container mt-4">
-    <h2>Generate Hunt Plan</h2>
-    <p class="mb-4">This phase combines your Topic Research, Hypothesis, ABLE Table, and Data Sources into a complete, shareable hunt plan. You can review the combined document below and download it.</p>
-
-    <div class="d-flex justify-content-start mb-3"> <!-- Changed from justify-content-end -->
-        <div id="download-plan-actions-container"></div>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="mb-0">Generate Hunt Plan</h2>
+        <div id="download-plan-actions-container" style="display: none;">
+            <!-- Download button will be inserted here by script -->
+        </div>
     </div>
+    <p class="mb-4">This phase combines your Topic Research, Hypothesis, ABLE Table, and Data Sources into a complete, shareable hunt plan. You can review the combined document below and download it.</p>
 
     <div id="plan-container" class="border rounded p-3 bg-light">
         <div id="plan-content" data-raw-markdown="">
@@ -70,9 +71,15 @@ setTimeout(function() {
             window.currentPlanMarkdown = plan;
             planContentDiv.setAttribute('data-raw-markdown', plan);
             
-            // Setup the download button
-            if (typeof setupDownloadButton === 'function') {
-                setupDownloadButton('plan-content', 'hunt_plan', 'download-plan-actions-container');
+            // Setup the download button and show container when content is available
+            setupDownloadButton('plan-content', 'hunt_plan', 'download-plan-actions-container');
+            const downloadContainer = document.getElementById('download-plan-actions-container');
+            if (downloadContainer && data.has_content) {
+                downloadContainer.style.display = 'block';
+                console.log('Hunt Planning: Download button shown for plan:', plan.substring(0, 100));
+            } else {
+                downloadContainer.style.display = 'none';
+                console.log('Hunt Planning: Download button hidden - no meaningful content');
             }
         } else {
             throw new Error(data.error || 'Failed to fetch hunt plan');
@@ -85,9 +92,11 @@ setTimeout(function() {
         window.currentPlanMarkdown = errorMessage;
         planContentDiv.setAttribute('data-raw-markdown', errorMessage);
         
-        // Still setup download button if function is available
-        if (typeof setupDownloadButton === 'function') {
-            setupDownloadButton('plan-content', 'hunt_plan', 'download-plan-actions-container');
+        // Don't show download button for error cases
+        const downloadContainer = document.getElementById('download-plan-actions-container');
+        if (downloadContainer) {
+            downloadContainer.style.display = 'none';
+            console.log('Hunt Planning: Download button hidden for error case');
         }
     });
 }, 500); // Wait a bit longer to ensure base template is fully loaded

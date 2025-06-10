@@ -109,6 +109,19 @@
             background-color: #146c43 !important; /* Bootstrap's darker success shade for a "duskier green" */
             border-color: #13653f !important; /* Slightly darker border */
         }
+        
+        /* Fix navigation button hover states for better text contrast */
+        .top-navigation .btn-outline-secondary:hover {
+            background-color: #adb5bd !important;
+            border-color: #adb5bd !important;
+            color: #212529 !important;
+        }
+        
+        .top-navigation .btn-outline-primary:hover {
+            background-color: #b6d7ff !important;
+            border-color: #b6d7ff !important;
+            color: #0a58ca !important;
+        }
     </style>
 </head>
 <body>
@@ -150,7 +163,7 @@
                         </li>
                         <li class="nav-item">
                             <a id="hunt-planning-btn" class="nav-link btn btn-success text-white mt-1 mb-1 w-100" href="/hunt-planning">
-                                Hunt Planning
+                                Generate Hunt Plan
                             </a>
                         </li>
                         <li class="nav-item mt-2"> <!-- Removed px-3 -->
