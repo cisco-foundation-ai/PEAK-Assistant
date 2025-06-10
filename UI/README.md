@@ -62,6 +62,8 @@ TAVILY_API_KEY=your_tavily_api_key
 SPLUNK_SERVER_URL=https://your-splunk-server:8089
 SPLUNK_MCP_USER=your-splunk-username
 SPLUNK_MCP_PASSWD=your-splunk-password
+SPLUNK_MCP_COMMAND=/path/to/splunk-mcp/run.sh
+SPLUNK_MCP_ARGS=splunk-mcp
 ```
 
 3. Create SSL certificates for HTTPS (development):
@@ -135,7 +137,8 @@ Session data is stored in a SQLite database (`peak_sessions.db`) in the UI direc
 - **OpenAI API 500 Errors**: Try increasing the retry count or use a simpler/shorter topic. This is typically an issue with OpenAI's servers.
 - **Environment Variables**: Ensure all required environment variables are properly set in your `.env` file.
 - **Azure API Issues**: Check that your Azure API key and endpoint are valid and correctly configured.
-- **Data Discovery Errors**: Ensure Splunk environment variables are set and that the Splunk MCP server is accessible.
+- **Data Discovery Errors**: Ensure Splunk environment variables are set and that the Splunk MCP server is accessible. Verify that `SPLUNK_MCP_COMMAND` points to a valid executable.
+- **MCP Server Connection Issues**: Check that the MCP server can start successfully and connect to your Splunk instance. Test the MCP command manually if needed.
 - **Session Issues**: 
   - Try clearing your browser cookies
   - Check that the SQLite database file has proper write permissions

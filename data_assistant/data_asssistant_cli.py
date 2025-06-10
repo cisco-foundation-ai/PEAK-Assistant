@@ -29,6 +29,8 @@ async def identify_data_sources(
     research_document: str = None,
     able_info: str = None,
     local_context: str = None,
+    mcp_command: str = None,
+    mcp_args: list = None,
     verbose: bool = False
 ) -> str:
     """
@@ -126,11 +128,12 @@ async def identify_data_sources(
         api_key=os.getenv("AZURE_OPENAI_API_KEY")
     )
 
+    # Split the args string into a list, handling multiple arguments
+    mcp_args_list = mcp_args.split()
+
     mcp_params = StdioServerParams(
-        command="/Users/dabianco/projects/SURGe/splunk-mcp/run.sh",
-        args=[
-            "splunk-mcp"
-        ]
+        command=mcp_command,
+        args=mcp_args_list
     )
 
     async with McpWorkbench(mcp_params) as mcp:
@@ -197,6 +200,14 @@ if __name__ == "__main__":
         else:
             print("Warning: No .env file found in current or parent directories")
 
+    # Get the MCP command and arguments from environment variables
+    if not "SPLUNK_MCP_COMMAND" in os.environ or not "SPLUNK_MCP_ARGS" in os.environ:
+        print("Error: SPLUNK_MCP_COMMAND and SPLUNK_MCP_ARGS environment variables must be set")
+        exit(1)
+
+    mcp_command = os.getenv("SPLUNK_MCP_COMMAND")
+    mcp_args_str = os.getenv("SPLUNK_MCP_ARGS")
+
     # Read the contents of the research document
     try:
         with open(args.research, 'r', encoding='utf-8') as file:
@@ -241,6 +252,8 @@ if __name__ == "__main__":
             research_document=research_data, 
             able_info=able_info,
             local_context=local_context,
+            mcp_command=mcp_command,
+            mcp_args=mcp_args_str,
             verbose=args.verbose
         )
     )

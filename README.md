@@ -133,7 +133,7 @@ python data_assistant/data_asssistant_cli.py -r kerberoasting.md -y "Adversaries
 
 **Notes:**
 This tool requires additional Splunk-specific environment variables (see Environment Variables section below).
-The data assistant uses an MCP (Model Context Protocol) server to interact with Splunk.
+The data assistant uses an MCP (Model Context Protocol) server to interact with Splunk. You must specify the path to your MCP server command and any required arguments through the `SPLUNK_MCP_COMMAND` and `SPLUNK_MCP_ARGS` environment variables.
 
 ## Local Context Files
 
@@ -200,9 +200,26 @@ TAVILY_API_KEY=your-tavily-api-key
 SPLUNK_SERVER_URL=https://your-splunk-server:8089
 SPLUNK_MCP_USER=your-splunk-username
 SPLUNK_MCP_PASSWD=your-splunk-password
+SPLUNK_MCP_COMMAND=/path/to/python3
+SPLUNK_MCP_ARGS=/path/to/splunk-mcp/splunk-mcp.py
 ```
 
 The assistant primarily supports Azure OpenAI as an LLM backend. You may use any model available in your Azure deployment.
+
+#### MCP Server Configuration (Data Assistant Only)
+
+The data assistant requires a Model Context Protocol (MCP) server to interact with Splunk. The MCP server acts as a bridge between the AI agents and your Splunk instance. It is designed to work with the [`splunk-mcp` server](https://github.com/splunk/splunk-mcp).
+
+- `SPLUNK_MCP_COMMAND`: Full path to the executable or script that starts your Splunk MCP server
+- `SPLUNK_MCP_ARGS`: Arguments to pass to the MCP server command (can be multiple arguments separated by spaces)
+
+Example configuration:
+```bash
+# Use a version of python3 that has the MCP module in it, such as the one
+# that the PEAK-Assistant app is using
+SPLUNK_MCP_COMMAND=/home/user/.pyenv/versions/peak-assistant/bin/python3
+SPLUNK_MCP_ARGS=/home/user/splunk-mcp/splunk-mcp.py
+```
 
 ### 3. Set Up a Python Environment
 These instructions assume you are using `pyenv` to manage your Python environment.
@@ -326,7 +343,8 @@ PEAK-Assistant/
 2. **OpenAI API Errors**: Usually indicates rate limiting or server issues - try increasing retry counts or waiting
 3. **SSL Certificate Issues**: For the web interface, ensure you've created the required SSL certificates
 4. **Splunk Connection Issues**: Verify your Splunk credentials and server URL for data discovery features
-5. **Permission Issues**: Ensure the application has write permissions for session storage
+5. **MCP Server Issues**: Ensure the `SPLUNK_MCP_COMMAND` points to a valid executable and that the MCP server can connect to your Splunk instance
+6. **Permission Issues**: Ensure the application has write permissions for session storage
 
 ### Getting Help:
 

@@ -388,6 +388,16 @@ async def data_discovery():
     if not report_md:
         return jsonify({'success': False, 'error': 'No research report available'}), 400
     
+    # Get MCP configuration from environment variables
+    mcp_command = os.getenv('SPLUNK_MCP_COMMAND')
+    mcp_args = os.getenv('SPLUNK_MCP_ARGS')
+    
+    if not mcp_command or not mcp_args:
+        return jsonify({
+            'success': False, 
+            'error': 'Splunk MCP configuration missing. Please ensure SPLUNK_MCP_COMMAND and SPLUNK_MCP_ARGS environment variables are set.'
+        }), 500
+    
     try:
         result = await retry_api_call(
             async_identify_data_sources, 
@@ -395,6 +405,8 @@ async def data_discovery():
             report_md,
             able_info=able_table_md,
             local_context=local_context,  # Pass local context to the function
+            mcp_command=mcp_command,
+            mcp_args=mcp_args,
             verbose=verbose_mode,
             max_retries=retry_count
         )
