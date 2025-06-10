@@ -130,6 +130,19 @@ from data_assistant.data_asssistant_cli import identify_data_sources as async_id
 
 # Initialize Flask app
 app = Flask(__name__)
+
+# --- Load initial local context ---
+INITIAL_LOCAL_CONTEXT = None
+CONTEXT_FILE_PATH = os.path.join(os.path.dirname(__file__), 'context.txt')
+if os.path.exists(CONTEXT_FILE_PATH):
+    try:
+        with open(CONTEXT_FILE_PATH, 'r', encoding='utf-8') as f:
+            INITIAL_LOCAL_CONTEXT = f.read()
+        print(f"Successfully loaded initial context from {CONTEXT_FILE_PATH}")
+    except Exception as e:
+        print(f"Error loading initial context from {CONTEXT_FILE_PATH}: {e}")
+# --- End load initial local context ---
+
 app.secret_key = os.urandom(24)  # For session management
 
 # Configure sessions to be temporary (don't persist across app restarts)
@@ -146,6 +159,11 @@ app.config['SESSION_KEY_PREFIX'] = 'peak_assistant_'
 db = SQLAlchemy(app)
 app.config['SESSION_SQLALCHEMY'] = db
 Session(app)  # Initialize Flask-Session
+
+@app.before_request
+def load_initial_context_into_session():
+    if INITIAL_LOCAL_CONTEXT is not None and 'local-context' not in session:
+        session['local-context'] = INITIAL_LOCAL_CONTEXT
 
 # Create the session table if it doesn't exist
 with app.app_context():
@@ -352,6 +370,7 @@ async def data_discovery():
     able_table_md = data.get('able_table_md') or session.get('able_table_md', '')
     retry_count = int(data.get('retry_count', 3))
     verbose_mode = data.get('verbose_mode', False)
+    local_context = session.get('local-context', '')  # Get local context from session
     
     if not hypothesis:
         return jsonify({'success': False, 'error': 'No hypothesis provided'}), 400
@@ -365,6 +384,7 @@ async def data_discovery():
             hypothesis, 
             report_md,
             able_info=able_table_md,
+            local_context=local_context,  # Pass local context to the function
             verbose=verbose_mode,
             max_retries=retry_count
         )

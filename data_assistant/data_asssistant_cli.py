@@ -28,6 +28,7 @@ async def identify_data_sources(
     hypothesis: str = None, 
     research_document: str = None,
     able_info: str = None,
+    local_context: str = None,
     verbose: bool = False
 ) -> str:
     """
@@ -74,13 +75,6 @@ async def identify_data_sources(
         your understanding of the data sources and fields and their relevance to the 
         hypothesis. 
 
-        If you encounter base64-encoded data, and if you decide that you must decode it,
-        you can use the following sample command as a reference:
-            | makeresults
-            | eval encoded="bnByb2Mg"
-            | code field=encoded method=base64 action=decode destfield=decoded
-            | table encoded, decoded
-
         If you cannot identify an appropriate data source, please respond with "No suitable data sources found."
         followed by a brief explanation of why no data sources were identified and the closest data source(s) 
         you could find.
@@ -118,6 +112,7 @@ async def identify_data_sources(
         TextMessage(content=f"Here is the research document:\n{research_document}\n", source="user"),
         TextMessage(content=f"Here is the hypothesis: {hypothesis}\n", source="user"),
         TextMessage(content=f"The Actor, Behavior, Location and Evidence (ABLE) information is as follows: {able_info}", source="user"),
+        TextMessage(content=f"Additional local context: {local_context}\n", source="user"),
         TextMessage(content=f"Splunk server URL: {os.getenv('SPLUNK_SERVER_URL')}\n", source="system"),
         TextMessage(content=f"Splunk MCP user: {os.getenv('SPLUNK_MCP_USER')}\n", source="system"),
         TextMessage(content=f"Splunk MCP password: {os.getenv('SPLUNK_MCP_PASSWD')}\n", source="system")
@@ -182,6 +177,7 @@ if __name__ == "__main__":
     parser.add_argument('-r', '--research', help='Path to the research document (markdown file)', required=True)
     parser.add_argument('-y', '--hypothesis', help='The hunting hypothesis', required=True)
     parser.add_argument('-a', '--able_info', help='The Actor, Behavior, Location and Evidence (ABLE) information', required=False, default=None)
+    parser.add_argument('-c', '--local_context', help='Additional local context to consider', required=False, default=None)
     parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output', default=False)
     args = parser.parse_args()
 
@@ -225,12 +221,26 @@ if __name__ == "__main__":
             print(f"Error reading ABLE information: {e}")
             exit(1)
 
+    # Read the contents of the local context if provided
+    local_context = None
+    if args.local_context:
+        try:
+            with open(args.local_context, 'r', encoding='utf-8') as file:
+                local_context = file.read()
+        except FileNotFoundError:
+            print(f"Error: Local context file '{args.local_context}' not found")
+            exit(1)
+        except Exception as e:
+            print(f"Error reading local context: {e}")
+            exit(1)
+
     # Run the hypothesizer asynchronously
     data_sources = asyncio.run(
         identify_data_sources(
             hypothesis=args.hypothesis, 
             research_document=research_data, 
             able_info=able_info,
+            local_context=local_context,
             verbose=args.verbose
         )
     )
