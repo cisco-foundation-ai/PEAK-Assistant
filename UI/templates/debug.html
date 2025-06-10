@@ -3,12 +3,44 @@
 {% block content %}
 <h2>Session Debug Page</h2>
 
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">Session Data</h3>
+            </div>
+            <div class="card-body">
+                <pre id="session-data" class="bg-light p-3 rounded">Loading...</pre>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">Settings</h3>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="debug-mode-page">
+                        <label class="form-check-label" for="debug-mode-page">Verbose Mode</label>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="retry-count-page" class="form-label form-label-sm">API Retries:</label>
+                    <input type="number" class="form-control form-control-sm" id="retry-count-page" value="3" min="0" max="10">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="card mb-4">
     <div class="card-header">
-        <h3 class="card-title">Session Data</h3>
+        <h3 class="card-title">Environment Variables</h3>
     </div>
     <div class="card-body">
-        <pre id="session-data" class="bg-light p-3 rounded">Loading...</pre>
+        <pre id="env-vars" class="bg-light p-3 rounded">Loading...</pre>
     </div>
 </div>
 
@@ -48,23 +80,25 @@
 {% endblock %}
 
 {% block script %}
-// Load session data
-function loadSessionData() {
+// Load session data and environment variables
+function loadDebugData() {
     fetch('/api/debug-info')
     .then(response => response.json())
     .then(data => {
         document.getElementById('session-data').textContent = JSON.stringify(data.session_data, null, 2);
+        document.getElementById('env-vars').textContent = JSON.stringify(data.environment, null, 2);
     })
     .catch(error => {
         document.getElementById('session-data').textContent = 'Error loading session data: ' + error.message;
+        document.getElementById('env-vars').textContent = 'Error loading environment variables: ' + error.message;
     });
 }
 
 // Initial load
-loadSessionData();
+loadDebugData();
 
 // Refresh button
-document.getElementById('refresh-btn').addEventListener('click', loadSessionData);
+document.getElementById('refresh-btn').addEventListener('click', loadDebugData);
 
 // Test saving hypothesis
 document.getElementById('test-save-btn').addEventListener('click', function() {
@@ -87,7 +121,7 @@ document.getElementById('test-save-btn').addEventListener('click', function() {
     .then(data => {
         if (data.success) {
             resultEl.innerHTML = '<div class="alert alert-success">Hypothesis saved successfully!</div>';
-            loadSessionData(); // Refresh session data
+            loadDebugData(); // Refresh session data
         } else {
             resultEl.innerHTML = '<div class="alert alert-danger">Error: ' + data.error + '</div>';
         }
@@ -104,7 +138,7 @@ document.getElementById('clear-session-btn').addEventListener('click', function(
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                loadSessionData();
+                loadDebugData(); // Reload all debug data, including (now empty) session
                 document.getElementById('test-result').innerHTML = 
                     '<div class="alert alert-success">Session cleared successfully!</div>';
             } else {
@@ -117,5 +151,50 @@ document.getElementById('clear-session-btn').addEventListener('click', function(
                 '<div class="alert alert-danger">Error: ' + error.message + '</div>';
         });
     }
+});
+
+// Event listeners for new settings on debug.html
+document.addEventListener('DOMContentLoaded', function () {
+    const debugModePage = document.getElementById('debug-mode-page');
+    const retryCountPage = document.getElementById('retry-count-page');
+    const debugModeSidebar = document.getElementById('debug-mode'); // Assuming this ID still exists or is managed elsewhere
+    const retryCountSidebar = document.getElementById('retry-count'); // Assuming this ID still exists or is managed elsewhere
+
+    // Function to update sidebar controls if they exist
+    function updateSidebarControls(debugState, retryValue) {
+        if (debugModeSidebar) {
+            debugModeSidebar.checked = debugState;
+        }
+        if (retryCountSidebar) {
+            retryCountSidebar.value = retryValue;
+        }
+    }
+
+    // Initialize page controls from localStorage or defaults
+    let currentDebugState = localStorage.getItem('debugMode') === 'true';
+    let currentRetryCount = localStorage.getItem('retryCount') || '3';
+
+    if (debugModePage) {
+        debugModePage.checked = currentDebugState;
+        debugModePage.addEventListener('change', function () {
+            currentDebugState = this.checked;
+            localStorage.setItem('debugMode', currentDebugState);
+            updateSidebarControls(currentDebugState, currentRetryCount);
+            // Add any fetch/API call here if settings need to be saved server-side
+        });
+    }
+
+    if (retryCountPage) {
+        retryCountPage.value = currentRetryCount;
+        retryCountPage.addEventListener('change', function () {
+            currentRetryCount = this.value;
+            localStorage.setItem('retryCount', currentRetryCount);
+            updateSidebarControls(currentDebugState, currentRetryCount);
+            // Add any fetch/API call here if settings need to be saved server-side
+        });
+    }
+    
+    // Initial sync with sidebar if elements are present
+    // updateSidebarControls(currentDebugState, currentRetryCount);
 });
 {% endblock %}

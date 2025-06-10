@@ -1,99 +1,83 @@
 {% extends "base.html" %}
 
-{% set prev_phase_url = "/data-discovery" %}
-{% set prev_phase_name = "Data Discovery" %}
-{% set next_phase_url = None %}
-{% set next_phase_name = None %}
+{% block title %}Hunt Plan - PEAK Assistant{% endblock %}
 
-{% block nav %}{{ super() }}{% endblock %}
+{% block nav %}
+    {% set prev_phase_url = url_for('data_discovery_page') %}
+    {% set prev_phase_name = "Data Discovery" %}
+    {% set next_phase_url = None %}
+    {% set next_phase_name = None %}
+    {{ super() }}
+{% endblock %}
 
 {% block content %}
-<h2>Generate Hunt Plan</h2>
-<p class="mb-4">This phase combines your Topic Research, Hypothesis, ABLE Table, and Data Sources into a complete, shareable hunt plan. You can review the combined document below and download it as Markdown or PDF.</p>
+<div class="container mt-4">
+    <h2>Generate Hunt Plan</h2>
+    <p class="mb-4">This phase combines your Topic Research, Hypothesis, ABLE Table, and Data Sources into a complete, shareable hunt plan. You can review the combined document below and download it.</p>
 
-<div class="d-flex justify-content-end mb-3">
-    <form id="download-plan-markdown-form" method="post">
-        <input type="hidden" name="content" id="plan-markdown-content">
-        <input type="hidden" name="filename" value="hunt_plan.md">
-        <button type="submit" class="btn btn-outline-primary btn-sm">Download Markdown</button>
-    </form>
-    <form id="download-plan-pdf-form" method="post" class="ms-2">
-        <input type="hidden" name="content" id="plan-pdf-content">
-        <input type="hidden" name="filename" value="hunt_plan.pdf">
-        <button type="submit" class="btn btn-outline-secondary btn-sm">Download PDF</button>
-    </form>
-</div>
+    <div class="d-flex justify-content-start mb-3"> <!-- Changed from justify-content-end -->
+        <div id="download-plan-actions-container"></div>
+    </div>
 
-<div id="plan-container" class="border rounded p-3 bg-light">
-    <div id="plan-content"></div>
-    <div class="navigation-buttons mt-4 d-flex justify-content-between">
-        <a href="{{ url_for('data_discovery_page') }}" class="btn btn-outline-secondary">
-            <i class="fas fa-arrow-left me-1"></i> Prev: Data Discovery
-        </a>
-        <div>
-            <!-- This is the final phase, no next button needed -->
+    <div id="plan-container" class="border rounded p-3 bg-light">
+        <div id="plan-content" data-raw-markdown="">
+            <!-- Plan content will be rendered here by JavaScript -->
+            <p class="text-muted">Loading hunt plan...</p>
         </div>
+        <!-- Removed bottom navigation bar from here -->
     </div>
 </div>
 {% endblock %}
 
 {% block script %}
-function handleDownload(formId, contentId, apiUrl, filename) {
-    const form = document.getElementById(formId);
-    form.addEventListener('submit', function(e) {
-        e.preventDefault();
-        const content = window.currentPlanMarkdown;
-        form.querySelector('input[name="content"]').value = content;
-        fetch(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: content, filename: filename })
-        })
-        .then(response => {
-            if (!response.ok) throw new Error('Download failed');
-            return response.blob();
-        })
-        .then(blob => {
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(url);
-        })
-        .catch(error => {
-            showError('Download failed: ' + error.message);
-        });
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const planContentDiv = document.getElementById('plan-content');
+    
+    // Ensure this global variable is available for setupDownloadButton
+    window.currentPlanMarkdown = '';
+
+    // Fetch and combine the research, hypothesis, ABLE table, and data sources from session
+    fetch('/api/debug-info')
+    .then(response => response.json())
+    .then(data => {
+        let plan = '';
+        const session = data.session_data || {};
+        if (session.report_md) {
+            plan += '# Topic Research\n\n' + session.report_md.trim() + '\n\n';
+        }
+        if (session.refined_hypothesis || session.hypothesis) {
+            plan += '# Hypothesis\n\n' + (session.refined_hypothesis || session.hypothesis).trim() + '\n\n';
+        }
+        if (session.able_table_md) {
+            plan += '# ABLE Table\n\n' + session.able_table_md.trim() + '\n\n';
+        }
+        if (session.data_sources_md) {
+            plan += '# Data Sources\n\n' + session.data_sources_md.trim() + '\n';
+        }
+        
+        if (!plan.trim()) {
+            plan = 'No research, hypothesis, ABLE table, or data sources found in your session. Please complete previous steps.';
+            planContentDiv.innerHTML = `<p class="text-muted">${plan}</p>`;
+        } else {
+            renderMarkdown(plan, planContentDiv);
+        }
+        
+        window.currentPlanMarkdown = plan;
+        planContentDiv.setAttribute('data-raw-markdown', plan);
+        
+        // Setup the download button
+        setupDownloadButton('plan-content', 'hunt_plan', 'download-plan-actions-container');
+    })
+    .catch(error => {
+        console.error('Error fetching hunt plan data:', error);
+        const errorMessage = 'Failed to load hunt plan data. Please try again later.';
+        planContentDiv.innerHTML = `<p class="text-danger">${errorMessage}</p>`;
+        window.currentPlanMarkdown = errorMessage; // Set error message for potential download
+        planContentDiv.setAttribute('data-raw-markdown', errorMessage);
+        // Still setup download button, it will allow downloading the error message or an empty file if preferred
+        setupDownloadButton('plan-content', 'hunt_plan', 'download-plan-actions-container');
     });
-}
-
-handleDownload('download-plan-markdown-form', 'plan-content', '/api/download/markdown', 'hunt_plan.md');
-handleDownload('download-plan-pdf-form', 'plan-content', '/api/download/pdf', 'hunt_plan.pdf');
-
-// Fetch and combine the research, hypothesis, and ABLE table from session
-fetch('/api/debug-info')
-.then(response => response.json())
-.then(data => {
-    let plan = '';
-    const session = data.session_data || {};
-    if (session.report_md) {
-        plan += '# Topic Research\n\n' + session.report_md.trim() + '\n\n';
-    }
-    if (session.refined_hypothesis || session.hypothesis) {
-        plan += '# Hypothesis\n\n' + (session.refined_hypothesis || session.hypothesis).trim() + '\n\n';
-    }
-    if (session.able_table_md) {
-        plan += '# ABLE Table\n\n' + session.able_table_md.trim() + '\n\n';
-    }
-    if (session.data_sources_md) {
-        plan += '# Data Sources\n\n' + session.data_sources_md.trim() + '\n';
-    }
-    if (!plan) {
-        plan = 'No research, hypothesis, ABLE table, or data sources found in your session.';
-    }
-    window.currentPlanMarkdown = plan;
-    renderMarkdown(plan, document.getElementById('plan-content'));
 });
+</script>
 {% endblock %}

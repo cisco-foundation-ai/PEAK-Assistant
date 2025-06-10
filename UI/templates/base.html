@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PEAK Assistant UI</title>
+    <title>{% block title %}PEAK Assistant UI{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
@@ -12,6 +12,22 @@
             background-color: #f8f9fa;
             border-right: 1px solid #e9ecef;
             padding: 20px;
+        }
+        .sidebar-title-link {
+            font-size: 1.75rem; /* Adjust size as needed */
+            font-weight: 500;
+            color: #212529; /* Standard bootstrap text color */
+            text-decoration: none;
+        }
+        .sidebar-title-link.active, /* Keep .active for potential future use but override its specific link look */
+        .sidebar-title-link:hover {
+            color: #0d6efd; /* Standard link hover color */
+            text-decoration: none; /* Ensure no underline on hover */
+        }
+        .sidebar-logo {
+            width: 100%; /* Make image take full width of its container (the <a> tag) */
+            height: auto; /* Maintain aspect ratio */
+            vertical-align: middle; /* Aligns logo nicely if there were text next to it */
         }
         .content {
             padding: 20px;
@@ -24,158 +40,212 @@
         .debug-section {
             border-top: 1px solid #e9ecef;
             margin-top: 20px;
-            padding-top: 20px;
         }
         pre {
             background-color: #f8f9fa;
-            padding: 15px;
-            border-radius: 4px;
+            border: 1px solid #dee2e6;
+            border-radius: .25rem;
+            padding: 1rem;
+            overflow-x: auto;
             white-space: pre-wrap;
+            word-wrap: break-word;
         }
         #error-message {
-            display: none;
-            margin-top: 15px;
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            z-index: 1050; /* Ensure it's above most other content */
         }
         #loading-indicator {
-            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1060; /* Higher than error messages */
+            background-color: rgba(0,0,0,0.7);
+            color: white;
+            padding: 20px;
+            border-radius: 5px;
         }
         .help-icon {
-            margin-right: 1.25rem !important; /* Add right margin to keep icon away from window edge */
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+            background-color: #0d6efd;
+            color: white;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            text-decoration: none;
         }
         .help-icon svg {
-            transition: box-shadow 0.2s, background 0.2s;
-            border-radius: 50%;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-            background: #fff;
+            width: 24px;
+            height: 24px;
         }
         .help-icon:hover svg {
-            background: #f0f0f0;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            fill: #f8f9fa;
+        }
+        .top-navigation {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #e9ecef;
+            margin-bottom: 20px;
+        }
+        .top-navigation .nav-arrow {
+            font-size: 1.5rem;
+        }
+        .top-navigation .nav-text {
+            font-size: 0.9rem;
+            color: #6c757d;
         }
     </style>
 </head>
 <body>
-    <div class="top-bar d-flex align-items-center justify-content-end mb-3" style="width: 100%; min-height: 44px;">
-        <div class="d-flex align-items-center" style="min-height: 44px;">
-            {% block nav %}
-            <div class="d-flex align-items-center" style="min-height: 44px;">
-                {% if prev_phase_url %}
-                    <a href="{{ prev_phase_url }}" class="btn btn-link text-decoration-none me-2">
-                        <span aria-hidden="true">&#8592;</span> Prev: {{ prev_phase_name }}
-                    </a>
-                {% endif %}
-                {% if next_phase_url %}
-                    <a href="{{ next_phase_url }}" class="btn btn-link text-decoration-none">
-                        Next: {{ next_phase_name }} <span aria-hidden="true">&#8594;</span>
-                    </a>
-                {% endif %}
-            </div>
-            {% endblock %}
-            <a href="/help" title="Help" class="help-icon ms-3 me-3" style="display: flex; align-items: center; height: 100%;">
-                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="11" cy="11" r="10" stroke="#666" stroke-width="2" fill="#fff"/>
-                    <text x="11" y="16" text-anchor="middle" font-size="13" font-family="Arial, sans-serif" fill="#666" font-weight="bold">?</text>
-                </svg>
-            </a>
-        </div>
-    </div>
     <div class="container-fluid">
         <div class="row">
             <!-- Sidebar -->
-            <div class="col-md-3 col-lg-2 sidebar">
-                <h3 class="mb-4"><a href="/" style="text-decoration: none; color: inherit;">PEAK Assistant</a></h3>
-                <ul class="nav flex-column">
-                    <li class="nav-item">
-                        <a class="nav-link" href="/research">Topic Research</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/hypothesis">Hypothesis Generation</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/refinement">Hypothesis Refinement (Optional)</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {{ 'active' if request.path == url_for('able_table_page') else '' }}" href="{{ url_for('able_table_page') }}">
-                            <i class="fas fa-table me-2"></i>Generate ABLE Table
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {{ 'active' if request.path == url_for('data_discovery_page') else '' }}" href="{{ url_for('data_discovery_page') }}">
-                            <i class="fas fa-search-location me-2"></i>Data Discovery
-                        </a>
-                    </li>
-                    <!-- Only the green button for Generate Hunt Plan - no regular nav-link -->
-                    <li class="nav-item mt-3 mb-2">
-                        <a class="btn btn-success w-100 fw-bold" href="/hunt-planning" style="font-size:1.1rem;">Generate Hunt Plan</a>
-                    </li>
-                    <li class="nav-item mb-2">
-                        <button id="clear-everything-btn" class="btn btn-danger w-100 fw-bold" style="font-size:1.1rem;">Clear Everything and Start Over</button>
-                    </li>
-                </ul>
-                
-                <!-- Debug toggle -->
-                <div class="form-check mt-3">
-                    <input class="form-check-input" type="checkbox" id="debug-mode">
-                    <label class="form-check-label" for="debug-mode">
-                        Debug mode
-                    </label>
+            <nav class="col-md-3 col-lg-2 d-md-block bg-light sidebar collapse" id="sidebarMenu">
+                <div class="position-sticky pt-3">
+                    <ul class="nav flex-column">
+                        <li class="nav-item mb-2"> <!-- Added margin-bottom for spacing -->
+                            <a class="nav-link active sidebar-title-link w-100" aria-current="page" href="/">
+                                <img src="{{ url_for('static', filename='images/peak-logo.png') }}" alt="PEAK Assistant Logo" class="sidebar-logo">
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/research">
+                                Topic Research
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/hypothesis">
+                                Hypothesis Generation
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/refinement">
+                                Hypothesis Refinement
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/able-table">
+                                ABLE Table
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/data-discovery">
+                                Data Discovery
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link btn btn-success text-white mt-1 mb-1 w-100" href="/hunt-planning">
+                                Hunt Planning
+                            </a>
+                        </li>
+                        <li class="nav-item mt-2"> <!-- Removed px-3 -->
+                            <button id="clear-session-sidebar-btn" class="btn btn-danger w-100" style="padding-top: 0.5rem; padding-bottom: 0.5rem;">Clear Everything and Start Over</button>
+                        </li>
+                    </ul>
+
+                    <div class="debug-section pt-3 mt-auto">
+                        <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                            <span>Tools</span>
+                        </h6>
+                        <ul class="nav flex-column mb-2">
+                            <li class="nav-item">
+                                <a class="nav-link" href="/help">
+                                    Help
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="/debug">
+                                    Debug
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
-                
-                <div id="debug-panel" style="display: none;" class="debug-section">
-                    <h5>Debug Tools</h5>
-                    <div class="mb-3">
-                        <label for="retry-count" class="form-label">API retry attempts:</label>
-                        <input type="number" id="retry-count" class="form-control" value="3" min="1" max="5">
-                    </div>
-                    <div class="form-check mb-3">
-                        <input class="form-check-input" type="checkbox" id="verbose-mode">
-                        <label class="form-check-label" for="verbose-mode">
-                            Verbose mode (adds extra details to server logs only; does not affect what you see in the app)
-                        </label>
-                    </div>
-                    <div class="mt-3">
-                        <button id="show-debug-info-btn" class="btn btn-sm btn-outline-secondary">Show Debug Info</button>
-                        <div id="debug-info" class="mt-2" style="display: none;"></div>
-                    </div>
-                    <div class="mt-3">
-                        <a href="/debug" class="btn btn-sm btn-outline-info">Session Debug Page</a>
-                    </div>
-                </div>
-            </div>
-            
+            </nav>
+
             <!-- Main content -->
-            <div class="col-md-9 col-lg-10 content">
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 content">
+                {% block nav %}
+                <div class="top-navigation">
+                    <div>
+                        {% if prev_phase_url %}
+                            <a href="{{ prev_phase_url }}" class="btn btn-outline-secondary">
+                                <span class="nav-arrow">&larr;</span> <span class="nav-text">{{ prev_phase_name }}</span>
+                            </a>
+                        {% else %}
+                            <span>&nbsp;</span> <!-- Placeholder to keep alignment -->
+                        {% endif %}
+                    </div>
+                    <div>
+                        {% if next_phase_url %}
+                            <a href="{{ next_phase_url }}" class="btn btn-outline-primary">
+                                <span class="nav-text">{{ next_phase_name }}</span> <span class="nav-arrow">&rarr;</span>
+                            </a>
+                        {% else %}
+                            <span>&nbsp;</span> <!-- Placeholder to keep alignment -->
+                        {% endif %}
+                    </div>
+                </div>
+                {% endblock %}
+
                 {% block content %}{% endblock %}
-                
-                <!-- Error message box -->
-                <div id="error-message" class="alert alert-danger">
-                    <h5>Error</h5>
-                    <p id="error-text"></p>
-                    <div id="error-details" style="display: none;">
-                        <hr>
-                        <h6>Technical Details</h6>
-                        <pre id="error-detail-text"></pre>
-                    </div>
-                    <button id="show-error-details" class="btn btn-sm btn-outline-danger mt-2">Show Details</button>
+
+                <!-- Debug Panel (hidden by default) -->
+                <div id="debug-panel" class="mt-5 p-3 border bg-light" style="display: none;">
+                    <h4>Verbose Output / Logs</h4>
+                    <pre id="debug-output">Verbose output will appear here...</pre>
                 </div>
-                
-                <!-- Loading indicator -->
-                <div id="loading-indicator" class="alert alert-info">
-                    <div class="d-flex align-items-center">
-                        <div class="spinner-border me-2" role="status"></div>
-                        <span id="loading-text">Processing...</span>
-                    </div>
-                </div>
-            </div>
+            </main>
         </div>
     </div>
 
+    <!-- Loading Indicator -->
+    <div id="loading-indicator" style="display: none;">
+        <div class="spinner-border text-light" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p id="loading-message" class="mt-2">Processing...</p>
+    </div>
+
+    <!-- Error Message Toast -->
+    <div class="position-fixed top-0 end-0 p-3" style="z-index: 1050">
+        <div id="error-toast" class="toast hide" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header bg-danger text-white">
+                <strong class="me-auto">Error</strong>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body">
+                <span id="error-message-text"></span>
+                <button id="show-error-details" class="btn btn-sm btn-link p-0" style="display:none;">Show Details</button>
+                <pre id="error-details-content" class="mt-2" style="display:none; max-height: 200px; overflow-y: auto;"></pre>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Help Floating Button -->
+    <a href="/help" class="help-icon" title="Help">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-question-lg" viewBox="0 0 16 16">
+            <path fill-rule="evenodd" d="M4.475 5.458c-.284 0-.514.237-.47.517C4.28 7.94 5.765 9.85 8 9.85c2.235 0 3.72-1.91 3.995-3.875.044-.28-.186-.517-.47-.517H4.475zM8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zM6.572 4.004c.04-.28.21-.505.478-.505h.9c.266 0 .438.225.478.505.078.54.45 1.328 1.258 2.142.807.814 1.64.935 1.64 1.536 0 .672-.724 1.423-1.825 1.423-1.212 0-1.77-.874-1.77-1.423 0-.394.117-.724.303-.975.187-.25.49-.583.49-.967 0-.386-.254-.687-.572-.937-.318-.25-.776-.592-1.15-.937C6.022 5.332 5.5 4.54 5.5 3.652c0-.28.21-.505.478-.505h.116c.266 0 .438.225.478.505.04.28.028.47-.003.586a.87.87 0 0 0-.08.29c-.06.226-.08.43-.08.61 0 .29.087.52.236.708.15.187.386.363.703.625.318.26.703.592.988.937.286.346.443.746.443 1.187 0 .672-.587 1.423-1.425 1.423S6.25 11.187 6.25 10.515c0-.76.725-1.691 1.8-2.036.23-.075.405-.165.53-.27.124-.104.187-.226.187-.363 0-.24-.164-.43-.405-.566-.24-.137-.56-.237-.96-.237-.353 0-.655.06-.89.18S4.87 7.17 4.87 7.416c0 .28-.21.505-.478.505H4.3c-.267 0-.438-.225-.478-.505C3.744 6.215 4.87 4.004 6.572 4.004z"/>
+        </svg>
+    </a>
+    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // Common utility functions
         function showLoading(message = "Processing...") {
-            document.getElementById('loading-text').innerText = message;
-            document.getElementById('loading-indicator').style.display = 'block';
+            document.getElementById('loading-message').textContent = message;
+            document.getElementById('loading-indicator').style.display = 'flex';
         }
         
         function hideLoading() {
@@ -183,111 +253,184 @@
         }
         
         function showError(message, detail = null) {
-            document.getElementById('error-text').innerText = message;
-            const errorMessage = document.getElementById('error-message');
-            errorMessage.style.display = 'block';
-            
-            const errorDetails = document.getElementById('error-details');
-            const errorDetailText = document.getElementById('error-detail-text');
-            
+            const errorToastEl = document.getElementById('error-toast');
+            const toast = new bootstrap.Toast(errorToastEl);
+            document.getElementById('error-message-text').textContent = message;
+
+            const detailsBtn = document.getElementById('show-error-details');
+            const detailsContent = document.getElementById('error-details-content');
+
             if (detail) {
-                errorDetailText.innerText = detail;
-                document.getElementById('show-error-details').style.display = 'block';
+                detailsContent.textContent = typeof detail === 'object' ? JSON.stringify(detail, null, 2) : detail;
+                detailsBtn.style.display = 'inline';
+                // Reset display of details content
+                detailsContent.style.display = 'none'; 
             } else {
-                document.getElementById('show-error-details').style.display = 'none';
-                errorDetails.style.display = 'none';
+                detailsBtn.style.display = 'none';
+                detailsContent.style.display = 'none';
             }
-            
-            hideLoading();
-            
-            // Scroll to error
-            errorMessage.scrollIntoView({ behavior: 'smooth' });
+            toast.show();
         }
         
         function hideError() {
-            document.getElementById('error-message').style.display = 'none';
+            // Not strictly necessary to hide programmatically if user can close,
+            // but good for clearing previous errors before new operations.
+            const errorToastEl = document.getElementById('error-toast');
+            const toast = bootstrap.Toast.getInstance(errorToastEl);
+            if (toast) {
+                toast.hide();
+            }
+            document.getElementById('error-details-content').style.display = 'none';
+            document.getElementById('show-error-details').style.display = 'none';
         }
         
         function renderMarkdown(markdown, targetElement) {
             if (typeof markdown === 'string') {
                 targetElement.innerHTML = marked.parse(markdown);
+            } else {
+                targetElement.innerHTML = '<p><em>Invalid content for Markdown rendering.</em></p>';
+                console.error("Invalid content for Markdown rendering:", markdown);
             }
         }
+
+        // Combined Download Button Helper
+        // targetContentId: ID of the element whose content (or a data attribute) is to be downloaded
+        // baseFilename: Filename without extension (e.g., 'research_report')
+        // containerId: ID of the div where the download button group will be placed
+        function setupDownloadButton(targetContentId, baseFilename, containerId) {
+            const container = document.getElementById(containerId);
+            if (!container) {
+                console.error('Download button container not found:', containerId);
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="btn-group">
+                    <button type="button" class="btn btn-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                        Download
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="#" data-format="markdown">Download Markdown (.md)</a></li>
+                        <li><a class="dropdown-item" href="#" data-format="pdf">Download PDF (.pdf)</a></li>
+                    </ul>
+                </div>
+            `;
+
+            container.querySelectorAll('.dropdown-item').forEach(item => {
+                item.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const format = this.dataset.format;
+                    const contentElement = document.getElementById(targetContentId);
+                    let contentToDownload = '';
+
+                    if (contentElement) {
+                        // Prefer a data attribute 'data-raw-markdown' if available
+                        contentToDownload = contentElement.dataset.rawMarkdown || contentElement.innerText || contentElement.value;
+                    } else {
+                        // Fallback for global content, e.g. window.currentPlanMarkdown
+                        if (targetContentId === 'plan-content' && typeof window.currentPlanMarkdown !== 'undefined') {
+                             contentToDownload = window.currentPlanMarkdown;
+                        } else if (targetContentId === 'report-content' && typeof window.currentReportMarkdown !== 'undefined') {
+                             contentToDownload = window.currentReportMarkdown;
+                        } else if (targetContentId === 'current-hypo-content' && typeof window.currentHypothesisMarkdown !== 'undefined') {
+                             contentToDownload = window.currentHypothesisMarkdown;
+                        } else if (targetContentId === 'refined-hypo-content' && typeof window.currentRefinedHypothesisMarkdown !== 'undefined') {
+                             contentToDownload = window.currentRefinedHypothesisMarkdown;
+                        } else if (targetContentId === 'able-table-content' && typeof window.currentAbleTableMarkdown !== 'undefined') {
+                             contentToDownload = window.currentAbleTableMarkdown;
+                        } else if (targetContentId === 'data-sources-content' && typeof window.currentDataSourcesMarkdown !== 'undefined') {
+                             contentToDownload = window.currentDataSourcesMarkdown;
+                        } else {
+                            showError('Content for download not found or not accessible for id: ' + targetContentId);
+                            return;
+                        }
+                    }
+                    
+                    if (!contentToDownload && format === 'markdown') {
+                         showError('No content available to download as Markdown.');
+                         return;
+                    }
+                     if (!contentToDownload && format === 'pdf') {
+                         showError('No content available to download as PDF. Ensure Markdown is generated first.');
+                         return;
+                    }
+
+
+                    const filename = baseFilename + (format === 'markdown' ? '.md' : '.pdf');
+                    const apiUrl = format === 'markdown' ? '/api/download/markdown' : '/api/download/pdf';
+
+                    fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ content: contentToDownload, filename: filename })
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            return response.json().then(err => { throw new Error(err.error || 'Download failed') });
+                        }
+                        return response.blob();
+                    })
+                    .then(blob => {
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.style.display = 'none';
+                        a.href = url;
+                        a.download = filename;
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                        a.remove();
+                    })
+                    .catch(error => {
+                        showError('Download error: ' + error.message, error.detail || error);
+                    });
+                });
+            });
+        }
         
-        // Toggle debug panel
-        document.getElementById('debug-mode').addEventListener('change', function() {
-            document.getElementById('debug-panel').style.display = this.checked ? 'block' : 'none';
-        });
+        // Toggle Verbose mode (debug panel)
+        const debugModeCheckbox = document.getElementById('debug-mode');
+        if (debugModeCheckbox) {
+            debugModeCheckbox.addEventListener('change', function() {
+                document.getElementById('debug-panel').style.display = this.checked ? 'block' : 'none';
+                // Optionally, store this preference in localStorage or session
+            });
+        }
         
         // Show error details button
-        document.getElementById('show-error-details').addEventListener('click', function() {
-            const details = document.getElementById('error-details');
-            if (details.style.display === 'none') {
-                details.style.display = 'block';
-                this.innerText = 'Hide Details';
-            } else {
-                details.style.display = 'none';
-                this.innerText = 'Show Details';
-            }
-        });
+        const showErrorDetailsBtn = document.getElementById('show-error-details');
+        if (showErrorDetailsBtn) {
+            showErrorDetailsBtn.addEventListener('click', function() {
+                const detailsContent = document.getElementById('error-details-content');
+                detailsContent.style.display = detailsContent.style.display === 'none' ? 'block' : 'none';
+            });
+        }
         
-        // Show debug info button
-        document.getElementById('show-debug-info-btn').addEventListener('click', function() {
-            const infoElement = document.getElementById('debug-info');
-            
-            if (infoElement.style.display === 'none') {
-                infoElement.innerHTML = '<div class="spinner-border" role="status"></div> Loading debug info...';
-                infoElement.style.display = 'block';
-                this.innerText = 'Hide Debug Info';
-                
-                fetch('/api/debug-info')
-                .then(response => response.json())
-                .then(data => {
-                    infoElement.innerHTML = '<h6>Environment Variables</h6>';
-                    infoElement.innerHTML += `<pre>${JSON.stringify(data.environment, null, 2)}</pre>`;
-                    
-                    infoElement.innerHTML += '<h6>System Info</h6>';
-                    infoElement.innerHTML += `<pre>${JSON.stringify(data.system_info, null, 2)}</pre>`;
-                    
-                    infoElement.innerHTML += '<h6>Session Data</h6>';
-                    infoElement.innerHTML += `<pre>${JSON.stringify(data.session_data, null, 2)}</pre>`;
-                })
-                .catch(error => {
-                    infoElement.innerHTML = `<div class="alert alert-danger">Error loading debug info: ${error.message}</div>`;
-                });
-            } else {
-                infoElement.style.display = 'none';
-                this.innerText = 'Show Debug Info';
-            }
-        });
-        
-        // Clear Everything button logic
-        document.addEventListener('DOMContentLoaded', function() {
-            const clearBtn = document.getElementById('clear-everything-btn');
-            if (clearBtn) {
-                clearBtn.addEventListener('click', function() {
-                    if (confirm('Are you sure you want to clear everything and start over? This will erase all your progress.')) {
-                        showLoading('Clearing session...');
-                        fetch('/clear-session', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                        })
-                        .then(response => {
-                            hideLoading();
-                            if (response.ok) {
-                                window.location.href = '/';
-                            } else {
-                                showError('Failed to clear session. Please try again.');
-                            }
-                        })
-                        .catch(() => {
-                            hideLoading();
-                            showError('Failed to clear session. Please try again.');
-                        });
-                    }
-                });
-            }
-        });
+        // Clear Session button in sidebar
+        const clearSessionSidebarBtn = document.getElementById('clear-session-sidebar-btn');
+        if (clearSessionSidebarBtn) {
+            clearSessionSidebarBtn.addEventListener('click', function() {
+                if (confirm('Are you sure you want to clear all session data? This will reset the application state.')) {
+                    showLoading('Clearing session...');
+                    fetch('/clear-session', { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        hideLoading();
+                        if (data.success) {
+                            // Show a success message using a toast or simple alert
+                            alert('Session cleared successfully. The page will now reload.');
+                            window.location.reload();
+                        } else {
+                            showError('Failed to clear session: ' + (data.error || 'Unknown error'));
+                        }
+                    })
+                    .catch(error => {
+                        hideLoading();
+                        showError('Error clearing session: ' + error.message);
+                    });
+                }
+            });
+        }
 
         // Add page-specific JavaScript
         {% block script %}{% endblock %}

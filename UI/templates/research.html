@@ -1,237 +1,203 @@
 {% extends "base.html" %}
 
+{% block title %}Topic Research - PEAK Assistant{% endblock %}
+
 {% set prev_phase_url = None %}
 {% set prev_phase_name = None %}
-{% set next_phase_url = "/hypothesis" %}
+{% set next_phase_url = url_for('hypothesis_page') %}
 {% set next_phase_name = "Hypothesis Generation" %}
 
 {% block nav %}{{ super() }}{% endblock %}
 
 {% block content %}
 <h2>Topic Research</h2>
+<p class="mb-4">Enter a topic, threat actor technique, or behavior to generate a research report. You can also upload an existing report.</p>
 
-<div class="row mb-4">
+<div class="row mb-3">
     <div class="col-md-9">
-        <input type="text" id="topic-input" class="form-control" placeholder="Enter a topic, threat actor technique, or behavior...">
+        <label for="topic-input" class="form-label">Research Topic:</label>
+        <input type="text" id="topic-input" class="form-control" placeholder="e.g., Kerberoasting, Initial Access via Phishing">
     </div>
-    <div class="col-md-3">
-        <button id="generate-btn" class="btn btn-primary w-100">Generate Research Report</button>
+    <div class="col-md-3 align-self-end">
+        <button id="generate-btn" class="btn btn-primary w-100">Generate Report</button>
     </div>
 </div>
 
 <div class="row mb-4">
     <div class="col-md-12">
-        <form id="upload-report-form" enctype="multipart/form-data" class="d-flex align-items-center">
-            <input type="file" id="upload-report-file" name="file" accept=".md,.txt" style="display:none;">
-            <button type="button" class="btn btn-outline-success btn-sm me-2" onclick="document.getElementById('upload-report-file').click();">Upload Report</button>
-            <span id="upload-report-filename" class="ms-2 text-muted"></span>
-        </form>
+        <label for="upload-report-file" class="form-label">Or Upload Report (MD or TXT):</label>
+        <div class="input-group">
+            <input type="file" class="form-control" id="upload-report-file" accept=".md,.txt">
+            <button id="upload-report-btn" class="btn btn-outline-secondary">Upload</button>
+        </div>
+        <small id="upload-report-filename" class="form-text text-muted"></small>
     </div>
+</div>
+
+<div id="report-actions-container" class="d-flex justify-content-end mb-2" style="display: none;">
+    <!-- Download button will be inserted here by script -->
 </div>
 
 <div id="report-container" style="display: none;">
-    <div class="container mt-4">
-        <div class="d-flex justify-content-end mb-2">
-            <form id="download-markdown-form" method="post">
-                <input type="hidden" name="content" id="markdown-content">
-                <input type="hidden" name="filename" value="report.md">
-                <button type="submit" class="btn btn-outline-primary btn-sm">Download Markdown</button>
-            </form>
-            <form id="download-pdf-form" method="post" class="ms-2">
-                <input type="hidden" name="content" id="pdf-content">
-                <input type="hidden" name="filename" value="report.pdf">
-                <button type="submit" class="btn btn-outline-secondary btn-sm">Download PDF</button>
-            </form>
-        </div>
-    </div>
     <h3>Research Report</h3>
-    <div id="report-content" class="border rounded p-3 mb-3"></div>
+    <div id="report-content" class="border rounded p-3 mb-3" data-raw-markdown=""></div>
 </div>
+
 {% endblock %}
 
 {% block script %}
-document.getElementById('generate-btn').addEventListener('click', function() {
-    const topic = document.getElementById('topic-input').value.trim();
-    if (!topic) {
-        showError('Please enter a topic to research.');
-        return;
-    }
-    
-    hideError();
-    showLoading('Generating research report... (this may take several minutes)');
-    
-    // Get settings
-    const retryCount = document.getElementById('retry-count').value;
-    const verboseMode = document.getElementById('verbose-mode')?.checked || false;
-    
-    fetch('/api/research', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-            topic: topic,
-            retry_count: retryCount,
-            verbose_mode: verboseMode
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        hideLoading();
+// Store current report markdown for download
+window.currentReportMarkdown = '';
+
+document.addEventListener('DOMContentLoaded', function() {
+    const generateBtn = document.getElementById('generate-btn');
+    const topicInput = document.getElementById('topic-input');
+    const reportContainer = document.getElementById('report-container');
+    const reportContent = document.getElementById('report-content');
+    const reportActionsContainer = document.getElementById('report-actions-container');
+    const uploadReportFile = document.getElementById('upload-report-file');
+    const uploadReportBtn = document.getElementById('upload-report-btn');
+    const uploadReportFilename = document.getElementById('upload-report-filename');
+
+    // Setup combined download button
+    setupDownloadButton('report-content', 'research_report', 'report-actions-container');
+
+    generateBtn.addEventListener('click', function() {
+        const topic = topicInput.value.trim();
+        if (!topic) {
+            showError('Please enter a research topic.');
+            return;
+        }
         
-        if (data.success) {
-            const reportContainer = document.getElementById('report-container');
-            const reportContent = document.getElementById('report-content');
-            
-            renderMarkdown(data.report, reportContent);
-            reportContainer.style.display = 'block';
-            
-            // Save to local variables for download buttons
-            window.currentReport = data.report;
-            window.originalReportMarkdown = data.report; // Store the original markdown
-        } else {
-            let errorDetail = data.detail || null;
-            if (data.error.includes('OpenAI API internal server error')) {
-                showError(
-                    'OpenAI API internal server error. This is an issue with OpenAI\'s servers, not with your code. Maximum retry attempts reached. \n\nTip: You can try reducing the complexity of your query, trying a different topic, or increasing the retry count.',
-                    errorDetail
-                );
-            } else {
-                showError('Error generating research report: ' + data.error, errorDetail);
-            }
-        }
-    })
-    .catch(error => {
-        hideLoading();
-        showError('Network error: ' + error.message);
-    });
-});
-
-// Allow pressing Enter in the topic input to submit
-const topicInput = document.getElementById('topic-input');
-topicInput.addEventListener('keydown', function(event) {
-    if (event.key === 'Enter') {
-        event.preventDefault();
-        document.getElementById('generate-btn').click();
-    }
-});
-
-// Download logic
-function handleDownload(formId, contentId, apiUrl, filename, isMarkdown = true) {
-    const form = document.getElementById(formId);
-    form.addEventListener('submit', function(e) {
-        e.preventDefault();
-        // Use .textContent for plain text, .innerText for visible text, .innerHTML for HTML
-        // To get the original markdown, store it in a JS variable when rendering
-        let content;
-        if (window.originalReportMarkdown) {
-            content = window.originalReportMarkdown;
-        } else {
-            content = document.getElementById(contentId).innerText;
-        }
-        form.querySelector('input[name="content"]').value = content;
-        fetch(apiUrl, {
+        hideError();
+        showLoading('Generating research report... (this may take several minutes)');
+        
+        const retryCount = document.getElementById('retry-count').value;
+        const verboseMode = document.getElementById('debug-mode')?.checked || false;
+        
+        fetch('/api/research', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: content, filename: filename })
+            body: JSON.stringify({ 
+                topic: topic, 
+                retry_count: retryCount,
+                verbose_mode: verboseMode 
+            })
         })
-        .then(response => {
-            if (!response.ok) throw new Error('Download failed');
-            return response.blob();
-        })
-        .then(blob => {
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(url);
+        .then(response => response.json())
+        .then(data => {
+            hideLoading();
+            if (data.success) {
+                window.currentReportMarkdown = data.report;
+                reportContent.dataset.rawMarkdown = data.report; // Store for download
+                renderMarkdown(data.report, reportContent);
+                reportContainer.style.display = 'block';
+                reportActionsContainer.style.display = 'flex'; // Show download button
+                // Store in sessionStorage for persistence across page loads (optional)
+                sessionStorage.setItem('last_topic', topic);
+                sessionStorage.setItem('report_md', data.report);
+            } else {
+                showError('Error generating report: ' + data.error, data.detail);
+            }
         })
         .catch(error => {
-            showError('Download failed: ' + error.message);
+            hideLoading();
+            showError('Network error: ' + error.message);
         });
     });
-}
 
-handleDownload('download-markdown-form', 'report-content', '/api/download/markdown', 'report.md');
-handleDownload('download-pdf-form', 'report-content', '/api/download/pdf', 'report.pdf', false);
-
-// Upload logic
-document.getElementById('upload-report-file').addEventListener('change', function() {
-    const fileInput = this;
-    if (!fileInput.files.length) return;
-    const formData = new FormData();
-    formData.append('file', fileInput.files[0]);
-    showLoading('Uploading report...');
-    fetch('/api/upload-report', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        hideLoading();
-        if (data.success) {
-            window.originalReportMarkdown = data.report;
-            // Optionally, re-render the report in the UI here
-            location.reload();
-        } else {
-            showError('Upload failed: ' + data.error);
+    topicInput.addEventListener('keydown', function(event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            generateBtn.click();
         }
-    })
-    .catch(error => {
-        hideLoading();
-        showError('Upload failed: ' + error.message);
     });
-});
 
-// Upload report logic
-const uploadInput = document.getElementById('upload-report-file');
-const uploadForm = document.getElementById('upload-report-form');
-const uploadFilename = document.getElementById('upload-report-filename');
-uploadInput.addEventListener('change', function() {
-    if (!uploadInput.files.length) return;
-    const formData = new FormData();
-    formData.append('file', uploadInput.files[0]);
-    showLoading('Uploading report...');
-    fetch('/api/upload-report', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        hideLoading();
-        if (data.success) {
-            uploadFilename.textContent = uploadInput.files[0].name + ' uploaded!';
-            window.originalReportMarkdown = data.report;
-            // Optionally, re-render the report in the UI here
-            location.reload();
-        } else {
-            showError('Upload failed: ' + data.error);
+    uploadReportBtn.addEventListener('click', function() {
+        const file = uploadReportFile.files[0];
+        if (!file) {
+            showError('Please select a file to upload.');
+            return;
         }
-    })
-    .catch(error => {
-        hideLoading();
-        showError('Upload failed: ' + error.message);
-    });
-});
 
-// Initialize from session data
-fetch('/api/debug-info')
-.then(response => response.json())
-.then(data => {
-    if (data.session_data && data.session_data.report_md) {
-        const reportContainer = document.getElementById('report-container');
-        const reportContent = document.getElementById('report-content');
-        
-        renderMarkdown(data.session_data.report_md, reportContent);
-        reportContainer.style.display = 'block';
-        
-        window.currentReport = data.session_data.report_md;
-        window.originalReportMarkdown = data.session_data.report_md; // Store the original markdown
-    }
+        hideError();
+        showLoading('Uploading report...');
+        const formData = new FormData();
+        formData.append('file', file);
+
+        fetch('/api/upload-report', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            hideLoading();
+            if (data.success) {
+                window.currentReportMarkdown = data.report;
+                reportContent.dataset.rawMarkdown = data.report; // Store for download
+                renderMarkdown(data.report, reportContent);
+                reportContainer.style.display = 'block';
+                reportActionsContainer.style.display = 'flex'; // Show download button
+                topicInput.value = '[Uploaded Report]';
+                uploadReportFilename.textContent = file.name;
+                sessionStorage.setItem('report_md', data.report);
+                sessionStorage.setItem('last_topic', '[Uploaded]');
+            } else {
+                showError('Error uploading report: ' + data.error);
+            }
+        })
+        .catch(error => {
+            hideLoading();
+            showError('Network error during upload: ' + error.message);
+        });
+    });
     
-    if (data.session_data && data.session_data.last_topic) {
-        document.getElementById('topic-input').value = data.session_data.last_topic;
+    uploadReportFile.addEventListener('change', function() {
+        if (this.files.length > 0) {
+            uploadReportFilename.textContent = this.files[0].name;
+        } else {
+            uploadReportFilename.textContent = '';
+        }
+    });
+
+    // Initialize from session data (or sessionStorage for better UX)
+    function loadSessionData() {
+        const storedReport = sessionStorage.getItem('report_md');
+        const storedTopic = sessionStorage.getItem('last_topic');
+
+        if (storedReport) {
+            window.currentReportMarkdown = storedReport;
+            reportContent.dataset.rawMarkdown = storedReport;
+            renderMarkdown(storedReport, reportContent);
+            reportContainer.style.display = 'block';
+            reportActionsContainer.style.display = 'flex';
+            if (storedTopic) {
+                topicInput.value = storedTopic;
+            }
+        } else {
+            // Fallback to server session if sessionStorage is empty (e.g. first load)
+            fetch('/api/debug-info')
+            .then(response => response.json())
+            .then(debugData => {
+                const session = debugData.session_data || {};
+                if (session.report_md) {
+                    window.currentReportMarkdown = session.report_md;
+                    reportContent.dataset.rawMarkdown = session.report_md;
+                    renderMarkdown(session.report_md, reportContent);
+                    reportContainer.style.display = 'block';
+                    reportActionsContainer.style.display = 'flex';
+                    if (session.last_topic) {
+                        topicInput.value = session.last_topic;
+                    }
+                    // Populate sessionStorage for next time
+                    sessionStorage.setItem('report_md', session.report_md);
+                    if(session.last_topic) sessionStorage.setItem('last_topic', session.last_topic);
+                }
+            })
+            .catch(error => console.error("Error fetching initial session data:", error));
+        }
     }
+    loadSessionData();
+
 });
 {% endblock %}

@@ -46,13 +46,6 @@
         <!-- Success messages will be displayed here -->
     </div>
 
-    <div class="mb-3">
-        <label for="data-sources-content" class="form-label">Identified Data Sources</label>
-        <div id="data-sources-content" class="border rounded p-3 bg-light" style="min-height: 400px;">
-            <p class="text-muted">Data sources will appear here...</p>
-        </div>
-    </div>
-
     <div class="d-flex flex-wrap gap-2 mb-3">
         <button class="btn btn-primary" id="generate-data-sources-btn">
             <i class="fas fa-search me-1"></i> Identify Data Sources
@@ -61,12 +54,14 @@
             <i class="fas fa-upload me-1"></i> Upload Data Sources (MD/TXT)
         </button>
         <input type="file" id="data-sources-file-input" style="display: none;" accept=".md,.txt">
-        <button class="btn btn-success" id="download-md-btn">
-            <i class="fas fa-download me-1"></i> Download as Markdown
-        </button>
-        <button class="btn btn-info" id="download-pdf-btn">
-            <i class="fas fa-file-pdf me-1"></i> Download as PDF
-        </button>
+        <div id="download-data-actions-container"></div>
+    </div>
+
+    <div class="mb-3">
+        <label for="data-sources-content" class="form-label">Identified Data Sources</label>
+        <div id="data-sources-content" class="border rounded p-3 bg-light" style="min-height: 400px;" data-raw-markdown="">
+            <p class="text-muted">Data sources will appear here...</p>
+        </div>
     </div>
 
     <!-- Navigation buttons are now handled by the nav block -->
@@ -78,22 +73,25 @@ document.addEventListener('DOMContentLoaded', function() {
     const uploadBtn = document.getElementById('upload-data-sources-btn');
     const fileInput = document.getElementById('data-sources-file-input');
     const contentDiv = document.getElementById('data-sources-content');
-    const downloadMdBtn = document.getElementById('download-md-btn');
-    const downloadPdfBtn = document.getElementById('download-pdf-btn');
     const loadingSpinner = document.getElementById('loading-spinner');
     const errorMessageDiv = document.getElementById('error-message');
     const successMessageDiv = document.getElementById('success-message');
 
     // Store the raw markdown for downloads
-    let currentMarkdown = '';
+    let currentMarkdown = ''; // Renamed from window.currentDataSourcesMarkdown for local scope clarity
+    window.currentDataSourcesMarkdown = ''; // Ensure global variable is also initialized
 
     function updateContent(markdown) {
         currentMarkdown = markdown;
+        window.currentDataSourcesMarkdown = markdown; // Keep global variable in sync
+        contentDiv.setAttribute('data-raw-markdown', markdown); // Update data attribute
         if (markdown && markdown.trim()) {
             renderMarkdown(markdown, contentDiv);
         } else {
             contentDiv.innerHTML = '<p class="text-muted">Data sources will appear here...</p>';
         }
+        // Initialize download button after content is updated
+        setupDownloadButton('data-sources-content', 'data-sources', 'download-data-actions-container');
     }
 
     function showLoading(isLoading) {
@@ -124,10 +122,17 @@ document.addEventListener('DOMContentLoaded', function() {
     .then(data => {
         if (data.data_sources_md) {
             updateContent(data.data_sources_md);
+        } else {
+            // Ensure download button is set up even if no initial content
+            setupDownloadButton('data-sources-content', 'data-sources', 'download-data-actions-container');
         }
         // Note: No fallback to sessionStorage to prevent stale data from persisting
     })
-    .catch(error => console.warn('Could not load existing data sources:', error));
+    .catch(error => {
+        console.warn('Could not load existing data sources:', error);
+        // Ensure download button is set up even if fetch fails
+        setupDownloadButton('data-sources-content', 'data-sources', 'download-data-actions-container');
+    });
 
     // Check for prerequisites and show warnings if missing
     fetch('/api/debug-info')
@@ -198,7 +203,7 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(data => {
             showLoading(false);
             if (data.success) {
-                updateContent(data.data_sources);
+                updateContent(data.data_sources); // This will also call setupDownloadButton
                 showMessage('Data sources identified successfully.', 'success');
             } else {
                 showMessage(data.error || 'Failed to identify data sources.');
@@ -233,7 +238,7 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(data => {
             showLoading(false);
             if (data.success) {
-                updateContent(data.data_sources);
+                updateContent(data.data_sources); // This will also call setupDownloadButton
                 showMessage('Data sources uploaded successfully.', 'success');
             } else {
                 showMessage(data.error || 'Failed to upload data sources.');
@@ -245,64 +250,6 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Error uploading file:', error);
         });
         fileInput.value = '';
-    });
-
-    downloadMdBtn.addEventListener('click', function() {
-        const content = currentMarkdown;
-        if (!content) {
-            showMessage('Nothing to download.');
-            return;
-        }
-        fetch('/api/download/markdown', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: content, filename: 'data-sources.md' })
-        })
-        .then(response => response.blob())
-        .then(blob => {
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = 'data-sources.md';
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-        })
-        .catch(error => {
-            showMessage('Error downloading Markdown: ' + error.message);
-            console.error('Error downloading Markdown:', error);
-        });
-    });
-
-    downloadPdfBtn.addEventListener('click', function() {
-        const content = currentMarkdown;
-        if (!content) {
-            showMessage('Nothing to download.');
-            return;
-        }
-        fetch('/api/download/pdf', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: content, filename: 'data-sources.pdf' })
-        })
-        .then(response => response.blob())
-        .then(blob => {
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = 'data-sources.pdf';
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-        })
-        .catch(error => {
-            showMessage('Error downloading PDF: ' + error.message);
-            console.error('Error downloading PDF:', error);
-        });
     });
 });
 </script>

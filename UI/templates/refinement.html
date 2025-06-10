@@ -11,14 +11,12 @@
 <h2>Hypothesis Refinement (Optional)</h2>
 
 <div id="no-hypothesis-warning" class="alert alert-warning mb-4" style="display: none;">
-    <strong>Note:</strong> No hypothesis found. Please generate a hypothesis in the Hypothesis Phase first.
+    <strong>Note:</strong> No hypothesis found. Please generate or select a hypothesis in the Hypothesis Phase first.
 </div>
 
-<h3>Hypothesis Refinement (Optional)</h3>
-
-<div id="current-hypo-container" style="display: none;">
+<div id="current-hypo-container" style="display: none;" class="mb-4">
     <h4>Current Hypothesis</h4>
-    <div id="current-hypo-content" class="border rounded p-3 mb-4"></div>
+    <div id="current-hypo-content" class="border rounded p-3" data-raw-markdown=""></div>
 </div>
 
 <div class="form-check form-switch mb-3">
@@ -28,160 +26,138 @@
     </label>
 </div>
 
-<div id="refine-btn-container">
-    <button id="refine-btn" class="btn btn-primary mb-3">Refine Hypothesis</button>
+<div id="refine-btn-container" class="mb-3">
+    <button id="refine-btn" class="btn btn-primary">Refine Hypothesis</button>
 </div>
 
-<div class="container mt-4">
-    <div class="d-flex justify-content-end mb-2">
-        <form id="download-markdown-form" method="post">
-            <input type="hidden" name="content" id="markdown-content">
-            <input type="hidden" name="filename" value="refined_hypothesis.md">
-            <button type="submit" class="btn btn-outline-primary btn-sm">Download Markdown</button>
-        </form>
-        <form id="download-pdf-form" method="post" class="ms-2">
-            <input type="hidden" name="content" id="pdf-content">
-            <input type="hidden" name="filename" value="refined_hypothesis.pdf">
-            <button type="submit" class="btn btn-outline-secondary btn-sm">Download PDF</button>
-        </form>
-    </div>
+<!-- Container for the combined download button -->
+<div id="download-refined-hypo-actions-container" class="d-flex justify-content-end mb-2" style="display: none;">
+    <!-- Download button will be inserted here by script -->
 </div>
 
 <div id="refined-hypo-container" style="display: none;">
     <h4>Refined Hypothesis</h4>
-    <div id="refined-hypo-content" class="border rounded p-3"></div>
+    <div id="refined-hypo-content" class="border rounded p-3" data-raw-markdown=""></div>
 </div>
 {% endblock %}
 
 {% block script %}
-// Function to update all hypothesis displays
-function updateHypothesisDisplay(currentHypothesis, refinedHypothesis) {
-    // Update current hypothesis display
-    const currentContainer = document.getElementById('current-hypo-container');
-    const currentContent = document.getElementById('current-hypo-content');
-    if (currentHypothesis) {
-        renderMarkdown(currentHypothesis, currentContent);
-        currentContainer.style.display = 'block';
-    } else {
-        currentContainer.style.display = 'none';
-    }
+// Store current and refined hypothesis markdown for download
+window.currentHypothesisMarkdown = ''; // For the original hypothesis displayed
+window.currentRefinedHypothesisMarkdown = ''; // For the refined hypothesis
 
-    // Update refined hypothesis display
-    const refinedContainer = document.getElementById('refined-hypo-container');
-    const refinedContent = document.getElementById('refined-hypo-content');
-    if (refinedHypothesis) {
-        renderMarkdown(refinedHypothesis, refinedContent);
-        refinedContainer.style.display = 'block';
-        // Store the original markdown in a global variable
-        window.originalRefinedHypothesisMarkdown = refinedHypothesis;
-    } else {
-        refinedContainer.style.display = 'none';
-    }
-}
+document.addEventListener('DOMContentLoaded', function() {
+    const currentHypoContainer = document.getElementById('current-hypo-container');
+    const currentHypoContent = document.getElementById('current-hypo-content');
+    const refinedHypoContainer = document.getElementById('refined-hypo-container');
+    const refinedHypoContent = document.getElementById('refined-hypo-content');
+    const noHypothesisWarning = document.getElementById('no-hypothesis-warning');
+    const refineBtn = document.getElementById('refine-btn');
+    const refineCheckbox = document.getElementById('refine-checkbox');
+    const downloadRefinedHypoActionsContainer = document.getElementById('download-refined-hypo-actions-container');
 
-// Initialize from session data
-fetch('/api/debug-info')
-.then(response => response.json())
-.then(data => {
-    // Check if we have a hypothesis
-    if (!data.session_data || !data.session_data.hypothesis) {
-        document.getElementById('no-hypothesis-warning').style.display = 'block';
-        // Add more detailed debug info if in debug mode
-        if (document.getElementById('debug-mode').checked) {
-            const debugInfo = document.createElement('div');
-            debugInfo.className = 'alert alert-info mt-2';
-            debugInfo.innerHTML = '<strong>Debug Info:</strong> No hypothesis found in session data. Session contains: <pre>' + 
-                JSON.stringify(data.session_data, null, 2) + '</pre>';
-            document.getElementById('no-hypothesis-warning').appendChild(debugInfo);
+    // Setup combined download button for refined hypothesis
+    setupDownloadButton('refined-hypo-content', 'refined_hypothesis', 'download-refined-hypo-actions-container');
+
+    function updateUIDisplay(sessionData) {
+        const hypothesis = sessionData.hypothesis;
+        const refinedHypothesis = sessionData.refined_hypothesis;
+
+        if (!hypothesis || hypothesis.trim() === '') {
+            noHypothesisWarning.style.display = 'block';
+            currentHypoContainer.style.display = 'none';
+            refinedHypoContainer.style.display = 'none';
+            downloadRefinedHypoActionsContainer.style.display = 'none';
+            refineBtn.disabled = true; // Disable refine button if no hypothesis
+            return;
         }
-    } else {
-        updateHypothesisDisplay(data.session_data.hypothesis, data.session_data.refined_hypothesis);
-        // Debug info
-        if (document.getElementById('debug-mode').checked) {
-            console.log('Hypothesis from session:', data.session_data.hypothesis);
-            if (data.session_data.refined_hypothesis) {
-                console.log('Refined hypothesis from session:', data.session_data.refined_hypothesis);
-            }
-        }
-    }
-});
 
-// Refine hypothesis
-const refineBtn = document.getElementById('refine-btn');
-refineBtn.addEventListener('click', function() {
-    hideError();
-    showLoading('Refining hypothesis...');
-    const retryCount = document.getElementById('retry-count').value;
-    const verboseMode = document.getElementById('verbose-mode')?.checked || false;
-    const refineAuto = document.getElementById('refine-checkbox').checked;
-    fetch('/api/refine', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-            retry_count: retryCount,
-            refine: refineAuto,
-            verbose_mode: verboseMode
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        hideLoading();
-        if (data.success) {
-            fetch('/api/debug-info')
-            .then(response => response.json())
-            .then(sessionData => {
-                updateHypothesisDisplay(sessionData.session_data.hypothesis, sessionData.session_data.refined_hypothesis);
-            });
+        noHypothesisWarning.style.display = 'none';
+        refineBtn.disabled = false;
+
+        // Display current hypothesis
+        window.currentHypothesisMarkdown = hypothesis;
+        currentHypoContent.dataset.rawMarkdown = hypothesis;
+        renderMarkdown(hypothesis, currentHypoContent);
+        currentHypoContainer.style.display = 'block';
+
+        // Display refined hypothesis if available
+        if (refinedHypothesis && refinedHypothesis.trim() !== '') {
+            window.currentRefinedHypothesisMarkdown = refinedHypothesis;
+            refinedHypoContent.dataset.rawMarkdown = refinedHypothesis;
+            renderMarkdown(refinedHypothesis, refinedHypoContent);
+            refinedHypoContainer.style.display = 'block';
+            downloadRefinedHypoActionsContainer.style.display = 'flex';
         } else {
-            let errorDetail = data.detail || null;
-            if (data.error.includes('OpenAI API internal server error')) {
-                showError(
-                    'OpenAI API internal server error. This is an issue with OpenAI\'s servers, not with your code. Maximum retry attempts reached. \n\nTip: You can try again later, proceed with your current hypothesis, or increase the retry count.',
-                    errorDetail
-                );
-            } else {
-                showError('Error refining hypothesis: ' + data.error, errorDetail);
-            }
+            refinedHypoContainer.style.display = 'none';
+            downloadRefinedHypoActionsContainer.style.display = 'none';
+            window.currentRefinedHypothesisMarkdown = ''; // Clear if not present
+            refinedHypoContent.dataset.rawMarkdown = '';
         }
-    })
-    .catch(error => {
-        hideLoading();
-        showError('Network error: ' + error.message);
-    });
-});
+    }
 
-// Handle downloads
-function handleDownload(formId, contentId, apiUrl, filename) {
-    const form = document.getElementById(formId);
-    form.addEventListener('submit', function(e) {
-        e.preventDefault();
-        const content = window.originalRefinedHypothesisMarkdown || document.getElementById(contentId).innerText;
-        form.querySelector('input[name="content"]').value = content;
-        fetch(apiUrl, {
+    function loadInitialData() {
+        showLoading('Loading hypothesis data...');
+        fetch('/api/debug-info')
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.session_data) {
+                    updateUIDisplay(data.session_data);
+                } else {
+                    // Handle case where session_data might be missing
+                    updateUIDisplay({}); // Pass empty object to show warnings
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                showError('Error loading initial data: ' + error.message);
+                updateUIDisplay({}); // Show warnings on error too
+            });
+    }
+
+    refineBtn.addEventListener('click', function() {
+        hideError();
+        showLoading('Refining hypothesis...');
+        
+        const retryCount = document.getElementById('retry-count').value;
+        const verboseMode = document.getElementById('debug-mode')?.checked || false;
+        const refineOption = refineCheckbox.checked;
+
+        fetch('/api/refine', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: content, filename: filename })
+            body: JSON.stringify({ 
+                retry_count: retryCount,
+                verbose_mode: verboseMode,
+                refine: refineOption // Pass the refine option to the backend
+            })
         })
-        .then(response => {
-            if (!response.ok) throw new Error('Download failed');
-            return response.blob();
-        })
-        .then(blob => {
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(url);
+        .then(response => response.json())
+        .then(data => {
+            hideLoading();
+            if (data.success) {
+                // Re-fetch session data to update UI with potentially new hypothesis and refined_hypothesis
+                loadInitialData(); 
+            } else {
+                let errorDetail = data.detail || null;
+                if (data.error && data.error.includes('OpenAI API internal server error')) {
+                    showError(
+                        'OpenAI API internal server error. This is an issue with OpenAI\\\'s servers. Maximum retry attempts reached. \\n\\nTip: You can try again later, proceed with your current hypothesis, or increase the retry count.',
+                        errorDetail
+                    );
+                } else {
+                    showError('Error refining hypothesis: ' + (data.error || 'Unknown error'), errorDetail);
+                }
+            }
         })
         .catch(error => {
-            showError('Download failed: ' + error.message);
+            hideLoading();
+            showError('Network error: ' + error.message);
         });
     });
-}
 
-handleDownload('download-markdown-form', 'refined-hypo-content', '/api/download/markdown', 'refined_hypothesis.md');
-handleDownload('download-pdf-form', 'refined-hypo-content', '/api/download/pdf', 'refined_hypothesis.pdf');
+    // Initial load of data
+    loadInitialData();
+});
 {% endblock %}

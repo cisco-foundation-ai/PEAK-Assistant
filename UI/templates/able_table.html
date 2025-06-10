@@ -9,227 +9,201 @@
 
 {% block content %}
 <h2>Generate ABLE Table</h2>
-
-<div class="row mb-4">
-    <div class="col-md-12">
-        <form id="upload-able-table-form" enctype="multipart/form-data" class="d-flex align-items-center">
-            <input type="file" id="upload-able-table-file" name="file" accept=".md,.txt" style="display:none;">
-            <button type="button" class="btn btn-outline-success btn-sm me-2" onclick="document.getElementById('upload-able-table-file').click();">Upload ABLE Table</button>
-            <span id="upload-able-table-filename" class="ms-2 text-muted"></span>
-        </form>
-    </div>
-</div>
+<p class="mb-4">This phase generates an ABLE (Activity, Behavior, Linkages, Environment) table based on the final hypothesis. You can also upload an existing ABLE table.</p>
 
 <div id="no-hypothesis-warning" class="alert alert-warning mb-4" style="display: none;">
-    <strong>Note:</strong> No hypothesis found. Please generate a hypothesis in the Hypothesis Phase first.
+    <strong>Note:</strong> No hypothesis found. Please generate or select a hypothesis in the Hypothesis Phase first.
 </div>
 
-<h3>ABLE Table</h3>
-
-<div id="final-hypo-container" style="display: none;">
+<div id="final-hypo-container" style="display: none;" class="mb-4">
     <h4>Final Hypothesis</h4>
-    <div id="final-hypo-content" class="border rounded p-3 mb-4"></div>
+    <p class="text-muted small">The ABLE table will be generated based on this hypothesis. If this is not the desired hypothesis, please go back to the Hypothesis or Refinement phase.</p>
+    <div id="final-hypo-content" class="border rounded p-3" data-raw-markdown=""></div>
 </div>
 
-<button id="generate-able-btn" class="btn btn-primary mb-4">Generate ABLE Table</button>
-
-<div class="container mt-4">
-    <div class="d-flex justify-content-end mb-2">
-        <form id="download-markdown-form" method="post">
-            <input type="hidden" name="content" id="markdown-content">
-            <input type="hidden" name="filename" value="able_table.md">
-            <button type="submit" class="btn btn-outline-primary btn-sm">Download Markdown</button>
-        </form>
-        <form id="download-pdf-form" method="post" class="ms-2">
-            <input type="hidden" name="content" id="pdf-content">
-            <input type="hidden" name="filename" value="able_table.pdf">
-            <button type="submit" class="btn btn-outline-secondary btn-sm">Download PDF</button>
-        </form>
+<div class="row mb-3">
+    <div class="col-md-9">
+        <button id="generate-able-btn" class="btn btn-primary w-100">Generate ABLE Table</button>
     </div>
+    <div class="col-md-3">
+        <label for="upload-able-table-file" class="form-label visually-hidden">Upload ABLE Table File</label>
+        <input type="file" id="upload-able-table-file" class="form-control" accept=".md,.txt" style="display: none;">
+        <button type="button" id="upload-able-table-btn" class="btn btn-outline-secondary w-100">Upload ABLE Table</button>
+        <small id="upload-able-table-filename" class="form-text text-muted"></small>
+    </div>
+</div>
+
+<!-- Container for the combined download button -->
+<div id="download-able-actions-container" class="d-flex justify-content-end mb-2" style="display: none;">
+    <!-- Download button will be inserted here by script -->
 </div>
 
 <div id="able-table-container" style="display: none;">
-    <div id="able-table-content" class="border rounded p-3 mb-3"></div>
-</div>    <div class="navigation-buttons mt-4 d-flex justify-content-between">
-        <a href="{{ url_for('refinement_page') }}" class="btn btn-outline-secondary">
-            <i class="fas fa-arrow-left me-1"></i> Prev: Hypothesis Refinement (Optional)
-        </a>
-        <a href="{{ url_for('data_discovery_page') }}" class="btn btn-outline-primary" id="next-phase-link">
-            Next: Data Discovery <i class="fas fa-arrow-right ms-1"></i>
-        </a>
-    </div>
+    <h3>ABLE Table</h3>
+    <div id="able-table-content" class="border rounded p-3 mb-3" data-raw-markdown=""></div>
+</div>
+
 {% endblock %}
 
 {% block script %}
-// Generate ABLE table
-document.getElementById('generate-able-btn').addEventListener('click', function() {
-    hideError();
-    showLoading('Generating ABLE Table...');
-    
-    const retryCount = document.getElementById('retry-count').value;
-    const verboseMode = document.getElementById('verbose-mode')?.checked || false;
-    
-    fetch('/api/able-table', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-            retry_count: retryCount,
-            verbose_mode: verboseMode
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        hideLoading();
-        
-        if (data.success) {
-            const tableContainer = document.getElementById('able-table-container');
-            const tableContent = document.getElementById('able-table-content');
-            
-            renderMarkdown(data.able_table, tableContent);
-            tableContainer.style.display = 'block';
-            
-            // Save to local variables for download buttons
-            window.currentAbleTable = data.able_table;
-            window.originalAbleTableMarkdown = data.able_table; // Store the original markdown
-        } else {
-            let errorDetail = data.detail || null;
-            if (data.error.includes('OpenAI API internal server error')) {
-                showError(
-                    'OpenAI API internal server error. This is an issue with OpenAI\'s servers, not with your code. Maximum retry attempts reached. \n\nTip: You can try again later, refine your hypothesis to be more specific, or increase the retry count.',
-                    errorDetail
-                );
-            } else {
-                showError('Error generating ABLE table: ' + data.error, errorDetail);
-            }
-        }
-    })
-    .catch(error => {
-        hideLoading();
-        showError('Network error: ' + error.message);
-    });
-});
+// Store current ABLE table markdown for download
+window.currentAbleTableMarkdown = '';
 
-// Reusable download handler
-function handleDownload(formId, contentId, apiUrl, filename) {
-    const form = document.getElementById(formId);
-    form.addEventListener('submit', function(e) {
-        e.preventDefault();
-        const content = window.originalAbleTableMarkdown; // Use the original markdown
-        form.querySelector('input[name="content"]').value = content;
-        fetch(apiUrl, {
+document.addEventListener('DOMContentLoaded', function() {
+    const generateAbleBtn = document.getElementById('generate-able-btn');
+    const ableTableContainer = document.getElementById('able-table-container');
+    const ableTableContent = document.getElementById('able-table-content');
+    const finalHypoContainer = document.getElementById('final-hypo-container');
+    const finalHypoContent = document.getElementById('final-hypo-content');
+    const noHypothesisWarning = document.getElementById('no-hypothesis-warning');
+    const uploadAbleTableFile = document.getElementById('upload-able-table-file');
+    const uploadAbleTableBtn = document.getElementById('upload-able-table-btn');
+    const uploadAbleTableFilename = document.getElementById('upload-able-table-filename');
+    const downloadAbleActionsContainer = document.getElementById('download-able-actions-container');
+
+    // Setup combined download button
+    setupDownloadButton('able-table-content', 'able_table', 'download-able-actions-container');
+
+    function updateUIDisplay(sessionData) {
+        const hypothesisToUse = sessionData.refined_hypothesis || sessionData.hypothesis;
+
+        if (!hypothesisToUse || hypothesisToUse.trim() === '') {
+            noHypothesisWarning.style.display = 'block';
+            finalHypoContainer.style.display = 'none';
+            ableTableContainer.style.display = 'none';
+            downloadAbleActionsContainer.style.display = 'none';
+            generateAbleBtn.disabled = true;
+        } else {
+            noHypothesisWarning.style.display = 'none';
+            generateAbleBtn.disabled = false;
+            finalHypoContent.dataset.rawMarkdown = hypothesisToUse;
+            renderMarkdown(hypothesisToUse, finalHypoContent);
+            finalHypoContainer.style.display = 'block';
+        }
+
+        if (sessionData.able_table_md && sessionData.able_table_md.trim() !== '') {
+            window.currentAbleTableMarkdown = sessionData.able_table_md;
+            ableTableContent.dataset.rawMarkdown = sessionData.able_table_md;
+            renderMarkdown(sessionData.able_table_md, ableTableContent);
+            ableTableContainer.style.display = 'block';
+            downloadAbleActionsContainer.style.display = 'flex';
+        } else {
+            ableTableContainer.style.display = 'none';
+            downloadAbleActionsContainer.style.display = 'none';
+            window.currentAbleTableMarkdown = '';
+            ableTableContent.dataset.rawMarkdown = '';
+        }
+    }
+
+    function loadInitialData() {
+        showLoading('Loading ABLE Table data...');
+        fetch('/api/debug-info')
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.session_data) {
+                    updateUIDisplay(data.session_data);
+                } else {
+                    updateUIDisplay({});
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                showError('Error loading initial data: ' + error.message);
+                updateUIDisplay({}); 
+            });
+    }
+
+    generateAbleBtn.addEventListener('click', function() {
+        hideError();
+        showLoading('Generating ABLE Table...');
+        
+        const retryCount = document.getElementById('retry-count').value;
+        // const verboseMode = document.getElementById('debug-mode')?.checked || false; // ABLE table doesn't use verbose
+        
+        fetch('/api/able-table', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: content, filename: filename })
+            body: JSON.stringify({ 
+                retry_count: retryCount
+                // verbose_mode: verboseMode 
+            })
         })
-        .then(response => {
-            if (!response.ok) throw new Error('Download failed');
-            return response.blob();
-        })
-        .then(blob => {
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(url);
+        .then(response => response.json())
+        .then(data => {
+            hideLoading();
+            if (data.success) {
+                window.currentAbleTableMarkdown = data.able_table;
+                ableTableContent.dataset.rawMarkdown = data.able_table;
+                renderMarkdown(data.able_table, ableTableContent);
+                ableTableContainer.style.display = 'block';
+                downloadAbleActionsContainer.style.display = 'flex';
+                // Persist to session by re-fetching or specific call if available
+                // For now, assume backend saves it and reload initial data to reflect
+                loadInitialData(); 
+            } else {
+                let errorDetail = data.detail || null;
+                if (data.error && data.error.includes('OpenAI API internal server error')) {
+                    showError(
+                        'OpenAI API internal server error. This is an issue with OpenAI\\\'s servers. Maximum retry attempts reached. \\n\\nTip: You can try again later, refine your hypothesis, or increase the retry count.',
+                        errorDetail
+                    );
+                } else {
+                    showError('Error generating ABLE table: ' + (data.error || 'Unknown error'), errorDetail);
+                }
+            }
         })
         .catch(error => {
-            showError('Download failed: ' + error.message);
+            hideLoading();
+            showError('Network error: ' + error.message);
         });
     });
-}
 
-handleDownload('download-markdown-form', 'able-table-content', '/api/download/markdown', 'able_table.md');
-handleDownload('download-pdf-form', 'able-table-content', '/api/download/pdf', 'able_table.pdf');
-
-// Upload ABLE table
-document.getElementById('upload-able-table-file').addEventListener('change', function() {
-    const fileInput = this;
-    if (!fileInput.files.length) return;
-    const formData = new FormData();
-    formData.append('file', fileInput.files[0]);
-    showLoading('Uploading ABLE table...');
-    fetch('/api/upload-able-table', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        hideLoading();
-        if (data.success) {
-            window.originalAbleTableMarkdown = data.able_table;
-            // Optionally, re-render the table in the UI here
-            location.reload();
-        } else {
-            showError('Upload failed: ' + data.error);
-        }
-    })
-    .catch(error => {
-        hideLoading();
-        showError('Upload failed: ' + error.message);
+    uploadAbleTableBtn.addEventListener('click', function() {
+        uploadAbleTableFile.click(); // Trigger hidden file input
     });
-});
 
-// Upload ABLE Table logic
-const uploadAbleInput = document.getElementById('upload-able-table-file');
-const uploadAbleForm = document.getElementById('upload-able-table-form');
-const uploadAbleFilename = document.getElementById('upload-able-table-filename');
-uploadAbleInput.addEventListener('change', function() {
-    if (!uploadAbleInput.files.length) return;
-    const formData = new FormData();
-    formData.append('file', uploadAbleInput.files[0]);
-    showLoading('Uploading ABLE table...');
-    fetch('/api/upload-able-table', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        hideLoading();
-        if (data.success) {
-            uploadAbleFilename.textContent = uploadAbleInput.files[0].name + ' uploaded!';
-            window.originalAbleTableMarkdown = data.able_table;
-            location.reload();
-        } else {
-            showError('Upload failed: ' + data.error);
+    uploadAbleTableFile.addEventListener('change', function() {
+        const file = this.files[0];
+        if (!file) {
+            return;
         }
-    })
-    .catch(error => {
-        hideLoading();
-        showError('Upload failed: ' + error.message);
-    });
-});
+        uploadAbleTableFilename.textContent = file.name;
+        hideError();
+        showLoading('Uploading ABLE table...');
+        const formData = new FormData();
+        formData.append('file', file);
 
-// Initialize from session data
-fetch('/api/debug-info')
-.then(response => response.json())
-.then(data => {
-    // Check if we have a refined hypothesis or fallback to original
-    let hypothesis = '';
-    if (data.session_data && data.session_data.refined_hypothesis) {
-        hypothesis = data.session_data.refined_hypothesis;
-    } else if (data.session_data && data.session_data.hypothesis) {
-        hypothesis = data.session_data.hypothesis;
-    }
-    if (!hypothesis) {
-        document.getElementById('no-hypothesis-warning').style.display = 'block';
-    } else {
-        // Display the final (refined) hypothesis
-        const container = document.getElementById('final-hypo-container');
-        const content = document.getElementById('final-hypo-content');
-        renderMarkdown(hypothesis, content);
-        container.style.display = 'block';
-    }
-    // Load ABLE table if available
-    if (data.session_data && data.session_data.able_table_md) {
-        const tableContainer = document.getElementById('able-table-container');
-        const tableContent = document.getElementById('able-table-content');
-        renderMarkdown(data.session_data.able_table_md, tableContent);
-        tableContainer.style.display = 'block';
-        window.currentAbleTable = data.session_data.able_table_md;
-        window.originalAbleTableMarkdown = data.session_data.able_table_md; // Store the original markdown
-    }
+        fetch('/api/upload-able-table', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            hideLoading();
+            if (data.success) {
+                window.currentAbleTableMarkdown = data.able_table;
+                ableTableContent.dataset.rawMarkdown = data.able_table;
+                renderMarkdown(data.able_table, ableTableContent);
+                ableTableContainer.style.display = 'block';
+                downloadAbleActionsContainer.style.display = 'flex';
+                uploadAbleTableFilename.textContent = file.name + ' uploaded successfully!';
+                setTimeout(() => { uploadAbleTableFilename.textContent = file.name; }, 3000); // Reset after a few seconds
+                 // Refresh data from server to ensure consistency
+                loadInitialData();
+            } else {
+                showError('Error uploading ABLE table: ' + data.error);
+                uploadAbleTableFilename.textContent = 'Upload failed. Try again.';
+            }
+        })
+        .catch(error => {
+            hideLoading();
+            showError('Network error during upload: ' + error.message);
+            uploadAbleTableFilename.textContent = 'Upload failed. Try again.';
+        });
+    });
+
+    // Initial load
+    loadInitialData();
 });
 {% endblock %}

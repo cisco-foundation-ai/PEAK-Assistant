@@ -542,15 +542,12 @@ def debug_info():
         session.clear()
         return jsonify({'success': True})
     
-    # Get environment variables (without sensitive values)
-    env_vars = {
-        'AZURE_OPENAI_DEPLOYMENT': os.getenv('AZURE_OPENAI_DEPLOYMENT', 'Not set'),
-        'AZURE_OPENAI_MODEL': os.getenv('AZURE_OPENAI_MODEL', 'Not set'),
-        'AZURE_OPENAI_API_VERSION': os.getenv('AZURE_OPENAI_API_VERSION', 'Not set'),
-        'AZURE_OPENAI_ENDPOINT': 'REDACTED' if os.getenv('AZURE_OPENAI_ENDPOINT') else 'Not set',
-        'AZURE_OPENAI_API_KEY': 'REDACTED' if os.getenv('AZURE_OPENAI_API_KEY') else 'Not set',
-        'TAVILY_API_KEY': 'REDACTED' if os.getenv('TAVILY_API_KEY') else 'Not set',
-    }
+    # Get environment variables (with redaction for sensitive ones)
+    env_vars = {}
+    sensitive_keywords = ["KEY", "TOKEN", "SECRET", "PASSWORD", "PASSWD", "API_KEY", "CONN_STR"]
+    for key, value in os.environ.items():
+        is_sensitive = any(keyword in key.upper() for keyword in sensitive_keywords)
+        env_vars[key] = "[REDACTED]" if is_sensitive and value else value
     
     # System info
     sys_info = {
