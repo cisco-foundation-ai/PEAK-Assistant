@@ -19,7 +19,11 @@ def find_dotenv_file():
         current_dir = current_dir.parent
     return None  # No .env file found
 
-async def hypothesizer(user_input: str, research_document: str) -> str:
+async def hypothesizer(
+        user_input: str = None, 
+        research_document: str = None,
+        local_context: str = None
+) -> str:
     """
     Hypothesizer agent that combines user input, a markdown document, and its own prompt
     to generate output using an OpenAI model on Azure.
@@ -42,40 +46,24 @@ async def hypothesizer(user_input: str, research_document: str) -> str:
         2. Extract relevant information from the research document.
         3. Combine both to generate clear, actionable, testable hypotheses.
 
-        Respond with a list of potential hypotheses, along with any relevant 
+        Respond with a list of potential hunting hypotheses, along with any relevant 
         details or considerations, such as where on the network the hypothesis 
         could be tested (e.g., "on the endpoint", "on the network", 
         "on the SMTP servers", "Internet-facing services", etc.) and typical datasets or 
         types of data that would be necessary to test the hypothesis.
 
-        Your output should be a Markdown document, with one section per hypothesis. 
-        The title of the document should be "Suggested Hypotheses for Hunting (BEHAVIOR)",
-        where "BEHAVIOR" is the behavior or technique being researched. (e.g., "Suggested
-        Hypotheses for Hunting Credential Dumping"). That would be the first level header.
-
-        Each section should include:
-        - A title for the hypothesis. This should be the 2nd-level header (e.g., the 
-          title of the section).
-        - The actual hypothesis. Call this section "Hypothesis".
-        - Test locations or systems. Call this section "Test Locations".
-        - Datasets or types of data needed for testing. Call this section "Data".
-        - Any other relevant details or considerations. Call this section 
-          "Notes & Considerations".
-
-        Do not include any other text or explanations outside of the sections
-        and headers. The first line of the output should be the title of the document (the 
-        1st level header) with no other text before it. When finished with the final 
-        hypothesis section, end the document and do not include any summary or ask for 
-        more work.
-    
-        The output should be a well-structured Markdown document.
+        Your output should be a list of hypotheses, each on a line by itself. There
+        should be no additional text, explanations, or formatting. Include at least
+        three hypotheses, but feel free to generate more if you can.
+        
         If you cannot generate a hypothesis, please say "No hypothesis could be generated."
     """
 
     messages = [
         SystemMessage(content=system_prompt),
         UserMessage(content=f"Here is the research document:\n{research_document}\n", source="user"),
-        UserMessage(content=f"Here is the user's input: {user_input}\n", source="user")
+        UserMessage(content=f"Here is the user's input: {user_input}\n", source="user"),
+        UserMessage(content=f"Additional local context: {local_context}\n", source="user"),
     ]
 
     az_model_client = AzureOpenAIChatCompletionClient(
@@ -103,6 +91,8 @@ if __name__ == "__main__":
     parser.add_argument('-e', '--environment', help='Path to specific .env file to use')
     parser.add_argument('-r', '--research', help='Path to the research document (markdown file)', required=True)
     parser.add_argument('-u', '--user_input', help='User input for hypothesis generation', required=False, default="")
+    parser.add_argument('-c', '--local_context', help='Additional local context to consider', required=False, default=None)
+
     args = parser.parse_args()
 
     # Load environment variables
@@ -132,6 +122,25 @@ if __name__ == "__main__":
         print(f"Error reading research document: {e}")
         exit(1)
 
+    # Read the contents of the local context if provided
+    local_context = None
+    if args.local_context:
+        try:
+            with open(args.local_context, 'r', encoding='utf-8') as file:
+                local_context = file.read()
+        except FileNotFoundError:
+            print(f"Error: Local context file '{args.local_context}' not found")
+            exit(1)
+        except Exception as e:
+            print(f"Error reading local context: {e}")
+            exit(1)
+
     # Run the hypothesizer asynchronously
-    hypotheses = asyncio.run(hypothesizer(args.user_input, research_data))
+    hypotheses = asyncio.run(
+        hypothesizer(
+            user_input=args.user_input, 
+            research_document=research_data,
+            local_context=local_context
+        )
+    )
     print(hypotheses)

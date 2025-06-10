@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Hunt Plan - PEAK Assistant{% endblock %}
+
+{% block nav %}
+    {% set prev_phase_url = url_for('data_discovery_page') %}
+    {% set prev_phase_name = "Data Discovery" %}
+    {% set next_phase_url = None %}
+    {% set next_phase_name = None %}
+    {{ super() }}
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="mb-0">Generate Hunt Plan</h2>
+        <div id="download-plan-actions-container" style="display: none;">
+            <!-- Download button will be inserted here by script -->
+        </div>
+    </div>
+    <p class="mb-4">This phase combines your Topic Research, Hypothesis, ABLE Table, and Data Sources into a complete, shareable hunt plan. You can review the combined document below and download it.</p>
+
+    <div id="plan-container" class="border rounded p-3 bg-light">
+        <div id="plan-content" data-raw-markdown="">
+            <!-- Plan content will be rendered here by JavaScript -->
+            <p class="text-muted">Loading hunt plan...</p>
+        </div>
+        <!-- Removed bottom navigation bar from here -->
+    </div>
+</div>
+</div>
+{% endblock %}
+
+{% block script %}
+// Hunt planning page script - executed after base template DOMContentLoaded
+setTimeout(function() {
+    const planContentDiv = document.getElementById('plan-content');
+    
+    // Ensure this global variable is available for setupDownloadButton
+    window.currentPlanMarkdown = '';
+
+    // Add immediate visual feedback
+    planContentDiv.innerHTML = '<p class="text-info">Fetching hunt plan data...</p>';
+
+    // Fetch the hunt plan from the dedicated endpoint
+    fetch('/api/hunt-plan')
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            const plan = data.hunt_plan;
+            if (data.has_content) {
+                // Use the renderMarkdown function from base.html
+                if (typeof renderMarkdown === 'function') {
+                    renderMarkdown(plan, planContentDiv);
+                } else if (typeof marked !== 'undefined') {
+                    // Fallback if renderMarkdown is not available
+                    planContentDiv.innerHTML = marked.parse(plan);
+                } else {
+                    // Last resort fallback
+                    planContentDiv.innerHTML = '<pre>' + plan + '</pre>';
+                }
+            } else {
+                planContentDiv.innerHTML = `<p class="text-muted">${plan}</p>`;
+            }
+            
+            window.currentPlanMarkdown = plan;
+            planContentDiv.setAttribute('data-raw-markdown', plan);
+            
+            // Setup the download button and show container when content is available
+            setupDownloadButton('plan-content', 'hunt_plan', 'download-plan-actions-container');
+            const downloadContainer = document.getElementById('download-plan-actions-container');
+            if (downloadContainer && data.has_content) {
+                downloadContainer.style.display = 'block';
+                console.log('Hunt Planning: Download button shown for plan:', plan.substring(0, 100));
+            } else {
+                downloadContainer.style.display = 'none';
+                console.log('Hunt Planning: Download button hidden - no meaningful content');
+            }
+        } else {
+            throw new Error(data.error || 'Failed to fetch hunt plan');
+        }
+    })
+    .catch(error => {
+        console.error('Error fetching hunt plan data:', error);
+        const errorMessage = 'Failed to load hunt plan data: ' + error.message;
+        planContentDiv.innerHTML = `<p class="text-danger">${errorMessage}</p>`;
+        window.currentPlanMarkdown = errorMessage;
+        planContentDiv.setAttribute('data-raw-markdown', errorMessage);
+        
+        // Show error using global toast system
+        showError(errorMessage);
+        
+        // Don't show download button for error cases
+        const downloadContainer = document.getElementById('download-plan-actions-container');
+        if (downloadContainer) {
+            downloadContainer.style.display = 'none';
+            console.log('Hunt Planning: Download button hidden for error case');
+        }
+    });
+}, 500); // Wait a bit longer to ensure base template is fully loaded
+{% endblock %}

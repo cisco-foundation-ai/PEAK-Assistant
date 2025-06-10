@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}PEAK Assistant UI{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        .sidebar {
+            min-height: 100vh;
+            background-color: #f8f9fa;
+            border-right: 1px solid #e9ecef;
+            padding: 20px;
+        }
+        .sidebar-title-link {
+            font-size: 1.75rem; /* Adjust size as needed */
+            font-weight: 500;
+            color: #212529; /* Standard bootstrap text color */
+            text-decoration: none;
+        }
+        .sidebar-title-link.active, /* Keep .active for potential future use but override its specific link look */
+        .sidebar-title-link:hover {
+            color: #0d6efd; /* Standard link hover color */
+            text-decoration: none; /* Ensure no underline on hover */
+        }
+        .sidebar-logo {
+            width: 100%; /* Make image take full width of its container (the <a> tag) */
+            height: auto; /* Maintain aspect ratio */
+            vertical-align: middle; /* Aligns logo nicely if there were text next to it */
+        }
+        .content {
+            padding: 20px;
+        }
+        .spinner-border {
+            width: 1rem;
+            height: 1rem;
+            vertical-align: text-bottom;
+        }
+        .debug-section {
+            border-top: 1px solid #e9ecef;
+            margin-top: 20px;
+        }
+        pre {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: .25rem;
+            padding: 1rem;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        #error-message {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            z-index: 1050; /* Ensure it's above most other content */
+        }
+        #success-toast-container { /* New style for success toast */
+            position: fixed;
+            top: 70px; /* Position below the error toast */
+            right: 10px;
+            z-index: 1050;
+        }
+        #loading-indicator {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1060; /* Higher than error messages */
+            background-color: rgba(0,0,0,0.7);
+            color: white;
+            padding: 20px;
+            border-radius: 5px;
+        }
+        .help-icon {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+            background-color: #0d6efd;
+            color: white;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            text-decoration: none;
+        }
+        .help-icon svg {
+            width: 24px;
+            height: 24px;
+        }
+        .help-icon:hover svg {
+            fill: #f8f9fa;
+        }
+        .top-navigation {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #e9ecef;
+            margin-bottom: 20px;
+        }
+        .top-navigation .nav-arrow {
+            font-size: 1.5rem;
+        }
+        .top-navigation .nav-text {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        .btn-hunt-planning-disabled-color {
+            background-color: #146c43 !important; /* Bootstrap's darker success shade for a "duskier green" */
+            border-color: #13653f !important; /* Slightly darker border */
+        }
+        
+        /* Fix navigation button hover states for better text contrast */
+        .top-navigation .btn-outline-secondary:hover {
+            background-color: #adb5bd !important;
+            border-color: #adb5bd !important;
+            color: #212529 !important;
+        }
+        
+        .top-navigation .btn-outline-primary:hover {
+            background-color: #b6d7ff !important;
+            border-color: #b6d7ff !important;
+            color: #0a58ca !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav class="col-md-3 col-lg-2 d-md-block bg-light sidebar collapse" id="sidebarMenu">
+                <div class="position-sticky pt-3">
+                    <ul class="nav flex-column">
+                        <li class="nav-item mb-2"> <!-- Added margin-bottom for spacing -->
+                            <a class="nav-link active sidebar-title-link w-100" aria-current="page" href="/">
+                                <img src="{{ url_for('static', filename='images/peak-logo.png') }}" alt="PEAK Assistant Logo" class="sidebar-logo">
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/research">
+                                Topic Research
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/hypothesis">
+                                Hypothesis Generation
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/refinement">
+                                Hypothesis Refinement
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/able-table">
+                                ABLE Table
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/data-discovery">
+                                Data Discovery
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a id="hunt-planning-btn" class="nav-link btn btn-success text-white mt-1 mb-1 w-100" href="/hunt-planning">
+                                Generate Hunt Plan
+                            </a>
+                        </li>
+                        <li class="nav-item mt-2"> <!-- Removed px-3 -->
+                            <button id="clear-session-sidebar-btn" class="btn btn-danger w-100" style="padding-top: 0.5rem; padding-bottom: 0.5rem;">Clear Everything and Start Over</button>
+                        </li>
+                    </ul>
+
+                    <div class="debug-section pt-3 mt-auto">
+                        <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                            <span>Tools</span>
+                        </h6>
+                        <ul class="nav flex-column mb-2">
+                            <li class="nav-item">
+                                <a class="nav-link" href="/help">
+                                    Help
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="/debug">
+                                    Debug
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- Main content -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 content">
+                {% block nav %}
+                <div class="top-navigation">
+                    <div>
+                        {% if prev_phase_url %}
+                            <a href="{{ prev_phase_url }}" class="btn btn-outline-secondary">
+                                <span class="nav-arrow">&larr;</span> <span class="nav-text">{{ prev_phase_name }}</span>
+                            </a>
+                        {% else %}
+                            <span>&nbsp;</span> <!-- Placeholder to keep alignment -->
+                        {% endif %}
+                    </div>
+                    <div>
+                        {% if next_phase_url %}
+                            <a href="{{ next_phase_url }}" class="btn btn-outline-primary">
+                                <span class="nav-text">{{ next_phase_name }}</span> <span class="nav-arrow">&rarr;</span>
+                            </a>
+                        {% else %}
+                            <span>&nbsp;</span> <!-- Placeholder to keep alignment -->
+                        {% endif %}
+                    </div>
+                </div>
+                {% endblock %}
+
+                {% block content %}{% endblock %}
+
+                <!-- Debug Panel (hidden by default) -->
+                <div id="debug-panel" class="mt-5 p-3 border bg-light" style="display: none;">
+                    <h4>Verbose Output / Logs</h4>
+                    <pre id="debug-output">Verbose output will appear here...</pre>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Loading Indicator -->
+    <div id="loading-indicator" style="display: none;">
+        <div class="spinner-border text-light" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p id="loading-message" class="mt-2">Processing...</p>
+    </div>
+
+    <!-- Error Message Toast -->
+    <div class="position-fixed top-0 end-0 p-3" style="z-index: 1050">
+        <div id="error-toast" class="toast hide" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header bg-danger text-white">
+                <strong class="me-auto">Error</strong>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body">
+                <span id="error-message-text"></span>
+                <button id="show-error-details" class="btn btn-sm btn-link p-0" style="display:none;">Show Details</button>
+                <pre id="error-details-content" class="mt-2" style="display:none; max-height: 200px; overflow-y: auto;"></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- Success Toast -->
+    <div id="success-toast-container" class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="true" data-bs-delay="5000">
+        <div class="d-flex">
+            <div class="toast-body" id="success-toast-body">
+                <!-- Success message will be inserted here -->
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+    </div>
+    
+    <!-- Help Floating Button -->
+    <a href="/help" class="help-icon" title="Help">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-question-lg" viewBox="0 0 16 16">
+            <path fill-rule="evenodd" d="M4.475 5.458c-.284 0-.514.237-.47.517C4.28 7.94 5.765 9.85 8 9.85c2.235 0 3.72-1.91 3.995-3.875.044-.28-.186-.517-.47-.517H4.475zM8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zM6.572 4.004c.04-.28.21-.505.478-.505h.9c.266 0 .438.225.478.505.078.54.45 1.328 1.258 2.142.807.814 1.64.935 1.64 1.536 0 .672-.724 1.423-1.825 1.423-1.212 0-1.77-.874-1.77-1.423 0-.394.117-.724.303-.975.187-.25.49-.583.49-.967 0-.386-.254-.687-.572-.937-.318-.25-.776-.592-1.15-.937C6.022 5.332 5.5 4.54 5.5 3.652c0-.28.21-.505.478-.505h.116c.266 0 .438.225.478.505.04.28.028.47-.003.586a.87.87 0 0 0-.08.29c-.06.226-.08.43-.08.61 0 .29.087.52.236.708.15.187.386.363.703.625.318.26.703.592.988.937.286.346.443.746.443 1.187 0 .672-.587 1.423-1.425 1.423S6.25 11.187 6.25 10.515c0-.76.725-1.691 1.8-2.036.23-.075.405-.165.53-.27.124-.104.187-.226.187-.363 0-.24-.164-.43-.405-.566-.24-.137-.56-.237-.96-.237-.353 0-.655.06-.89.18S4.87 7.17 4.87 7.416c0 .28-.21.505-.478.505H4.3c-.267 0-.438-.225-.478-.505C3.744 6.215 4.87 4.004 6.572 4.004z"/>
+        </svg>
+    </a>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Common utility functions
+        function showLoading(message = "Processing...") {
+            document.getElementById('loading-message').textContent = message;
+            document.getElementById('loading-indicator').style.display = 'flex';
+        }
+        
+        function hideLoading() {
+            document.getElementById('loading-indicator').style.display = 'none';
+        }
+        
+        function showError(message, detail = null) {
+            const errorToastEl = document.getElementById('error-toast');
+            const toast = new bootstrap.Toast(errorToastEl);
+            document.getElementById('error-message-text').textContent = message;
+
+            const detailsBtn = document.getElementById('show-error-details');
+            const detailsContent = document.getElementById('error-details-content');
+
+            if (detail) {
+                detailsContent.textContent = typeof detail === 'object' ? JSON.stringify(detail, null, 2) : detail;
+                detailsBtn.style.display = 'inline';
+                // Reset display of details content
+                detailsContent.style.display = 'none'; 
+            } else {
+                detailsBtn.style.display = 'none';
+                detailsContent.style.display = 'none';
+            }
+            toast.show();
+        }
+        
+        function hideError() {
+            // Not strictly necessary to hide programmatically if user can close,
+            // but good for clearing previous errors before new operations.
+            const errorToastEl = document.getElementById('error-toast');
+            const toast = bootstrap.Toast.getInstance(errorToastEl);
+            if (toast) {
+                toast.hide();
+            }
+            document.getElementById('error-details-content').style.display = 'none';
+            document.getElementById('show-error-details').style.display = 'none';
+        }
+
+        function showSuccess(message) {
+            const successToastEl = document.getElementById('success-toast-container');
+            const toast = bootstrap.Toast.getOrCreateInstance(successToastEl);
+            document.getElementById('success-toast-body').textContent = message;
+            toast.show();
+        }
+        
+        function renderMarkdown(markdown, targetElement) {
+            if (typeof markdown === 'string') {
+                targetElement.innerHTML = marked.parse(markdown);
+            } else {
+                targetElement.innerHTML = '<p><em>Invalid content for Markdown rendering.</em></p>';
+                console.error("Invalid content for Markdown rendering:", markdown);
+            }
+        }
+
+        // Combined Download Button Helper
+        // targetContentId: ID of the element whose content (or a data attribute) is to be downloaded
+        // baseFilename: Filename without extension (e.g., 'research_report')
+        // containerId: ID of the div where the download button group will be placed
+        function setupDownloadButton(targetContentId, baseFilename, containerId) {
+            const container = document.getElementById(containerId);
+            if (!container) {
+                console.error('Download button container not found:', containerId);
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="btn-group">
+                    <button type="button" class="btn btn-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                        Download
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="#" data-format="markdown">Download Markdown (.md)</a></li>
+                        <li><a class="dropdown-item" href="#" data-format="pdf">Download PDF (.pdf)</a></li>
+                    </ul>
+                </div>
+            `;
+
+            container.querySelectorAll('.dropdown-item').forEach(item => {
+                item.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const format = this.dataset.format;
+                    const contentElement = document.getElementById(targetContentId);
+                    let contentToDownload = '';
+
+                    if (contentElement) {
+                        // Prefer a data attribute 'data-raw-markdown' if available
+                        contentToDownload = contentElement.dataset.rawMarkdown || contentElement.innerText || contentElement.value;
+                    } else {
+                        // Fallback for global content, e.g. window.currentPlanMarkdown
+                        if (targetContentId === 'plan-content' && typeof window.currentPlanMarkdown !== 'undefined') {
+                             contentToDownload = window.currentPlanMarkdown;
+                        } else if (targetContentId === 'report-content' && typeof window.currentReportMarkdown !== 'undefined') {
+                             contentToDownload = window.currentReportMarkdown;
+                        } else if (targetContentId === 'current-hypo-content' && typeof window.currentHypothesisMarkdown !== 'undefined') {
+                             contentToDownload = window.currentHypothesisMarkdown;
+                        } else if (targetContentId === 'refined-hypo-content' && typeof window.currentRefinedHypothesisMarkdown !== 'undefined') {
+                             contentToDownload = window.currentRefinedHypothesisMarkdown;
+                        } else if (targetContentId === 'able-table-content' && typeof window.currentAbleTableMarkdown !== 'undefined') {
+                             contentToDownload = window.currentAbleTableMarkdown;
+                        } else if (targetContentId === 'data-sources-content' && typeof window.currentDataSourcesMarkdown !== 'undefined') {
+                             contentToDownload = window.currentDataSourcesMarkdown;
+                        } else {
+                            showError('Content for download not found or not accessible for id: ' + targetContentId);
+                            return;
+                        }
+                    }
+                    
+                    if (!contentToDownload && format === 'markdown') {
+                         showError('No content available to download as Markdown.');
+                         return;
+                    }
+                     if (!contentToDownload && format === 'pdf') {
+                         showError('No content available to download as PDF. Ensure Markdown is generated first.');
+                         return;
+                    }
+
+
+                    const filename = baseFilename + (format === 'markdown' ? '.md' : '.pdf');
+                    const apiUrl = format === 'markdown' ? '/api/download/markdown' : '/api/download/pdf';
+
+                    fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ content: contentToDownload, filename: filename })
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            return response.json().then(err => { throw new Error(err.error || 'Download failed') });
+                        }
+                        return response.blob();
+                    })
+                    .then(blob => {
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.style.display = 'none';
+                        a.href = url;
+                        a.download = filename;
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                        a.remove();
+                    })
+                    .catch(error => {
+                        showError('Download error: ' + error.message, error.detail || error);
+                    });
+                });
+            });
+        }
+        
+        // Toggle Verbose mode (debug panel)
+        const debugModeCheckbox = document.getElementById('debug-mode');
+        if (debugModeCheckbox) {
+            debugModeCheckbox.addEventListener('change', function() {
+                document.getElementById('debug-panel').style.display = this.checked ? 'block' : 'none';
+                // Optionally, store this preference in localStorage or session
+            });
+        }
+        
+        // Show error details button
+        const showErrorDetailsBtn = document.getElementById('show-error-details');
+        if (showErrorDetailsBtn) {
+            showErrorDetailsBtn.addEventListener('click', function() {
+                const detailsContent = document.getElementById('error-details-content');
+                detailsContent.style.display = detailsContent.style.display === 'none' ? 'block' : 'none';
+            });
+        }
+        
+        // Clear Session button in sidebar
+        const clearSessionSidebarBtn = document.getElementById('clear-session-sidebar-btn');
+        if (clearSessionSidebarBtn) {
+            clearSessionSidebarBtn.addEventListener('click', function() {
+                if (confirm('Are you sure you want to clear all session data? This will reset the application state.')) {
+                    showLoading('Clearing session...');
+                    fetch('/clear-session', { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        hideLoading();
+                        if (data.success) {
+                            // Clear relevant sessionStorage items
+                            sessionStorage.removeItem('report_md');
+                            sessionStorage.removeItem('last_topic');
+                            sessionStorage.removeItem('hypotheses');
+                            sessionStorage.removeItem('current_hypothesis'); // For hypothesis.html
+                            sessionStorage.removeItem('refined_hypothesis'); // For refinement.html
+                            sessionStorage.removeItem('able_table_md'); // For able_table.html
+                            sessionStorage.removeItem('data_sources_md'); // For data_discovery.html
+                            sessionStorage.removeItem('currentPlanMarkdown'); // For hunt_planning.html
+                            // Add any other sessionStorage keys used by other pages here
+
+                            alert('Session cleared successfully. The page will now reload.');
+                            window.location.reload();
+                        } else {
+                            showError('Failed to clear session: ' + (data.error || 'Unknown error'));
+                        }
+                    })
+                    .catch(error => {
+                        hideLoading();
+                        showError('Error clearing session: ' + error.message);
+                    });
+                }
+            });
+        }
+
+        // Function to check prerequisites for Hunt Planning button and style it
+        function checkHuntPlanningPrerequisites() {
+            const huntPlanningBtn = document.getElementById('hunt-planning-btn');
+            if (!huntPlanningBtn) {
+                return; // Button not found, do nothing
+            }
+
+            const researchDone = sessionStorage.getItem('report_md')?.trim();
+            const hypothesisDone = sessionStorage.getItem('refined_hypothesis')?.trim() || sessionStorage.getItem('current_hypothesis')?.trim();
+            const ableDone = sessionStorage.getItem('able_table_md')?.trim();
+            const discoveryDone = sessionStorage.getItem('data_sources_md')?.trim();
+
+            const allPrerequisitesMet = researchDone && hypothesisDone && ableDone && discoveryDone;
+
+            if (allPrerequisitesMet) {
+                huntPlanningBtn.classList.remove('disabled'); 
+                huntPlanningBtn.classList.remove('btn-hunt-planning-disabled-color');
+                // Ensure btn-success is present if it was somehow removed (it shouldn't be with this logic)
+                if (!huntPlanningBtn.classList.contains('btn-success')) {
+                     huntPlanningBtn.classList.add('btn-success');
+                }
+            } else {
+                huntPlanningBtn.classList.add('disabled'); 
+                // btn-success might be kept for other stylings (padding, font, etc.)
+                // but our custom class will override background/border due to !important.
+                huntPlanningBtn.classList.add('btn-hunt-planning-disabled-color'); 
+            }
+        }
+
+        // Call this function when the page loads.
+        // Ensures DOM is ready before trying to access elements.
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', checkHuntPlanningPrerequisites);
+        } else {
+            // DOMContentLoaded has already fired
+            checkHuntPlanningPrerequisites();
+        }
+
+        // Add page-specific JavaScript
+        {% block script %}{% endblock %}
+    </script>
+</body>
+</html>

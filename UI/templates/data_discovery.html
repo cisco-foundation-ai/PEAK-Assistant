@@ -1,0 +1,303 @@
+{% extends "base.html" %}
+
+{% block title %}Data Discovery - PEAK Assistant{% endblock %}
+
+{% set prev_phase_url = "/able-table" %}
+{% set prev_phase_name = "ABLE Table" %}
+{% set next_phase_url = "/hunt-planning" %}
+{% set next_phase_name = "Generate Hunt Plan" %}
+
+{% block nav %}{{ super() }}{% endblock %}
+
+{% block content %}
+<style>
+    .btn-disabled-warning {
+        opacity: 0.6;
+        cursor: not-allowed !important;
+    }
+    
+    .btn-disabled-warning:hover {
+        opacity: 0.6 !important;
+    }
+</style>
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center">
+        <h1>Data Discovery</h1>
+        <div id="download-data-actions-container" style="display: none;">
+            <!-- Download button will be inserted here by script -->
+        </div>
+    </div>
+    <p>Identify potential data sources based on the research report, hypothesis, and ABLE table.</p>
+
+    <!-- Prerequisite warnings -->
+    <div id="missing-prerequisites-warning" class="alert alert-warning mb-4" style="display: none;">
+        <strong>Warning:</strong> Missing required information. Please complete the following phases first:
+        <ul id="missing-items-list" class="mb-0 mt-2">
+            <!-- Missing items will be populated by JavaScript -->
+        </ul>
+    </div>
+
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        <button class="btn btn-primary" id="generate-data-sources-btn">
+            <i class="fas fa-search me-1"></i> Identify Data Sources
+        </button>
+        <button class="btn btn-secondary" id="upload-data-sources-btn">
+            <i class="fas fa-upload me-1"></i> Upload Data Sources (MD/TXT)
+        </button>
+        <input type="file" id="data-sources-file-input" style="display: none;" accept=".md,.txt">
+    </div>
+
+    <div class="mb-3">
+        <label for="data-sources-content" class="form-label">Identified Data Sources</label>
+        <div id="data-sources-content" class="border rounded p-3 bg-light" style="min-height: 400px;" data-raw-markdown="">
+            <p class="text-muted">Data sources will appear here...</p>
+        </div>
+    </div>
+
+    <!-- Navigation buttons are now handled by the nav block -->
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const generateBtn = document.getElementById('generate-data-sources-btn');
+    const uploadBtn = document.getElementById('upload-data-sources-btn');
+    const fileInput = document.getElementById('data-sources-file-input');
+    const contentDiv = document.getElementById('data-sources-content');
+
+    // Store the raw markdown for downloads
+    let currentMarkdown = ''; // Renamed from window.currentDataSourcesMarkdown for local scope clarity
+    window.currentDataSourcesMarkdown = ''; // Ensure global variable is also initialized
+
+    function updateContent(markdown) {
+        currentMarkdown = markdown;
+        window.currentDataSourcesMarkdown = markdown; // Keep global variable in sync
+        contentDiv.setAttribute('data-raw-markdown', markdown); // Update data attribute
+        if (markdown && markdown.trim()) {
+            renderMarkdown(markdown, contentDiv);
+            sessionStorage.setItem('data_sources_md', markdown);
+        } else {
+            contentDiv.innerHTML = '<p class="text-muted">Data sources will appear here...</p>';
+            sessionStorage.removeItem('data_sources_md');
+        }
+        // Initialize download button after content is updated
+        setupDownloadButton('data-sources-content', 'data-sources', 'download-data-actions-container');
+        
+        // Show download button container only when content is available
+        const downloadContainer = document.getElementById('download-data-actions-container');
+        if (downloadContainer) {
+            if (markdown && markdown.trim()) {
+                downloadContainer.style.display = 'block';
+                console.log('Data Discovery: Download button shown for content:', markdown.substring(0, 100));
+            } else {
+                downloadContainer.style.display = 'none';
+                console.log('Data Discovery: Download button hidden - no content');
+            }
+        } else {
+            console.error('Data Discovery: Download container not found');
+        }
+        
+        if (typeof checkHuntPlanningPrerequisites === 'function') {
+            checkHuntPlanningPrerequisites();
+        }
+        // Also check navigation button state
+        checkNavigationButtonState();
+    }
+
+    function checkNavigationButtonState() {
+        // Check if hunt planning prerequisites are met (same logic as base template)
+        const researchDone = sessionStorage.getItem('report_md')?.trim();
+        const hypothesisDone = sessionStorage.getItem('refined_hypothesis')?.trim() || sessionStorage.getItem('current_hypothesis')?.trim();
+        const ableDone = sessionStorage.getItem('able_table_md')?.trim();
+        const discoveryDone = sessionStorage.getItem('data_sources_md')?.trim();
+
+        const allPrerequisitesMet = researchDone && hypothesisDone && ableDone && discoveryDone;
+        
+        // Find the navigation button (hunt planning "next" button)
+        const navButtons = document.querySelectorAll('.top-navigation .btn-outline-primary');
+        navButtons.forEach(btn => {
+            if (btn.href && btn.href.includes('/hunt-planning')) {
+                if (!allPrerequisitesMet) {
+                    btn.classList.add('disabled');
+                    btn.style.opacity = '0.6';
+                    btn.style.cursor = 'not-allowed';
+                    btn.addEventListener('click', function(e) {
+                        if (this.classList.contains('disabled')) {
+                            e.preventDefault();
+                            return false;
+                        }
+                    });
+                } else {
+                    btn.classList.remove('disabled');
+                    btn.style.opacity = '';
+                    btn.style.cursor = '';
+                }
+            }
+        });
+    }
+
+    function showDataDiscoveryLoading(isLoading) {
+        // Use the global loading modal from base.html for consistency with research page
+        if (isLoading) {
+            showLoading('Identifying data sources... (this may take a moment)');
+        } else {
+            hideLoading();
+        }
+        // Only enable/disable button if it's not already disabled due to missing prerequisites
+        if (!generateBtn.classList.contains('btn-disabled-warning')) {
+            generateBtn.disabled = isLoading;
+        }
+    }
+
+    function showMessage(message, type = 'error') {
+        // Only show error messages for consistency with other pages
+        if (type === 'error') {
+            showError(message); // Uses global showError from base.html
+        }
+        // Remove success toast functionality to match other pages
+    }
+
+    // Load existing data sources from session if available
+    fetch('/api/data-discovery', { // This will use the GET request to fetch existing session data
+        method: 'GET', // Explicitly GET, though default
+        headers: {
+            'Accept': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.data_sources_md) {
+            updateContent(data.data_sources_md);
+        } else {
+            // Check navigation button state even if no content
+            checkNavigationButtonState();
+        }
+        // Note: No fallback to sessionStorage to prevent stale data from persisting
+    })
+    .catch(error => {
+        console.warn('Could not load existing data sources:', error);
+        // Check navigation button state even if fetch fails
+        checkNavigationButtonState();
+    });
+
+    // Check for prerequisites and show warnings if missing
+    fetch('/api/debug-info')
+    .then(response => response.json())
+    .then(data => {
+        const missingItems = [];
+        const sessionData = data.session_data || {};
+        
+        // Check for research document
+        if (!sessionData.report_md) {
+            missingItems.push('<li>Research Document - <a href="/research">Generate Research Report</a></li>');
+        }
+        
+        // Check for hypothesis (refined or original)
+        if (!sessionData.refined_hypothesis && !sessionData.hypothesis) {
+            missingItems.push('<li>Hypothesis - <a href="/hypothesis">Generate Hypothesis</a></li>');
+        }
+        
+        // Check for ABLE table
+        if (!sessionData.able_table_md) {
+            missingItems.push('<li>ABLE Table - <a href="/able-table">Generate ABLE Table</a></li>');
+        }
+        
+        // Show warning if any prerequisites are missing
+        if (missingItems.length > 0) {
+            const warningDiv = document.getElementById('missing-prerequisites-warning');
+            const itemsList = document.getElementById('missing-items-list');
+            itemsList.innerHTML = missingItems.join('');
+            warningDiv.style.display = 'block';
+            
+            // Disable the generate button if prerequisites are missing
+            const generateBtn = document.getElementById('generate-data-sources-btn');
+            generateBtn.disabled = true;
+            generateBtn.classList.add('btn-disabled-warning');
+            generateBtn.title = 'Complete all prerequisite phases first';
+            generateBtn.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i> Prerequisites Required';
+        } else {
+            // All prerequisites are met - ensure button is enabled and styled correctly
+            const generateBtn = document.getElementById('generate-data-sources-btn');
+            generateBtn.disabled = false;
+            generateBtn.classList.remove('btn-disabled-warning');
+            generateBtn.title = 'Identify data sources for hunting';
+            generateBtn.innerHTML = '<i class="fas fa-search me-1"></i> Identify Data Sources';
+        }
+    })
+    .catch(error => console.warn('Could not check prerequisites:', error));
+
+
+    generateBtn.addEventListener('click', function() {
+        // Prevent action if prerequisites are missing
+        if (generateBtn.classList.contains('btn-disabled-warning')) {
+            showError('Please complete all prerequisite phases first.');
+            return;
+        }
+        
+        // Clear existing content immediately
+        updateContent('');
+        
+        showDataDiscoveryLoading(true);
+        hideError();
+
+        fetch('/api/data-discovery', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({}) 
+        })
+        .then(response => response.json())
+        .then(data => {
+            showDataDiscoveryLoading(false);
+            if (data.success) {
+                updateContent(data.data_sources); // This will also call setupDownloadButton
+                // Remove success toast for consistency with other pages
+            } else {
+                showError(data.error || 'Failed to identify data sources.');
+            }
+        })
+        .catch(error => {
+            showDataDiscoveryLoading(false);
+            showError('Error: ' + error.message);
+            console.error('Error:', error);
+        });
+    });
+
+    uploadBtn.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', function(event) {
+        const file = event.target.files[0];
+        if (!file) {
+            return;
+        }
+        showDataDiscoveryLoading(true);
+        hideError();
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        fetch('/api/upload-data-sources', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            showDataDiscoveryLoading(false);
+            if (data.success) {
+                updateContent(data.data_sources); // This will also call setupDownloadButton
+                // Remove success toast for consistency with other pages
+            } else {
+                showError(data.error || 'Failed to upload data sources.');
+            }
+        })
+        .catch(error => {
+            showDataDiscoveryLoading(false);
+            showError('Error uploading file: ' + error.message);
+            console.error('Error uploading file:', error);
+        });
+        fileInput.value = '';
+    });
+});
+</script>
+{% endblock %}

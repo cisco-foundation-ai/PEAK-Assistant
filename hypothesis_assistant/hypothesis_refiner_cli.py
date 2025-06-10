@@ -24,7 +24,13 @@ def find_dotenv_file():
         current_dir = current_dir.parent
     return None  # No .env file found
 
-async def refiner(hypothesis: str, user_context: str, research_document: str, automated: bool = False, verbose: bool = False) -> str:
+async def refiner(
+        hypothesis: str = None, 
+        local_context: str = None, 
+        research_document: str = None, 
+        automated: bool = False, 
+        verbose: bool = False
+) -> str:
     """
     Threat hunting hypothesis refiner agent that combines user input, a markdown document, and its own prompt
     to generate output using an OpenAI model on Azure.
@@ -125,7 +131,7 @@ async def refiner(hypothesis: str, user_context: str, research_document: str, au
     messages = [
         TextMessage(content=f"Here is the user's hypothesis: {hypothesis}\n", source="user"),
         TextMessage(content=f"Here is the research document:\n{research_document}\n", source="user"),
-        TextMessage(content=f"Here is the additional context: {user_context}\n", source="user")
+        TextMessage(content=f"Additional local context: {local_context}\n", source="user"),
     ]
 
     try:
@@ -149,7 +155,7 @@ if __name__ == "__main__":
     parser.add_argument('-e', '--environment', help='Path to specific .env file to use')
     parser.add_argument("-y", "--hypothesis", help="The hypothesis to be refined", required=True)
     parser.add_argument('-r', '--research', help='Path to the research document (markdown file)', required=True)
-    parser.add_argument('-c', '--context', help='Additional context or guidelines', required=False, default="")
+    parser.add_argument('-c', '--local_context', help='Additional local context to consider', required=False, default=None)
     parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output', default=False)
     parser.add_argument('-a', '--automated', action='store_true', help='Enable automated mode', default=False)
 
@@ -188,11 +194,24 @@ if __name__ == "__main__":
         print(f"Error reading research document: {e}")
         exit(1)
 
+    # Read the contents of the local context if provided
+    local_context = None
+    if args.local_context:
+        try:
+            with open(args.local_context, 'r', encoding='utf-8') as file:
+                local_context = file.read()
+        except FileNotFoundError:
+            print(f"Error: Local context file '{args.local_context}' not found")
+            exit(1)
+        except Exception as e:
+            print(f"Error reading local context: {e}")
+            exit(1)
+
     # Run the hypothesizer asynchronously
     messages = asyncio.run(
         refiner(
             hypothesis=args.hypothesis, 
-            user_context=args.context, 
+            local_context=local_context, 
             research_document=research_data,
             automated=args.automated,
             verbose=args.verbose

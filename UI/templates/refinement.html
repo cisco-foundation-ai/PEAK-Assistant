@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+
+{% set prev_phase_url = "/hypothesis" %}
+{% set prev_phase_name = "Hypothesis Generation" %}
+{% set next_phase_url = "/able-table" %}
+{% set next_phase_name = "Generate ABLE Table" %}
+
+{% block nav %}{{ super() }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">Hypothesis Refinement (Optional)</h2>
+    <div id="download-refined-hypo-actions-container" style="display: none;">
+        <!-- Download button will be inserted here by script -->
+    </div>
+</div>
+
+<div id="no-hypothesis-warning" class="alert alert-warning mb-4" style="display: none;">
+    <strong>Note:</strong> No hypothesis found. Please generate or select a hypothesis in the Hypothesis Phase first.
+</div>
+
+<div id="current-hypo-container" style="display: none;" class="mb-4">
+    <h4>Current Hypothesis</h4>
+    <div id="current-hypo-content" class="border rounded p-3" data-raw-markdown=""></div>
+</div>
+
+<div class="form-check form-switch mb-3">
+    <input class="form-check-input" type="checkbox" id="refine-checkbox" checked>
+    <label class="form-check-label" for="refine-checkbox">
+        Refine hypothesis automatically?
+    </label>
+</div>
+
+<div id="refine-btn-container" class="mb-3">
+    <button id="refine-btn" class="btn btn-primary">Refine Hypothesis</button>
+</div>
+
+<div id="refined-hypo-container" style="display: none;">
+    <h4>Refined Hypothesis</h4>
+    <div id="refined-hypo-content" class="border rounded p-3" data-raw-markdown=""></div>
+</div>
+{% endblock %}
+
+{% block script %}
+// Store current and refined hypothesis markdown for download
+window.currentHypothesisMarkdown = ''; // For the original hypothesis displayed
+window.currentRefinedHypothesisMarkdown = ''; // For the refined hypothesis
+
+document.addEventListener('DOMContentLoaded', function() {
+    const currentHypoContainer = document.getElementById('current-hypo-container');
+    const currentHypoContent = document.getElementById('current-hypo-content');
+    const refinedHypoContainer = document.getElementById('refined-hypo-container');
+    const refinedHypoContent = document.getElementById('refined-hypo-content');
+    const noHypothesisWarning = document.getElementById('no-hypothesis-warning');
+    const refineBtn = document.getElementById('refine-btn');
+    const refineCheckbox = document.getElementById('refine-checkbox');
+    const downloadRefinedHypoActionsContainer = document.getElementById('download-refined-hypo-actions-container');
+
+    // Setup combined download button for refined hypothesis
+    setupDownloadButton('refined-hypo-content', 'refined_hypothesis', 'download-refined-hypo-actions-container');
+
+    function updateUIDisplay(sessionData) {
+        const hypothesis = sessionData.hypothesis;
+        const refinedHypothesis = sessionData.refined_hypothesis;
+
+        if (!hypothesis || hypothesis.trim() === '') {
+            noHypothesisWarning.style.display = 'block';
+            currentHypoContainer.style.display = 'none';
+            refinedHypoContainer.style.display = 'none';
+            downloadRefinedHypoActionsContainer.style.display = 'none';
+            refineBtn.disabled = true; // Disable refine button if no hypothesis
+            return;
+        }
+
+        noHypothesisWarning.style.display = 'none';
+        refineBtn.disabled = false;
+
+        // Display current hypothesis
+        window.currentHypothesisMarkdown = hypothesis;
+        currentHypoContent.dataset.rawMarkdown = hypothesis;
+        renderMarkdown(hypothesis, currentHypoContent);
+        currentHypoContainer.style.display = 'block';
+
+        // Display refined hypothesis if available
+        if (refinedHypothesis && refinedHypothesis.trim() !== '') {
+            window.currentRefinedHypothesisMarkdown = refinedHypothesis;
+            refinedHypoContent.dataset.rawMarkdown = refinedHypothesis;
+            renderMarkdown(refinedHypothesis, refinedHypoContent);
+            refinedHypoContainer.style.display = 'block';
+            downloadRefinedHypoActionsContainer.style.display = 'flex';
+            sessionStorage.setItem('refined_hypothesis', refinedHypothesis);
+        } else {
+            refinedHypoContainer.style.display = 'none';
+            downloadRefinedHypoActionsContainer.style.display = 'none';
+            window.currentRefinedHypothesisMarkdown = ''; // Clear if not present
+            refinedHypoContent.dataset.rawMarkdown = '';
+            sessionStorage.removeItem('refined_hypothesis');
+        }
+        if (typeof checkHuntPlanningPrerequisites === 'function') {
+            checkHuntPlanningPrerequisites();
+        }
+    }
+
+    function loadInitialData() {
+        showLoading('Loading hypothesis data...');
+        fetch('/api/debug-info')
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.session_data) {
+                    updateUIDisplay(data.session_data);
+                } else {
+                    // Handle case where session_data might be missing
+                    updateUIDisplay({}); // Pass empty object to show warnings
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                showError('Error loading initial data: ' + error.message);
+                updateUIDisplay({}); // Show warnings on error too
+            });
+    }
+
+    refineBtn.addEventListener('click', function() {
+        // Clear existing refined content immediately
+        window.currentRefinedHypothesisMarkdown = '';
+        refinedHypoContent.dataset.rawMarkdown = '';
+        refinedHypoContainer.style.display = 'none';
+        downloadRefinedHypoActionsContainer.style.display = 'none';
+        sessionStorage.removeItem('refined_hypothesis');
+        
+        hideError();
+        showLoading('Refining hypothesis...');
+        
+        let retryCount = 3; // Default value
+        const storedRetryCount = localStorage.getItem('retry-count-page');
+        if (storedRetryCount) {
+            const parsedRetryCount = parseInt(storedRetryCount, 10);
+            if (!isNaN(parsedRetryCount)) {
+                retryCount = parsedRetryCount;
+            } else {
+                console.warn('Invalid retry count in localStorage for refinement, using default (3).');
+            }
+        }
+
+        const storedVerboseMode = localStorage.getItem('debug-mode-page');
+        const verboseMode = storedVerboseMode === 'true';
+        
+        const refineOption = refineCheckbox.checked;
+
+        fetch('/api/refine', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                retry_count: retryCount,
+                verbose_mode: verboseMode,
+                refine: refineOption // Pass the refine option to the backend
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            hideLoading();
+            if (data.success) {
+                // Re-fetch session data to update UI with potentially new hypothesis and refined_hypothesis
+                loadInitialData(); 
+            } else {
+                let errorDetail = data.detail || null;
+                if (data.error && data.error.includes('OpenAI API internal server error')) {
+                    showError(
+                        'OpenAI API internal server error. This is an issue with OpenAI\\\'s servers. Maximum retry attempts reached. \\n\\nTip: You can try again later, proceed with your current hypothesis, or increase the retry count.',
+                        errorDetail
+                    );
+                } else {
+                    showError('Error refining hypothesis: ' + (data.error || 'Unknown error'), errorDetail);
+                }
+            }
+        })
+        .catch(error => {
+            hideLoading();
+            showError('Network error: ' + error.message);
+        });
+    });
+
+    // Initial load of data
+    loadInitialData();
+});
+{% endblock %}

@@ -1,7 +1,15 @@
+flask==2.3.2
+Flask-Session
+Flask-SQLAlchemy
 python-dotenv
 markdown-pdf
-tavily-python
-autogen
-autogen-agentchat
-autogen-ext
 openai
+markdown
+fpdf
+# For production deployment (optional, not needed for local dev)
+gunicorn>=21.0.0
+# Remove duplicate and unnecessary packages
+tavily-python  # Only if you use Tavily API in your code
+autogen  # Only if you use autogen in your code
+autogen-agentchat  # Only if you use autogen-agentchat in your code
+autogen-ext  # Only if you use autogen-ext in your code
