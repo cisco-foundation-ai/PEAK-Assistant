@@ -69,6 +69,12 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
+        // Clear existing content immediately
+        window.currentReportMarkdown = '';
+        reportContent.dataset.rawMarkdown = '';
+        reportContainer.style.display = 'none';
+        reportActionsContainer.style.display = 'none';
+        
         hideError();
         showLoading('Generating research report... (this may take several minutes)');
         

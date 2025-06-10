@@ -122,6 +122,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     refineBtn.addEventListener('click', function() {
+        // Clear existing refined content immediately
+        window.currentRefinedHypothesisMarkdown = '';
+        refinedHypoContent.dataset.rawMarkdown = '';
+        refinedHypoContainer.style.display = 'none';
+        downloadRefinedHypoActionsContainer.style.display = 'none';
+        sessionStorage.removeItem('refined_hypothesis');
+        
         hideError();
         showLoading('Refining hypothesis...');
         

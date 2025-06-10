@@ -5,6 +5,8 @@
 <h2>Help</h2>
 <p class="lead">How to use the PEAK Assistant</p>
 
+<p>The PEAK Assistant guides you through a structured threat hunting methodology that combines research, hypothesis development, and data analysis to create comprehensive hunt plans. The workflow follows these key phases:</p>
+
 <ol>
     <li>
         <strong>Topic Research</strong><br>
@@ -30,23 +32,41 @@
         <b>Download:</b> After generating or uploading a table, use the <b>Download Markdown</b> or <b>Download PDF</b> buttons to save your work.
     </li>
     <li class="mt-3">
+        <strong>Data Discovery</strong><br>
+        Identify potential data sources based on your research report, hypothesis, and ABLE table. The system will analyze your Splunk environment to find relevant indices and data sources that could be used to test your hypothesis.<br>
+        <b>Prerequisites:</b> You must complete Topic Research, Hypothesis Generation, and ABLE Table phases before accessing Data Discovery.<br>
+        <b>Upload:</b> You can upload your own data source analysis in Markdown or plain text using the <b>Upload Data Sources</b> button.<br>
+        <b>Download:</b> After generating or uploading data sources, use the <b>Download Markdown</b> or <b>Download PDF</b> buttons to save your work.
+    </li>
+    <li class="mt-3">
         <strong>Generate Hunt Plan</strong><br>
-        Combine your Topic Research, Hypothesis, and ABLE Table into a single, formatted hunt plan. Review the combined document on the page and download it as Markdown or PDF.<br>
+        Combine your Topic Research, Hypothesis, ABLE Table, and Data Sources into a single, formatted hunt plan. Review the combined document on the page and download it as Markdown or PDF.<br>
+        <b>Prerequisites:</b> All previous phases must be completed before generating a hunt plan.<br>
         <b>Tip:</b> Use this phase to create a shareable summary of your entire workflow.
     </li>
 </ol>
 
 <h4 class="mt-4">Tips</h4>
 <ul>
-    <li>You can always return to a previous phase using the sidebar navigation.</li>
+    <li>Follow the phases in order: <strong>Topic Research → Hypothesis Generation → (Optional) Hypothesis Refinement → ABLE Table → Data Discovery → Hunt Plan</strong>.</li>
+    <li>The system will prevent you from skipping required phases - missing prerequisites will be highlighted with warnings.</li>
+    <li>You can always return to a previous phase using the sidebar navigation to edit or regenerate content.</li>
+    <li>When you click a generate button, any existing content for that phase will be immediately cleared before generation begins.</li>
     <li>Uploaded documents must be in <b>.md</b> (Markdown) or <b>.txt</b> (plain text) format.</li>
     <li>After uploading, the page will reload and your uploaded content will be displayed and used in subsequent phases.</li>
+    <li>Each phase has download options - you can download individual components or the final hunt plan as Markdown or PDF.</li>
     <li>Use the <b>Help</b> page for guidance at any time.</li>
+    <li>The <b>Clear Everything and Start Over</b> button in the sidebar will reset all session data if you want to begin fresh.</li>
 </ul>
 
 <h4 class="mt-4">Troubleshooting</h4>
 <ul>
-    <li>If you encounter errors, check your API settings or try again later.</li>
-    <li>For technical details, use the <b>Debug</b> tools in the sidebar.</li>
+    <li><strong>Missing Prerequisites:</strong> If you see warnings about missing prerequisites, complete the required phases in order.</li>
+    <li><strong>Generate Buttons Disabled:</strong> Buttons may be disabled if prerequisite phases aren't completed or if API connectivity issues exist.</li>
+    <li><strong>API Errors:</strong> If you encounter OpenAI API errors, try again later or increase the retry count in the Debug settings.</li>
+    <li><strong>Data Discovery Issues:</strong> Ensure your Splunk environment variables are properly configured if the Data Discovery phase fails.</li>
+    <li><strong>Session Issues:</strong> If content disappears unexpectedly, check the <b>Debug</b> page for session data or use <b>Clear Everything and Start Over</b> to reset.</li>
+    <li><strong>Upload Failures:</strong> Ensure files are in .md or .txt format and contain valid content.</li>
+    <li>For technical details and session information, use the <b>Debug</b> tools in the sidebar.</li>
 </ul>
 {% endblock %}

@@ -234,6 +234,9 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
+        // Clear existing content immediately
+        updateContent('');
+        
         showDataDiscoveryLoading(true);
         hideError();
 

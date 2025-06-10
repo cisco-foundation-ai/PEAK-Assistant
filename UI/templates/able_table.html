@@ -119,6 +119,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     generateAbleBtn.addEventListener('click', function() {
+        // Clear existing content immediately
+        window.currentAbleTableMarkdown = '';
+        ableTableContent.dataset.rawMarkdown = '';
+        ableTableContainer.style.display = 'none';
+        downloadAbleActionsContainer.style.display = 'none';
+        sessionStorage.removeItem('able_table_md');
+        
         hideError();
         showLoading('Generating ABLE Table...');
         

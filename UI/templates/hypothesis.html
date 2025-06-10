@@ -93,6 +93,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Get hypotheses suggestions
     document.getElementById('get-hypos-btn').addEventListener('click', function() {
+        // Clear existing content immediately
+        document.getElementById('hypo-select-container').style.display = 'none';
+        document.getElementById('hypo-select').innerHTML = '';
+        updateCurrentHypothesisUI('');
+        
         hideError();
         showLoading('Getting hypotheses...');
         
