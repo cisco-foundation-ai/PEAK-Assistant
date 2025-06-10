@@ -24,13 +24,8 @@
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center">
         <h1>Data Discovery</h1>
-        <div class="d-flex align-items-center">
-            <div id="download-data-actions-container" style="display: none;">
-                <!-- Download button will be inserted here by script -->
-            </div>
-            <span id="loading-spinner" class="spinner-border text-primary ms-2" role="status" style="display: none;">
-                <span class="visually-hidden">Loading...</span>
-            </span>
+        <div id="download-data-actions-container" style="display: none;">
+            <!-- Download button will be inserted here by script -->
         </div>
     </div>
     <p>Identify potential data sources based on the research report, hypothesis, and ABLE table.</p>
@@ -41,13 +36,6 @@
         <ul id="missing-items-list" class="mb-0 mt-2">
             <!-- Missing items will be populated by JavaScript -->
         </ul>
-    </div>
-
-    <div class="alert alert-danger" role="alert" id="error-message" style="display: none;">
-        <!-- Error messages will be displayed here -->
-    </div>
-    <div class="alert alert-success" role="alert" id="success-message" style="display: none;">
-        <!-- Success messages will be displayed here -->
     </div>
 
     <div class="d-flex flex-wrap gap-2 mb-3">
@@ -76,9 +64,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const uploadBtn = document.getElementById('upload-data-sources-btn');
     const fileInput = document.getElementById('data-sources-file-input');
     const contentDiv = document.getElementById('data-sources-content');
-    const loadingSpinner = document.getElementById('loading-spinner');
-    const errorMessageDiv = document.getElementById('error-message');
-    const successMessageDiv = document.getElementById('success-message');
 
     // Store the raw markdown for downloads
     let currentMarkdown = ''; // Renamed from window.currentDataSourcesMarkdown for local scope clarity
@@ -151,8 +136,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    function showLoading(isLoading) {
-        loadingSpinner.style.display = isLoading ? 'inline-block' : 'none';
+    function showDataDiscoveryLoading(isLoading) {
+        // Use the global loading modal from base.html for consistency with research page
+        if (isLoading) {
+            showLoading('Identifying data sources... (this may take a moment)');
+        } else {
+            hideLoading();
+        }
         // Only enable/disable button if it's not already disabled due to missing prerequisites
         if (!generateBtn.classList.contains('btn-disabled-warning')) {
             generateBtn.disabled = isLoading;
@@ -160,12 +150,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function showMessage(message, type = 'error') {
-        const div = type === 'error' ? errorMessageDiv : successMessageDiv;
-        div.textContent = message;
-        div.style.display = 'block';
-        setTimeout(() => {
-            div.style.display = 'none';
-        }, 5000);
+        // Only show error messages for consistency with other pages
+        if (type === 'error') {
+            showError(message); // Uses global showError from base.html
+        }
+        // Remove success toast functionality to match other pages
     }
 
     // Load existing data sources from session if available
@@ -241,13 +230,12 @@ document.addEventListener('DOMContentLoaded', function() {
     generateBtn.addEventListener('click', function() {
         // Prevent action if prerequisites are missing
         if (generateBtn.classList.contains('btn-disabled-warning')) {
-            showMessage('Please complete all prerequisite phases first.', 'error');
+            showError('Please complete all prerequisite phases first.');
             return;
         }
         
-        showLoading(true);
-        errorMessageDiv.style.display = 'none';
-        successMessageDiv.style.display = 'none';
+        showDataDiscoveryLoading(true);
+        hideError();
 
         fetch('/api/data-discovery', {
             method: 'POST',
@@ -258,17 +246,17 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(response => response.json())
         .then(data => {
-            showLoading(false);
+            showDataDiscoveryLoading(false);
             if (data.success) {
                 updateContent(data.data_sources); // This will also call setupDownloadButton
-                showMessage('Data sources identified successfully.', 'success');
+                // Remove success toast for consistency with other pages
             } else {
-                showMessage(data.error || 'Failed to identify data sources.');
+                showError(data.error || 'Failed to identify data sources.');
             }
         })
         .catch(error => {
-            showLoading(false);
-            showMessage('Error: ' + error.message);
+            showDataDiscoveryLoading(false);
+            showError('Error: ' + error.message);
             console.error('Error:', error);
         });
     });
@@ -280,9 +268,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!file) {
             return;
         }
-        showLoading(true);
-        errorMessageDiv.style.display = 'none';
-        successMessageDiv.style.display = 'none';
+        showDataDiscoveryLoading(true);
+        hideError();
 
         const formData = new FormData();
         formData.append('file', file);
@@ -293,17 +280,17 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(response => response.json())
         .then(data => {
-            showLoading(false);
+            showDataDiscoveryLoading(false);
             if (data.success) {
                 updateContent(data.data_sources); // This will also call setupDownloadButton
-                showMessage('Data sources uploaded successfully.', 'success');
+                // Remove success toast for consistency with other pages
             } else {
-                showMessage(data.error || 'Failed to upload data sources.');
+                showError(data.error || 'Failed to upload data sources.');
             }
         })
         .catch(error => {
-            showLoading(false);
-            showMessage('Error uploading file: ' + error.message);
+            showDataDiscoveryLoading(false);
+            showError('Error uploading file: ' + error.message);
             console.error('Error uploading file:', error);
         });
         fileInput.value = '';

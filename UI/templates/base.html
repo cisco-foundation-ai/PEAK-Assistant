@@ -56,6 +56,12 @@
             right: 10px;
             z-index: 1050; /* Ensure it's above most other content */
         }
+        #success-toast-container { /* New style for success toast */
+            position: fixed;
+            top: 70px; /* Position below the error toast */
+            right: 10px;
+            z-index: 1050;
+        }
         #loading-indicator {
             position: fixed;
             top: 50%;
@@ -249,6 +255,16 @@
             </div>
         </div>
     </div>
+
+    <!-- Success Toast -->
+    <div id="success-toast-container" class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="true" data-bs-delay="5000">
+        <div class="d-flex">
+            <div class="toast-body" id="success-toast-body">
+                <!-- Success message will be inserted here -->
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+    </div>
     
     <!-- Help Floating Button -->
     <a href="/help" class="help-icon" title="Help">
@@ -299,6 +315,13 @@
             }
             document.getElementById('error-details-content').style.display = 'none';
             document.getElementById('show-error-details').style.display = 'none';
+        }
+
+        function showSuccess(message) {
+            const successToastEl = document.getElementById('success-toast-container');
+            const toast = bootstrap.Toast.getOrCreateInstance(successToastEl);
+            document.getElementById('success-toast-body').textContent = message;
+            toast.show();
         }
         
         function renderMarkdown(markdown, targetElement) {

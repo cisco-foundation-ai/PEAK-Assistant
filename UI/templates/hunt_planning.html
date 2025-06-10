@@ -92,6 +92,9 @@ setTimeout(function() {
         window.currentPlanMarkdown = errorMessage;
         planContentDiv.setAttribute('data-raw-markdown', errorMessage);
         
+        // Show error using global toast system
+        showError(errorMessage);
+        
         // Don't show download button for error cases
         const downloadContainer = document.getElementById('download-plan-actions-container');
         if (downloadContainer) {
