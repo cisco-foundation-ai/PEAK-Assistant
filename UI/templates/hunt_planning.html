@@ -11,6 +11,17 @@
 {% endblock %}
 
 {% block content %}
+<style>
+    .btn-disabled-warning {
+        opacity: 0.6;
+        cursor: not-allowed !important;
+    }
+    
+    .btn-disabled-warning:hover {
+        opacity: 0.6 !important;
+    }
+</style>
+
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h2 class="mb-0">Generate Hunt Plan</h2>
@@ -18,89 +29,222 @@
             <!-- Download button will be inserted here by script -->
         </div>
     </div>
-    <p class="mb-4">This phase combines your Topic Research, Hypothesis, ABLE Table, and Data Sources into a complete, shareable hunt plan. You can review the combined document below and download it.</p>
+    <p class="mb-4">Use AI agents to combine your Topic Research, Hypothesis, ABLE Table, and Data Sources into a comprehensive, actionable hunt plan with specific Splunk queries and detailed procedures.</p>
 
-    <div id="plan-container" class="border rounded p-3 bg-light">
-        <div id="plan-content" data-raw-markdown="">
-            <!-- Plan content will be rendered here by JavaScript -->
-            <p class="text-muted">Loading hunt plan...</p>
-        </div>
-        <!-- Removed bottom navigation bar from here -->
+    <!-- Prerequisite warnings -->
+    <div id="missing-prerequisites-warning" class="alert alert-warning" style="display: none;">
+        <strong>Missing Prerequisites:</strong>
+        <p>Please complete the following phases before generating a hunt plan:</p>
+        <ul id="missing-items-list"></ul>
     </div>
-</div>
+
+    <div class="row mb-4">
+        <div class="col-md-9">
+            <button id="generate-hunt-plan-btn" class="btn btn-primary">
+                Generate AI Hunt Plan
+            </button>
+        </div>
+    </div>
+
+    <div id="hunt-plan-container" style="display: none;">
+        <div id="plan-content" class="border rounded p-3 mb-3" data-raw-markdown=""></div>
+    </div>
 </div>
 {% endblock %}
 
 {% block script %}
-// Hunt planning page script - executed after base template DOMContentLoaded
-setTimeout(function() {
-    const planContentDiv = document.getElementById('plan-content');
+// Store current hunt plan markdown for download
+window.currentPlanMarkdown = '';
+
+// Setup combined download button
+setupDownloadButton('plan-content', 'hunt_plan', 'download-plan-actions-container');
+
+// Get references to DOM elements
+const generateBtn = document.getElementById('generate-hunt-plan-btn');
+const huntPlanContainer = document.getElementById('hunt-plan-container');
+const huntPlanContent = document.getElementById('plan-content');
+const downloadActionsContainer = document.getElementById('download-plan-actions-container');
+
+function updateUIDisplay(sessionData) {
+    // Update content display using the simple pattern from research page
+    if (sessionData.hunt_plan && sessionData.hunt_plan.trim() !== '') {
+        window.currentPlanMarkdown = sessionData.hunt_plan;
+        huntPlanContent.dataset.rawMarkdown = sessionData.hunt_plan;
+        renderMarkdown(sessionData.hunt_plan, huntPlanContent);
+        huntPlanContainer.style.display = 'block';
+        downloadActionsContainer.style.display = 'block';
+        sessionStorage.setItem('hunt_plan', sessionData.hunt_plan);
+    } else {
+        huntPlanContent.innerHTML = '<p class="text-muted">Hunt plan will appear here...</p>';
+        huntPlanContainer.style.display = 'none';
+        downloadActionsContainer.style.display = 'none';
+        sessionStorage.removeItem('hunt_plan');
+        window.currentPlanMarkdown = '';
+        huntPlanContent.dataset.rawMarkdown = '';
+    }
     
-    // Ensure this global variable is available for setupDownloadButton
-    window.currentPlanMarkdown = '';
+    // Initialize download button after content is updated
+    setupDownloadButton('plan-content', 'hunt_plan', 'download-plan-actions-container');
+    
+    if (typeof checkHuntPlanningPrerequisites === 'function') {
+        checkHuntPlanningPrerequisites();
+    }
+}
 
-    // Add immediate visual feedback
-    planContentDiv.innerHTML = '<p class="text-info">Fetching hunt plan data...</p>';
-
-    // Fetch the hunt plan from the dedicated endpoint
-    fetch('/api/hunt-plan')
-    .then(response => {
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        return response.json();
-    })
-    .then(data => {
-        if (data.success) {
-            const plan = data.hunt_plan;
-            if (data.has_content) {
-                // Use the renderMarkdown function from base.html
-                if (typeof renderMarkdown === 'function') {
-                    renderMarkdown(plan, planContentDiv);
-                } else if (typeof marked !== 'undefined') {
-                    // Fallback if renderMarkdown is not available
-                    planContentDiv.innerHTML = marked.parse(plan);
-                } else {
-                    // Last resort fallback
-                    planContentDiv.innerHTML = '<pre>' + plan + '</pre>';
-                }
-            } else {
-                planContentDiv.innerHTML = `<p class="text-muted">${plan}</p>`;
+function loadInitialData() {
+    const storedPlan = sessionStorage.getItem('hunt_plan');
+    
+    if (storedPlan) {
+        window.currentPlanMarkdown = storedPlan;
+        huntPlanContent.dataset.rawMarkdown = storedPlan;
+        renderMarkdown(storedPlan, huntPlanContent);
+        huntPlanContainer.style.display = 'block';
+        downloadActionsContainer.style.display = 'block';
+    } else {
+        // Fallback to server session if sessionStorage is empty (e.g. first load)
+        fetch('/api/debug-info')
+        .then(response => response.json())
+        .then(debugData => {
+            const session = debugData.session_data || {};
+            if (session.hunt_plan) {
+                window.currentPlanMarkdown = session.hunt_plan;
+                huntPlanContent.dataset.rawMarkdown = session.hunt_plan;
+                renderMarkdown(session.hunt_plan, huntPlanContent);
+                huntPlanContainer.style.display = 'block';
+                downloadActionsContainer.style.display = 'block';
+                // Populate sessionStorage for next time
+                sessionStorage.setItem('hunt_plan', session.hunt_plan);
             }
+        })
+        .catch(error => console.error("Error fetching initial session data:", error));
+    }
+    
+    // Initialize download button after content is loaded
+    setupDownloadButton('plan-content', 'hunt_plan', 'download-plan-actions-container');
+}
+
+function checkPrerequisites() {
+    return fetch('/api/debug-info')
+    .then(response => response.json())
+    .then(data => {
+        const sessionData = data.session_data || {};
+        const missingItems = [];
+        
+        // Check for research document
+        if (!sessionData.report_md || !sessionData.report_md.trim()) {
+            missingItems.push('<li>Research Document - <a href="/research">Generate Research Report</a></li>');
+        }
+        
+        // Check for hypothesis (refined or original)
+        if (!sessionData.refined_hypothesis && !sessionData.hypothesis) {
+            missingItems.push('<li>Hypothesis - <a href="/hypothesis">Generate Hypothesis</a></li>');
+        }
+        
+        // Check for ABLE table
+        if (!sessionData.able_table_md) {
+            missingItems.push('<li>ABLE Table - <a href="/able-table">Generate ABLE Table</a></li>');
+        }
+        
+        // Check for data discovery
+        if (!sessionData.data_sources_md) {
+            missingItems.push('<li>Data Discovery - <a href="/data-discovery">Identify Data Sources</a></li>');
+        }
+        
+        // Show warning if any prerequisites are missing
+        if (missingItems.length > 0) {
+            const warningDiv = document.getElementById('missing-prerequisites-warning');
+            const itemsList = document.getElementById('missing-items-list');
+            itemsList.innerHTML = missingItems.join('');
+            warningDiv.style.display = 'block';
             
-            window.currentPlanMarkdown = plan;
-            planContentDiv.setAttribute('data-raw-markdown', plan);
+            // Disable the generate button if prerequisites are missing
+            generateBtn.disabled = true;
+            generateBtn.classList.add('btn-disabled-warning');
+            generateBtn.title = 'Complete all prerequisite phases first';
+            generateBtn.innerHTML = '⚠ Prerequisites Required';
+        } else {
+            // All prerequisites are met - ensure button is enabled and styled correctly
+            document.getElementById('missing-prerequisites-warning').style.display = 'none';
+            generateBtn.disabled = false;
+            generateBtn.classList.remove('btn-disabled-warning');
+            generateBtn.title = 'Generate comprehensive hunt plan using AI agents';
+            generateBtn.innerHTML = 'Generate AI Hunt Plan';
+        }
+    })
+    .catch(error => console.warn('Could not check prerequisites:', error));
+}
+
+generateBtn.addEventListener('click', function() {
+    // Prevent action if prerequisites are missing
+    if (generateBtn.classList.contains('btn-disabled-warning')) {
+        showError('Please complete all prerequisite phases first.');
+        return;
+    }
+    
+    // Clear existing content immediately
+    huntPlanContent.innerHTML = '<p class="text-muted">Hunt plan will appear here...</p>';
+    huntPlanContainer.style.display = 'none';
+    downloadActionsContainer.style.display = 'none';
+    window.currentPlanMarkdown = '';
+    huntPlanContent.dataset.rawMarkdown = '';
+    sessionStorage.removeItem('hunt_plan');
+    
+    hideError();
+    showLoading('AI agents are creating your comprehensive hunt plan... (this may take several minutes)');
+    
+    let retryCount = 3; // Default value
+    const storedRetryCount = localStorage.getItem('retryCount');
+    if (storedRetryCount) {
+        const parsedRetryCount = parseInt(storedRetryCount, 10);
+        if (!isNaN(parsedRetryCount)) {
+            retryCount = parsedRetryCount;
+        } else {
+            console.warn('Invalid retry count in localStorage, using default (3).');
+        }
+    }
+
+    const storedVerboseMode = localStorage.getItem('verboseMode');
+    const verboseMode = storedVerboseMode === 'true';
+    
+    fetch('/api/hunt-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            retry_count: retryCount,
+            verbose_mode: verboseMode 
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        if (data.success) {
+            window.currentPlanMarkdown = data.hunt_plan;
+            huntPlanContent.dataset.rawMarkdown = data.hunt_plan;
+            renderMarkdown(data.hunt_plan, huntPlanContent);
+            huntPlanContainer.style.display = 'block';
+            downloadActionsContainer.style.display = 'block';
+            // Store in sessionStorage for persistence across page loads
+            sessionStorage.setItem('hunt_plan', data.hunt_plan);
             
-            // Setup the download button and show container when content is available
+            // Initialize download button after content is updated
             setupDownloadButton('plan-content', 'hunt_plan', 'download-plan-actions-container');
-            const downloadContainer = document.getElementById('download-plan-actions-container');
-            if (downloadContainer && data.has_content) {
-                downloadContainer.style.display = 'block';
-                console.log('Hunt Planning: Download button shown for plan:', plan.substring(0, 100));
-            } else {
-                downloadContainer.style.display = 'none';
-                console.log('Hunt Planning: Download button hidden - no meaningful content');
+            
+            if (typeof checkHuntPlanningPrerequisites === 'function') {
+                checkHuntPlanningPrerequisites();
             }
         } else {
-            throw new Error(data.error || 'Failed to fetch hunt plan');
+            showError('Error generating hunt plan: ' + data.error, data.detail);
         }
     })
     .catch(error => {
-        console.error('Error fetching hunt plan data:', error);
-        const errorMessage = 'Failed to load hunt plan data: ' + error.message;
-        planContentDiv.innerHTML = `<p class="text-danger">${errorMessage}</p>`;
-        window.currentPlanMarkdown = errorMessage;
-        planContentDiv.setAttribute('data-raw-markdown', errorMessage);
-        
-        // Show error using global toast system
-        showError(errorMessage);
-        
-        // Don't show download button for error cases
-        const downloadContainer = document.getElementById('download-plan-actions-container');
-        if (downloadContainer) {
-            downloadContainer.style.display = 'none';
-            console.log('Hunt Planning: Download button hidden for error case');
-        }
+        hideLoading();
+        showError('Network error: ' + error.message);
     });
-}, 500); // Wait a bit longer to ensure base template is fully loaded
+});
+
+// Check prerequisites when page loads
+checkPrerequisites();
+
+// Initial load
+loadInitialData();
 {% endblock %}

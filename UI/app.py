@@ -127,6 +127,7 @@ from hypothesis_assistant.hypothesis_assistant_cli import hypothesizer as async_
 from hypothesis_assistant.hypothesis_refiner_cli import refiner as async_refiner
 from able_assistant.able_assistant_cli import able_table as async_able_table
 from data_assistant.data_asssistant_cli import identify_data_sources as async_identify_data_sources
+from planning_assistant.planning_assistant_cli import plan_hunt as async_plan_hunt
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -531,39 +532,99 @@ def download_pdf():
         download_name=filename
     )
 
-@app.route('/api/hunt-plan', methods=['GET'])
-def get_hunt_plan():
-    """Generate hunt plan by concatenating all session data"""
-    plan = ''
+@app.route('/api/hunt-plan', methods=['GET', 'POST'])
+@async_action
+async def get_hunt_plan():
+    """Generate hunt plan using AI agents"""
+    if request.method == 'GET':
+        # Return existing hunt plan from session
+        return jsonify({
+            'hunt_plan': session.get('hunt_plan', ''),
+            'success': True,
+            'has_content': bool(session.get('hunt_plan', '').strip())
+        })
     
-    # Add research report
-    report_md = session.get('report_md', '')
-    if report_md:
-        plan += '# Topic Research\n\n' + report_md.strip() + '\n\n'
+    # POST method - generate new hunt plan
+    data = request.json or {}
+    retry_count = int(data.get('retry_count', 3))
+    verbose_mode = data.get('verbose_mode', False)
     
-    # Add hypothesis (prefer refined over original)
+    # Get required data from session
+    research_document = session.get('report_md', '')
     hypothesis = session.get('refined_hypothesis') or session.get('hypothesis', '')
-    if hypothesis:
-        plan += '# Hypothesis\n\n' + hypothesis.strip() + '\n\n'
+    able_info = session.get('able_table_md', '')
+    data_discovery = session.get('data_sources_md', '')
+    local_context = session.get('local-context', '')
     
-    # Add ABLE table
-    able_table_md = session.get('able_table_md', '')
-    if able_table_md:
-        plan += '# ABLE Table\n\n' + able_table_md.strip() + '\n\n'
+    # Check prerequisites
+    missing_items = []
+    if not research_document.strip():
+        missing_items.append('research document')
+    if not hypothesis.strip():
+        missing_items.append('hypothesis')
+    if not able_info.strip():
+        missing_items.append('ABLE table')
+    if not data_discovery.strip():
+        missing_items.append('data discovery information')
     
-    # Add data sources
-    data_sources_md = session.get('data_sources_md', '')
-    if data_sources_md:
-        plan += '# Data Sources\n\n' + data_sources_md.strip() + '\n'
+    if missing_items:
+        error_msg = f'Missing required information: {", ".join(missing_items)}. Please complete previous steps.'
+        return jsonify({
+            'success': False, 
+            'error': error_msg,
+            'hunt_plan': error_msg,
+            'has_content': False
+        }), 400
     
-    if not plan.strip():
-        plan = 'No research, hypothesis, ABLE table, or data sources found in your session. Please complete previous steps.'
-    
-    return jsonify({
-        'success': True,
-        'hunt_plan': plan.strip(),
-        'has_content': bool(plan.strip() and plan.strip() != 'No research, hypothesis, ABLE table, or data sources found in your session. Please complete previous steps.')
-    })
+    try:
+        result = await retry_api_call(
+            async_plan_hunt,
+            research_document=research_document,
+            hypothesis=hypothesis, 
+            able_info=able_info,
+            data_discovery=data_discovery,
+            local_context=local_context,
+            verbose=verbose_mode,
+            max_retries=retry_count
+        )
+        
+        # Extract the final message from the "hunt_planner" agent
+        hunt_plan = None
+        if hasattr(result, 'messages'):
+            hunt_plan = next(
+                (message.content for message in reversed(result.messages) if getattr(message, 'source', None) == "hunt_planner"),
+                None
+            )
+        if not hunt_plan:
+            if hasattr(result, 'content'):
+                hunt_plan = result.content
+            else:
+                hunt_plan = str(result)
+        
+        # Store in session
+        session['hunt_plan'] = hunt_plan
+        return jsonify({
+            'success': True, 
+            'hunt_plan': hunt_plan,
+            'has_content': bool(hunt_plan.strip())
+        })
+    except Exception as e:
+        error_msg = str(e)
+        if "500" in error_msg and "Internal server error" in error_msg:
+            return jsonify({
+                'success': False, 
+                'error': 'OpenAI API internal server error. Maximum retry attempts reached.',
+                'detail': str(e),
+                'hunt_plan': 'Error generating hunt plan: ' + error_msg,
+                'has_content': False
+            }), 500
+        else:
+            return jsonify({
+                'success': False, 
+                'error': str(e),
+                'hunt_plan': 'Error generating hunt plan: ' + error_msg,
+                'has_content': False
+            }), 500
 
 @app.route('/clear-session', methods=['POST'])
 def clear_session():

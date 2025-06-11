@@ -304,10 +304,10 @@ if __name__ == "__main__":
         )
     )
 
-    # Find the final message from the "planner" agent using next() and a generator expression
+    # Find the final message from the "hunt_planner" agent using next() and a generator expression
     hunt_plan = next(
-        (message.content for message in reversed(data_sources.messages) if message.source == "hunt-planner"),
-        None  # Default value if no "critic" message is found
+        (message.content for message in reversed(data_sources.messages) if message.source == "hunt_planner"),
+        None  # Default value if no "hunt_planner" message is found
     )
 
     print(hunt_plan)
