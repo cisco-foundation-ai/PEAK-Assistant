@@ -63,6 +63,10 @@ async def identify_data_sources(
           You may need to inspect data in Splunk to find the correct names.
         - If the exact type of data you expect is not availalble, it is possible that there is a
           similar type of data that could be used instead.
+        - Do not report indices, sourcetypes or fields that are not relevant. For example,
+          it is not necessary to report indices that contain data that is not relevant or
+          that contain no data at all. Only report data sources that might be helpful 
+          to the hunter.
 
         Respond with a list of potential Splunk indices or data sources, a brief description of the type
         of data they contain (high level, such as "Windows Event Logs" or "Linux authentication events" is OK)
