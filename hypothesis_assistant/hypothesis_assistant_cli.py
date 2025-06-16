@@ -46,11 +46,7 @@ async def hypothesizer(
         2. Extract relevant information from the research document.
         3. Combine both to generate clear, actionable, testable hypotheses.
 
-        Respond with a list of potential hunting hypotheses, along with any relevant 
-        details or considerations, such as where on the network the hypothesis 
-        could be tested (e.g., "on the endpoint", "on the network", 
-        "on the SMTP servers", "Internet-facing services", etc.) and typical datasets or 
-        types of data that would be necessary to test the hypothesis.
+        Respond with a list of potential hunting hypotheses.
 
         Your output should be a list of hypotheses, each on a line by itself. There
         should be no additional text, explanations, or formatting. Include at least
