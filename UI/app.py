@@ -455,7 +455,7 @@ def upload_report():
         content = f.read()
     session['report_md'] = content
     session['last_topic'] = '[Uploaded]'
-    return jsonify({'success': True, 'report': content})
+    return jsonify({'success': True, 'content': content})
 
 @app.route('/api/upload-able-table', methods=['POST'])
 def upload_able_table():
@@ -532,19 +532,10 @@ def download_pdf():
         download_name=filename
     )
 
-@app.route('/api/hunt-plan', methods=['GET', 'POST'])
+@app.route('/api/hunt-plan', methods=['POST'])
 @async_action
-async def get_hunt_plan():
+async def hunt_plan():
     """Generate hunt plan using AI agents"""
-    if request.method == 'GET':
-        # Return existing hunt plan from session
-        return jsonify({
-            'hunt_plan': session.get('hunt_plan', ''),
-            'success': True,
-            'has_content': bool(session.get('hunt_plan', '').strip())
-        })
-    
-    # POST method - generate new hunt plan
     data = request.json or {}
     retry_count = int(data.get('retry_count', 3))
     verbose_mode = data.get('verbose_mode', False)
@@ -571,9 +562,7 @@ async def get_hunt_plan():
         error_msg = f'Missing required information: {", ".join(missing_items)}. Please complete previous steps.'
         return jsonify({
             'success': False, 
-            'error': error_msg,
-            'hunt_plan': error_msg,
-            'has_content': False
+            'error': error_msg
         }), 400
     
     try:
@@ -605,8 +594,7 @@ async def get_hunt_plan():
         session['hunt_plan'] = hunt_plan
         return jsonify({
             'success': True, 
-            'hunt_plan': hunt_plan,
-            'has_content': bool(hunt_plan.strip())
+            'hunt_plan': hunt_plan
         })
     except Exception as e:
         error_msg = str(e)
@@ -614,17 +602,10 @@ async def get_hunt_plan():
             return jsonify({
                 'success': False, 
                 'error': 'OpenAI API internal server error. Maximum retry attempts reached.',
-                'detail': str(e),
-                'hunt_plan': 'Error generating hunt plan: ' + error_msg,
-                'has_content': False
+                'detail': str(e)
             }), 500
         else:
-            return jsonify({
-                'success': False, 
-                'error': str(e),
-                'hunt_plan': 'Error generating hunt plan: ' + error_msg,
-                'has_content': False
-            }), 500
+            return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/clear-session', methods=['POST'])
 def clear_session():

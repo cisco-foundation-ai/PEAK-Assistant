@@ -10,211 +10,223 @@
 {% block nav %}{{ super() }}{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h2 class="mb-0">Topic Research</h2>
-    <div id="report-actions-container" style="display: none;">
-        <!-- Download button will be inserted here by script -->
-    </div>
-</div>
-<p class="mb-4">Enter a topic, threat actor technique, or behavior to generate a research report. You can also upload an existing report.</p>
-
-<div class="row mb-3">
-    <div class="col-md-9">
-        <label for="topic-input" class="form-label">Research Topic:</label>
-        <input type="text" id="topic-input" class="form-control" placeholder="e.g., Kerberoasting, Initial Access via Phishing">
-    </div>
-    <div class="col-md-3 align-self-end">
-        <button id="generate-btn" class="btn btn-primary w-100">Generate Report</button>
-    </div>
-</div>
-
-<div class="row mb-4">
-    <div class="col-md-12">
-        <label for="upload-report-file" class="form-label">Or Upload Report (MD or TXT):</label>
-        <div class="input-group">
-            <input type="file" class="form-control" id="upload-report-file" accept=".md,.txt">
-            <button id="upload-report-btn" class="btn btn-outline-secondary">Upload</button>
+<div class="phase-container">
+    <!-- Compact Phase Header -->
+    <div class="phase-header">
+        <h1 class="phase-title">Topic Research</h1>
+        <div id="report-actions-container" style="display: none;">
+            <!-- Download button will be inserted here by script -->
         </div>
-        <small id="upload-report-filename" class="form-text text-muted"></small>
+    </div>
+    
+    <!-- Compact Phase Description -->
+    <p class="phase-description">
+        Enter a topic, threat actor technique, or behavior to generate a research report, or upload an existing report.
+    </p>
+
+    <!-- Create Research Report Section -->
+    <div class="action-section mb-4">
+        <div class="action-section-title mb-3">
+            <i class="bi bi-robot me-2"></i>Create Research Report
+        </div>
+        
+        <!-- Combined Input and Upload Section for Better Space Usage -->
+        <div class="row g-3">
+            <!-- Research Topic Section -->
+            <div class="col-md-8">
+                <div class="input-group">
+                    <input type="text" id="topic-input" class="form-control" 
+                           placeholder="e.g., Kerberoasting, Initial Access via Phishing">
+                    <button id="generate-btn" class="btn btn-primary">
+                        <i class="bi bi-magic me-2"></i>Generate Report
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Upload Section -->
+            <div class="col-md-4">
+                <input type="file" id="upload-report-file" class="form-control" accept=".md,.txt" style="display: none;">
+                <button type="button" id="upload-report-btn" class="btn btn-outline-secondary w-100">
+                    <i class="bi bi-upload me-2"></i>Upload Report
+                </button>
+                <small id="upload-report-filename" class="form-text text-muted"></small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Content Display - Takes up most of the page -->
+    <div id="report-container" style="display: none;">
+        <div class="content-card">
+            <div id="report-content" data-raw-markdown=""></div>
+        </div>
     </div>
 </div>
-
-<div id="report-container" style="display: none;">
-    <div id="report-content" class="border rounded p-3 mb-3" data-raw-markdown=""></div>
-</div>
-
 {% endblock %}
 
 {% block script %}
-// Store current report markdown for download
-window.currentReportMarkdown = '';
-
-document.addEventListener('DOMContentLoaded', function() {
-    const generateBtn = document.getElementById('generate-btn');
-    const topicInput = document.getElementById('topic-input');
-    const reportContainer = document.getElementById('report-container');
-    const reportContent = document.getElementById('report-content');
-    const reportActionsContainer = document.getElementById('report-actions-container');
-    const uploadReportFile = document.getElementById('upload-report-file');
-    const uploadReportBtn = document.getElementById('upload-report-btn');
-    const uploadReportFilename = document.getElementById('upload-report-filename');
-
-    // Setup combined download button
-    setupDownloadButton('report-content', 'research_report', 'report-actions-container');
-
-    generateBtn.addEventListener('click', function() {
-        const topic = topicInput.value.trim();
-        if (!topic) {
-            showError('Please enter a research topic.');
-            return;
-        }
-        
-        // Clear existing content immediately
-        window.currentReportMarkdown = '';
-        reportContent.dataset.rawMarkdown = '';
-        reportContainer.style.display = 'none';
-        reportActionsContainer.style.display = 'none';
-        
-        hideError();
-        showLoading('Generating research report... (this may take several minutes)');
-        
-        let retryCount = 3; // Default value
-        const storedRetryCount = localStorage.getItem('retry-count-page');
-        if (storedRetryCount) {
-            const parsedRetryCount = parseInt(storedRetryCount, 10);
-            if (!isNaN(parsedRetryCount)) {
-                retryCount = parsedRetryCount;
-            } else {
-                console.warn('Invalid retry count in localStorage, using default (3).');
-            }
-        }
-
-        const storedVerboseMode = localStorage.getItem('debug-mode-page');
-        const verboseMode = storedVerboseMode === 'true';
-        
-        fetch('/api/research', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                topic: topic, 
-                retry_count: retryCount,
-                verbose_mode: verboseMode 
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            hideLoading();
-            if (data.success) {
-                window.currentReportMarkdown = data.report;
-                reportContent.dataset.rawMarkdown = data.report; // Store for download
-                renderMarkdown(data.report, reportContent);
-                reportContainer.style.display = 'block';
-                reportActionsContainer.style.display = 'flex'; // Show download button
-                // Store in sessionStorage for persistence across page loads (optional)
-                sessionStorage.setItem('last_topic', topic);
-                sessionStorage.setItem('report_md', data.report);
-            } else {
-                showError('Error generating report: ' + data.error, data.detail);
-            }
-        })
-        .catch(error => {
-            hideLoading();
-            showError('Network error: ' + error.message);
+/**
+ * Research Phase Manager
+ */
+class ResearchManager extends PhaseManager {
+    constructor() {
+        super('research', {
+            apiEndpoint: '/api/research',
+            contentContainer: 'report-content',
+            downloadContainer: 'report-actions-container',
+            sessionStorageKey: 'report_md',
+            globalContentVar: 'currentReportMarkdown',
+            responseContentKey: 'report',
+            loadingMessage: 'Generating research report... (this may take several minutes)',
+            generateButtonTitle: 'Generate comprehensive research report',
+            generateButtonText: '<i class="bi bi-magic me-2"></i>Generate Report'
         });
-    });
-
-    topicInput.addEventListener('keydown', function(event) {
-        if (event.key === 'Enter') {
-            event.preventDefault();
-            generateBtn.click();
-        }
-    });
-
-    uploadReportBtn.addEventListener('click', function() {
-        const file = uploadReportFile.files[0];
-        if (!file) {
-            showError('Please select a file to upload.');
-            return;
-        }
-
-        hideError();
-        showLoading('Uploading report...');
-        const formData = new FormData();
-        formData.append('file', file);
-
-        fetch('/api/upload-report', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            hideLoading();
-            if (data.success) {
-                window.currentReportMarkdown = data.report;
-                reportContent.dataset.rawMarkdown = data.report; // Store for download
-                renderMarkdown(data.report, reportContent);
-                reportContainer.style.display = 'block';
-                reportActionsContainer.style.display = 'flex'; // Show download button
-                topicInput.value = '[Uploaded Report]';
-                uploadReportFilename.textContent = file.name;
-                sessionStorage.setItem('report_md', data.report);
-                sessionStorage.setItem('last_topic', '[Uploaded]');
-            } else {
-                showError('Error uploading report: ' + data.error);
-            }
-        })
-        .catch(error => {
-            hideLoading();
-            showError('Network error during upload: ' + error.message);
-        });
-    });
+    }
     
-    uploadReportFile.addEventListener('change', function() {
-        if (this.files.length > 0) {
-            uploadReportFilename.textContent = this.files[0].name;
-        } else {
-            uploadReportFilename.textContent = '';
-        }
-    });
-
-    // Initialize from session data (or sessionStorage for better UX)
-    function loadSessionData() {
-        const storedReport = sessionStorage.getItem('report_md');
-        const storedTopic = sessionStorage.getItem('last_topic');
-
-        if (storedReport) {
-            window.currentReportMarkdown = storedReport;
-            reportContent.dataset.rawMarkdown = storedReport;
-            renderMarkdown(storedReport, reportContent);
-            reportContainer.style.display = 'block';
-            reportActionsContainer.style.display = 'flex';
-            if (storedTopic) {
-                topicInput.value = storedTopic;
+    displayContent(content) {
+        // Override parent displayContent to handle report container visibility
+        const contentElement = document.getElementById(this.config.contentContainer);
+        const downloadContainer = document.getElementById(this.config.downloadContainer);
+        const reportContainer = document.getElementById('report-container');
+        
+        if (content && content.trim()) {
+            if (this.config.globalContentVar) {
+                window[this.config.globalContentVar] = content;
+            }
+            contentElement.dataset.rawMarkdown = content;
+            ContentRenderer.renderMarkdown(content, contentElement);
+            
+            // Show the report container
+            if (reportContainer) {
+                reportContainer.style.display = 'block';
+            }
+            
+            if (downloadContainer) {
+                downloadContainer.style.display = 'flex';
             }
         } else {
-            // Fallback to server session if sessionStorage is empty (e.g. first load)
-            fetch('/api/debug-info')
-            .then(response => response.json())
-            .then(debugData => {
-                const session = debugData.session_data || {};
-                if (session.report_md) {
-                    window.currentReportMarkdown = session.report_md;
-                    reportContent.dataset.rawMarkdown = session.report_md;
-                    renderMarkdown(session.report_md, reportContent);
-                    reportContainer.style.display = 'block';
-                    reportActionsContainer.style.display = 'flex';
-                    if (session.last_topic) {
-                        topicInput.value = session.last_topic;
-                    }
-                    // Populate sessionStorage for next time
-                    sessionStorage.setItem('report_md', session.report_md);
-                    if(session.last_topic) sessionStorage.setItem('last_topic', session.last_topic);
-                }
-            })
-            .catch(error => console.error("Error fetching initial session data:", error));
+            ContentRenderer.clearContent(contentElement);
+            
+            // Hide the report container
+            if (reportContainer) {
+                reportContainer.style.display = 'none';
+            }
+            
+            if (downloadContainer) {
+                downloadContainer.style.display = 'none';
+            }
         }
     }
-    loadSessionData();
+    
+    setupEventListeners() {
+        const generateBtn = document.getElementById('generate-btn');
+        const topicInput = document.getElementById('topic-input');
+        const uploadReportBtn = document.getElementById('upload-report-btn');
+        const uploadReportFile = document.getElementById('upload-report-file');
+        
+        if (generateBtn) {
+            generateBtn.addEventListener('click', () => this.handleGenerate());
+        }
+        
+        if (topicInput) {
+            topicInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    this.handleGenerate();
+                }
+            });
+        }
+        
+        if (uploadReportBtn) {
+            uploadReportBtn.addEventListener('click', () => {
+                uploadReportFile.click(); // Trigger hidden file input
+            });
+        }
+        
+        if (uploadReportFile) {
+            uploadReportFile.addEventListener('change', () => {
+                const file = uploadReportFile.files[0];
+                if (!file) {
+                    return;
+                }
+                
+                const uploadReportFilename = document.getElementById('upload-report-filename');
+                uploadReportFilename.textContent = file.name;
+                
+                // Auto-upload when file is selected (like ABLE table)
+                this.handleUpload();
+            });
+        }
+    }
+    
+    async handleGenerate() {
+        const topicInput = document.getElementById('topic-input');
+        const topic = topicInput.value.trim();
+        
+        if (!topic) {
+            UIFeedback.show('error', 'Please enter a research topic.');
+            return;
+        }
+        
+        try {
+            const response = await this.generateContent({ topic });
+            
+            // Store topic for reference
+            sessionStorage.setItem('last_topic', topic);
+        } catch (error) {
+            // Error handling is already done in the parent class
+        }
+    }
+    
+    async handleUpload() {
+        const uploadReportFile = document.getElementById('upload-report-file');
+        const uploadReportFilename = document.getElementById('upload-report-filename');
+        const file = uploadReportFile.files[0];
+        
+        if (!file) {
+            return;
+        }
 
+        UIFeedback.hideError();
+        UIFeedback.show('loading', 'Uploading report...');
+        
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            const response = await this.apiClient.uploadFile('/api/upload-report', formData);
+            UIFeedback.hideLoading();
+            
+            if (response.success) {
+                // Use parent's displayContent method which handles everything properly
+                this.displayContent(response.content);
+                sessionStorage.setItem(this.config.sessionStorageKey, response.content);
+                
+                uploadReportFilename.textContent = file.name + ' uploaded successfully!';
+                setTimeout(() => { uploadReportFilename.textContent = file.name; }, 3000); // Reset after a few seconds
+                
+                this.onContentGenerated(response);
+            } else {
+                throw new Error(response.error || 'Upload failed');
+            }
+        } catch (error) {
+            UIFeedback.hideLoading();
+            UIFeedback.show('error', 'Upload error: ' + error.message, error.detail);
+            uploadReportFilename.textContent = 'Upload failed. Try again.';
+        }
+    }
+    
+    onContentGenerated(response) {
+        // Setup download button - container visibility is handled by displayContent
+        DownloadManager.setupDownloadButton(
+            this.config.contentContainer,
+            'research_report',
+            this.config.downloadContainer
+        );
+    }
+}
+
+// Initialize the Research Manager when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    window.researchManager = new ResearchManager();
 });
 {% endblock %}

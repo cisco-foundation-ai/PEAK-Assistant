@@ -8,52 +8,84 @@
 {% block nav %}{{ super() }}{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h2 class="mb-0">Hypothesis Generation</h2>
-    <div id="download-hypo-actions-container" style="display: none;">
-        <!-- Download button will be inserted here by script -->
+<div class="phase-container">
+    <!-- Compact Phase Header -->
+    <div class="phase-header">
+        <h1 class="phase-title">Hypothesis Generation</h1>
+        <div id="download-hypo-actions-container" style="display: none;">
+            <!-- Download button will be inserted here by script -->
+        </div>
     </div>
-</div>
 
-<div id="no-research-warning" class="alert alert-warning mb-4" style="display: none;">
-    <strong>Note:</strong> No research report found. Please generate a research report in the Research Phase first.
-</div>
+    <!-- Compact Phase Description -->
+    <p class="phase-description">
+        Generate or input hypothesis based on your research findings. AI can suggest hypotheses or you can create your own.
+    </p>
 
-<h3>Hypothesis</h3>
-<div class="mb-4">
-    <div class="form-check form-check-inline">
-        <input class="form-check-input" type="radio" name="hypoMode" id="hypoModeAuto" value="auto" checked>
-        <label class="form-check-label" for="hypoModeAuto">Generate hypotheses for me</label>
+    <!-- Warning for Missing Research -->
+    <div id="no-research-warning" class="prerequisite-warning" style="display: none;">
+        <h5><i class="bi bi-exclamation-triangle-fill me-2"></i>Missing Research</h5>
+        <p class="mb-0">No research report found. Please <a href="/research">generate a research report</a> first.</p>
     </div>
-    <div class="form-check form-check-inline">
-        <input class="form-check-input" type="radio" name="hypoMode" id="hypoModeManual" value="manual">
-        <label class="form-check-label" for="hypoModeManual">Let me input my own hypothesis</label>
-    </div>
-</div>
 
-<div id="hypo-auto-section">
-    <button id="get-hypos-btn" class="btn btn-primary mb-3">Get Hypotheses Suggestions</button>
-    <div id="hypo-select-container" style="display: none;">
-        <label for="hypo-select" class="form-label">Select a hypothesis:</label>
-        <select id="hypo-select" class="form-select mb-3" size="6" style="height:auto;"></select>
-    </div>
-</div>
+    <!-- Compact Mode Selection and Actions -->
+    <div class="row g-3 mb-3">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="d-flex gap-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="hypoMode" id="hypoModeAuto" value="auto" checked>
+                        <label class="form-check-label" for="hypoModeAuto">
+                            <i class="bi bi-robot me-1"></i>AI Generated
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="hypoMode" id="hypoModeManual" value="manual">
+                        <label class="form-check-label" for="hypoModeManual">
+                            <i class="bi bi-pencil me-1"></i>Manual Input
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Auto Hypothesis Button -->
+                <div id="hypo-auto-section">
+                    <button id="get-hypos-btn" class="btn btn-primary btn-sm">
+                        <i class="bi bi-lightbulb me-1"></i>Get Suggestions
+                    </button>
+                </div>
 
-<div id="hypo-manual-section" style="display: none;">
-    <div class="mb-3">
-        <label for="hypo-input" class="form-label">Enter your hypothesis:</label>
-        <textarea id="hypo-input" class="form-control" rows="4"></textarea>
+                <!-- Manual Hypothesis Button -->
+                <div id="hypo-manual-section" style="display: none;">
+                    <button id="submit-hypo-btn" class="btn btn-primary btn-sm">
+                        <i class="bi bi-check-circle me-1"></i>Submit
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
-    <button id="submit-hypo-btn" class="btn btn-primary mb-3">Submit Hypothesis</button>
-</div>
 
-<div id="current-hypo-container" style="display: none;">
-    <h4>Current Hypothesis</h4>
-    <div class="input-group mb-2">
-        <textarea id="current-hypo-edit" class="form-control" rows="4" style="resize: vertical;" data-raw-markdown=""></textarea>
-        <button id="save-current-hypo-btn" class="btn btn-primary" type="button">Save</button>
+    <!-- Manual Input Section (full width when active) -->
+    <div id="hypo-manual-input-section" class="mb-3" style="display: none;">
+        <textarea id="hypo-input" class="form-control" rows="3" 
+                  placeholder="Describe the threat hypothesis you want to test..."></textarea>
     </div>
-    <div id="current-hypo-saved-msg" class="text-success mb-2" style="display:none;">Saved!</div>
+
+    <!-- AI Generation Section (full width) -->
+    <div id="hypo-select-container" class="mb-3" style="display: none;">
+        <div id="hypo-select" class="hypothesis-options">
+            <!-- Options will be dynamically inserted here -->
+        </div>
+    </div>
+
+    <!-- Current Hypothesis Display -->
+    <div id="current-hypo-container" class="content-card" style="display: none;">
+        <h5><i class="bi bi-lightbulb me-2"></i>Current Hypothesis</h5>
+        <textarea id="current-hypo-edit" class="form-control" rows="3" 
+                  style="resize: vertical;" data-raw-markdown=""></textarea>
+        <div id="current-hypo-saved-msg" class="alert alert-success py-1" style="display:none;">
+            <i class="bi bi-check-circle me-2"></i>Hypothesis saved successfully!
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -79,17 +111,17 @@ document.addEventListener('DOMContentLoaded', function() {
             if (this.value === 'auto') {
                 document.getElementById('hypo-auto-section').style.display = 'block';
                 document.getElementById('hypo-manual-section').style.display = 'none';
+                document.getElementById('hypo-manual-input-section').style.display = 'none';
+                // Keep AI suggestions visible if they exist
             } else {
                 document.getElementById('hypo-auto-section').style.display = 'none';
                 document.getElementById('hypo-manual-section').style.display = 'block';
+                document.getElementById('hypo-manual-input-section').style.display = 'block';
+                // Hide AI suggestions when switching to manual mode
+                document.getElementById('hypo-select-container').style.display = 'none';
             }
         });
     });
-
-    // Utility: alternate background colors for dropdown
-    function getHypoBgClass(idx) {
-        return idx % 2 === 0 ? 'bg-light' : 'bg-white';
-    }
 
     // Get hypotheses suggestions
     document.getElementById('get-hypos-btn').addEventListener('click', function() {
@@ -129,24 +161,69 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 const hypos = data.hypotheses.filter(h => h.trim() !== '');
                 hypos.forEach((hypo, idx) => {
-                    const option = document.createElement('option');
-                    option.value = hypo;
-                    option.textContent = hypo;
-                    option.className = getHypoBgClass(idx);
-                    selectElement.appendChild(option);
+                    const optionDiv = document.createElement('div');
+                    optionDiv.className = 'hypothesis-option';
+                    optionDiv.textContent = hypo;
+                    optionDiv.dataset.value = hypo;
+                    
+                    // Add inline styles as backup
+                    optionDiv.style.padding = '16px';
+                    optionDiv.style.borderBottom = '1px solid #dee2e6';
+                    optionDiv.style.cursor = 'pointer';
+                    optionDiv.style.transition = 'all 0.3s ease';
+                    optionDiv.style.backgroundColor = '#ffffff';
+                    
+                    // Add hover effects with JavaScript since CSS might not be working
+                    optionDiv.addEventListener('mouseenter', function() {
+                        if (!this.classList.contains('selected')) {
+                            this.style.backgroundColor = '#f8f9fa';
+                            this.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+                            this.style.transform = 'translateY(-2px)';
+                            this.style.borderLeft = '4px solid #0d6efd';
+                        }
+                    });
+                    
+                    optionDiv.addEventListener('mouseleave', function() {
+                        if (!this.classList.contains('selected')) {
+                            this.style.backgroundColor = '#ffffff';
+                            this.style.boxShadow = 'none';
+                            this.style.transform = 'translateY(0)';
+                            this.style.borderLeft = 'none';
+                        }
+                    });
+                    
+                    // Add click handler
+                    optionDiv.addEventListener('click', function() {
+                        // Remove selected class from all options
+                        selectElement.querySelectorAll('.hypothesis-option').forEach(opt => {
+                            opt.classList.remove('selected');
+                            opt.style.backgroundColor = '#ffffff';
+                            opt.style.color = '#000000';
+                            opt.style.boxShadow = 'none';
+                        });
+                        // Add selected class to clicked option
+                        this.classList.add('selected');
+                        this.style.backgroundColor = '#0d6efd';
+                        this.style.color = 'white';
+                        this.style.boxShadow = '0 4px 12px rgba(13,110,253,0.3)';
+                        // Save and display the hypothesis
+                        saveAndDisplayHypothesis(this.dataset.value);
+                    });
+                    
+                    selectElement.appendChild(optionDiv);
                 });
                 
                 document.getElementById('hypo-select-container').style.display = 'block';
                 
                 if (hypos.length > 0) {
                     // Automatically select and save the first hypothesis
-                    selectElement.value = hypos[0];
+                    const firstOption = selectElement.querySelector('.hypothesis-option');
+                    firstOption.classList.add('selected');
+                    firstOption.style.backgroundColor = '#0d6efd';
+                    firstOption.style.color = 'white';
+                    firstOption.style.boxShadow = '0 4px 12px rgba(13,110,253,0.3)';
                     saveAndDisplayHypothesis(hypos[0]);
                 }
-                
-                selectElement.addEventListener('change', function() {
-                    saveAndDisplayHypothesis(this.value);
-                });
             } else {
                 let errorDetail = data.detail || null;
                 if (data.error && data.error.includes('OpenAI API internal server error')) {
@@ -166,23 +243,45 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Submit manual hypothesis
-    document.getElementById('submit-hypo-btn').addEventListener('click', function() {
+    function submitManualHypothesis() {
         const hypothesis = document.getElementById('hypo-input').value.trim();
         if (!hypothesis) {
             showError('Please enter a hypothesis.');
             return;
         }
         saveAndDisplayHypothesis(hypothesis);
+    }
+    
+    document.getElementById('submit-hypo-btn').addEventListener('click', submitManualHypothesis);
+    
+    // Handle Enter key in manual input textarea
+    document.getElementById('hypo-input').addEventListener('keydown', function(event) {
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault(); // Prevent line break
+            submitManualHypothesis();
+        }
+        // Allow Shift+Enter for line breaks if needed
     });
 
-    // Save current hypothesis (from textarea)
-    document.getElementById('save-current-hypo-btn').addEventListener('click', function() {
+    // Auto-save current hypothesis when user stops typing or leaves the field
+    let saveTimeout;
+    currentHypoEdit.addEventListener('input', function() {
+        clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => {
+            const hypothesis = currentHypoEdit.value.trim();
+            if (hypothesis) {
+                saveAndDisplayHypothesis(hypothesis, false); // Don't show saved message for auto-save
+            }
+        }, 1000); // Save after 1 second of no typing
+    });
+
+    // Also save on blur (when user clicks away)
+    currentHypoEdit.addEventListener('blur', function() {
+        clearTimeout(saveTimeout);
         const hypothesis = currentHypoEdit.value.trim();
-        if (!hypothesis) {
-            showError('Hypothesis cannot be empty.');
-            return;
+        if (hypothesis) {
+            saveAndDisplayHypothesis(hypothesis, false);
         }
-        saveAndDisplayHypothesis(hypothesis, true); // Pass true to show "Saved!" message
     });
 
     function saveAndDisplayHypothesis(hypothesis, showSavedMessage = false) {
@@ -283,4 +382,77 @@ document.addEventListener('DOMContentLoaded', function() {
     loadInitialData();
 
 });
+{% endblock %}
+
+{% block style %}
+<style>
+    .hypothesis-options {
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
+        max-height: 400px;
+        overflow-y: auto;
+        background-color: #ffffff;
+    }
+    
+    .hypothesis-option {
+        padding: 16px;
+        border-bottom: 1px solid #dee2e6;
+        cursor: pointer !important;
+        transition: all 0.3s ease !important;
+        line-height: 1.5;
+        word-wrap: break-word;
+        background-color: #ffffff !important;
+        position: relative;
+        margin: 0;
+        display: block;
+    }
+    
+    .hypothesis-option:last-child {
+        border-bottom: none;
+    }
+    
+    .hypothesis-option:hover {
+        background-color: #f8f9fa !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+        transform: translateY(-2px) !important;
+        border-left: 4px solid #0d6efd;
+    }
+    
+    .hypothesis-option.selected {
+        background-color: #0d6efd !important;
+        color: white !important;
+        box-shadow: 0 4px 12px rgba(13,110,253,0.3) !important;
+        border-left: 4px solid #0b5ed7;
+    }
+    
+    .hypothesis-option.selected:hover {
+        background-color: #0b5ed7 !important;
+        transform: translateY(-2px) !important;
+    }
+    
+    /* Add a clickable indicator */
+    .hypothesis-option::after {
+        content: "Click to select";
+        position: absolute;
+        right: 16px;
+        top: 50%;
+        transform: translateY(-50%);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        font-size: 12px;
+        color: #6c757d;
+        font-style: italic;
+    }
+    
+    .hypothesis-option:hover::after {
+        opacity: 1;
+    }
+    
+    .hypothesis-option.selected::after {
+        content: "✓ Selected";
+        opacity: 1;
+        color: white;
+        font-weight: bold;
+    }
+</style>
 {% endblock %}
