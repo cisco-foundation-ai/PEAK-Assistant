@@ -11,7 +11,7 @@
 
 {% block content %}
 <div class="phase-container">
-    <!-- Compact Phase Header -->
+    <!-- Phase Header -->
     <div class="phase-header">
         <h1 class="phase-title">Topic Research</h1>
         <div id="report-actions-container" style="display: none;">
@@ -19,42 +19,48 @@
         </div>
     </div>
     
-    <!-- Compact Phase Description -->
+    <!-- Phase Description -->
     <p class="phase-description">
-        Enter a topic, threat actor technique, or behavior to generate a research report, or upload an existing report.
+        Enter a topic, threat actor technique, or behavior to generate a research report. You can also upload an existing report.
     </p>
 
-    <!-- Create Research Report Section -->
-    <div class="action-section mb-4">
-        <div class="action-section-title mb-3">
-            <i class="bi bi-robot me-2"></i>Create Research Report
+    <!-- Input Section -->
+    <div class="action-section">
+        <div class="action-section-title">
+            <i class="bi bi-search me-2"></i>Research Topic
         </div>
-        
-        <!-- Combined Input and Upload Section for Better Space Usage -->
-        <div class="row g-3">
-            <!-- Research Topic Section -->
-            <div class="col-md-8">
-                <div class="input-group">
-                    <input type="text" id="topic-input" class="form-control" 
+        <div class="form-section">
+            <div class="input-group-enhanced mb-3">
+                <div class="flex-grow-1">
+                    <label for="topic-input" class="form-label">Research Topic:</label>
+                    <input type="text" id="topic-input" class="form-control form-control-lg" 
                            placeholder="e.g., Kerberoasting, Initial Access via Phishing">
-                    <button id="generate-btn" class="btn btn-primary">
-                        <i class="bi bi-magic me-2"></i>Generate Report
-                    </button>
                 </div>
-            </div>
-            
-            <!-- Upload Section -->
-            <div class="col-md-4">
-                <input type="file" id="upload-report-file" class="form-control" accept=".md,.txt" style="display: none;">
-                <button type="button" id="upload-report-btn" class="btn btn-outline-secondary w-100">
-                    <i class="bi bi-upload me-2"></i>Upload Report
+                <button id="generate-btn" class="btn btn-primary btn-lg">
+                    <i class="bi bi-magic me-2"></i>Generate Report
                 </button>
-                <small id="upload-report-filename" class="form-text text-muted"></small>
             </div>
         </div>
     </div>
 
-    <!-- Content Display - Takes up most of the page -->
+    <!-- Upload Section -->
+    <div class="action-section">
+        <div class="action-section-title">
+            <i class="bi bi-upload me-2"></i>Upload Existing Report
+        </div>
+        <div class="form-section">
+            <label for="upload-report-file" class="form-label">Upload Report (MD or TXT):</label>
+            <div class="input-group">
+                <input type="file" class="form-control" id="upload-report-file" accept=".md,.txt">
+                <button id="upload-report-btn" class="btn btn-outline-secondary">
+                    <i class="bi bi-upload me-2"></i>Upload
+                </button>
+            </div>
+            <small id="upload-report-filename" class="form-text text-muted"></small>
+        </div>
+    </div>
+
+    <!-- Content Display -->
     <div id="report-container" style="display: none;">
         <div class="content-card">
             <div id="report-content" data-raw-markdown=""></div>
@@ -102,24 +108,11 @@ class ResearchManager extends PhaseManager {
         }
         
         if (uploadReportBtn) {
-            uploadReportBtn.addEventListener('click', () => {
-                uploadReportFile.click(); // Trigger hidden file input
-            });
+            uploadReportBtn.addEventListener('click', () => this.handleUpload());
         }
         
         if (uploadReportFile) {
-            uploadReportFile.addEventListener('change', () => {
-                const file = uploadReportFile.files[0];
-                if (!file) {
-                    return;
-                }
-                
-                const uploadReportFilename = document.getElementById('upload-report-filename');
-                uploadReportFilename.textContent = file.name;
-                
-                // Auto-upload when file is selected (like ABLE table)
-                this.handleUpload();
-            });
+            uploadReportFile.addEventListener('change', () => this.updateFilename());
         }
     }
     
@@ -144,10 +137,10 @@ class ResearchManager extends PhaseManager {
     
     async handleUpload() {
         const uploadReportFile = document.getElementById('upload-report-file');
-        const uploadReportFilename = document.getElementById('upload-report-filename');
         const file = uploadReportFile.files[0];
         
         if (!file) {
+            UIFeedback.show('error', 'Please select a file to upload.');
             return;
         }
 
@@ -162,18 +155,8 @@ class ResearchManager extends PhaseManager {
             UIFeedback.hideLoading();
             
             if (response.success) {
-                // Use parent's displayContent method which handles everything properly
                 this.displayContent(response.content);
                 sessionStorage.setItem(this.config.sessionStorageKey, response.content);
-                
-                // Show the report container (which wraps the content-card)
-                const reportContainer = document.getElementById('report-container');
-                if (reportContainer) {
-                    reportContainer.style.display = 'block';
-                }
-                
-                uploadReportFilename.textContent = file.name + ' uploaded successfully!';
-                setTimeout(() => { uploadReportFilename.textContent = file.name; }, 3000); // Reset after a few seconds
                 
                 this.onContentGenerated(response);
             } else {
@@ -182,7 +165,17 @@ class ResearchManager extends PhaseManager {
         } catch (error) {
             UIFeedback.hideLoading();
             UIFeedback.show('error', 'Upload error: ' + error.message, error.detail);
-            uploadReportFilename.textContent = 'Upload failed. Try again.';
+        }
+    }
+    
+    updateFilename() {
+        const uploadReportFile = document.getElementById('upload-report-file');
+        const uploadReportFilename = document.getElementById('upload-report-filename');
+        
+        if (uploadReportFile.files[0] && uploadReportFilename) {
+            uploadReportFilename.textContent = `Selected: ${uploadReportFile.files[0].name}`;
+        } else if (uploadReportFilename) {
+            uploadReportFilename.textContent = '';
         }
     }
     
