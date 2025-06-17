@@ -115,115 +115,18 @@ class HuntPlanningManager extends PhaseManager {
         try {
             await this.generateContent();
             
+            // Show content container after generation
+            const huntPlanContainer = document.getElementById('hunt-plan-container');
+            if (huntPlanContainer) {
+                huntPlanContainer.style.display = 'block';
+            }
+            
             // Update hunt planning prerequisites check in the sidebar
             if (typeof checkHuntPlanningPrerequisites === 'function') {
                 checkHuntPlanningPrerequisites();
             }
         } catch (error) {
             // Error handling is already done in the parent class
-        }
-    }
-    
-    async checkPrerequisites() {
-        try {
-            const sessionData = await this.apiClient.getSessionData();
-            const missing = [];
-            
-            // Check for research document
-            if (!sessionData.report_md || !sessionData.report_md.trim()) {
-                missing.push({
-                    sessionKey: 'report_md',
-                    name: 'Research Document',
-                    url: '/research'
-                });
-            }
-            
-            // Check for hypothesis (refined or original)
-            if (!sessionData.refined_hypothesis && !sessionData.hypothesis) {
-                missing.push({
-                    sessionKey: 'hypothesis',
-                    name: 'Hypothesis',
-                    url: '/hypothesis'
-                });
-            }
-            
-            // Check for ABLE table
-            if (!sessionData.able_table_md) {
-                missing.push({
-                    sessionKey: 'able_table_md',
-                    name: 'ABLE Table',
-                    url: '/able-table'
-                });
-            }
-            
-            // Check for data discovery
-            if (!sessionData.data_sources_md) {
-                missing.push({
-                    sessionKey: 'data_sources_md',
-                    name: 'Data Discovery',
-                    url: '/data-discovery'
-                });
-            }
-            
-            this.updatePrerequisiteUI(missing);
-            return { valid: missing.length === 0, missing };
-        } catch (error) {
-            console.warn('Could not check prerequisites:', error);
-            return { valid: true, missing: [] };
-        }
-    }
-    
-    updatePrerequisiteUI(missingPrereqs) {
-        const warningElement = document.getElementById('missing-prerequisites-warning');
-        const generateBtn = document.getElementById('generate-hunt-plan-btn');
-        
-        if (missingPrereqs.length > 0 && warningElement) {
-            const itemsList = document.getElementById('missing-items-list');
-            if (itemsList) {
-                itemsList.innerHTML = missingPrereqs.map(prereq => 
-                    `<li><a href="${prereq.url}">${prereq.name}</a></li>`
-                ).join('');
-            }
-            warningElement.style.display = 'block';
-            
-            if (generateBtn) {
-                generateBtn.disabled = true;
-                generateBtn.classList.add('btn-disabled-warning');
-                generateBtn.title = 'Complete all prerequisite phases first';
-                generateBtn.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i>Prerequisites Required';
-            }
-        } else {
-            if (warningElement) {
-                warningElement.style.display = 'none';
-            }
-            
-            if (generateBtn) {
-                generateBtn.disabled = false;
-                generateBtn.classList.remove('btn-disabled-warning');
-                generateBtn.title = 'Generate comprehensive hunt plan using AI agents';
-                generateBtn.innerHTML = '<i class="bi bi-magic me-2"></i>Generate AI Hunt Plan';
-            }
-        }
-    }
-    
-    onContentGenerated(response) {
-        // Show content container
-        const huntPlanContainer = document.getElementById('hunt-plan-container');
-        if (huntPlanContainer) {
-            huntPlanContainer.style.display = 'block';
-        }
-        
-        // Setup download button
-        DownloadManager.setupDownloadButton(
-            this.config.contentContainer,
-            'hunt_plan',
-            this.config.downloadContainer
-        );
-        
-        // Show download container
-        const downloadContainer = document.getElementById(this.config.downloadContainer);
-        if (downloadContainer) {
-            downloadContainer.style.display = 'flex';
         }
     }
 }

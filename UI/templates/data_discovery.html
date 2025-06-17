@@ -267,27 +267,19 @@ class DataDiscoveryManager extends PhaseManager {
         // Store content in global variables
         window.currentDataSourcesMarkdown = markdown;
         
-        const contentDiv = document.getElementById(this.config.contentContainer);
         const dataSourcesSection = document.getElementById('data-sources-section');
         
         if (markdown && markdown.trim()) {
-            // Render content using the global renderMarkdown function
-            if (typeof renderMarkdown === 'function') {
-                renderMarkdown(markdown, contentDiv);
-            } else {
-                contentDiv.innerHTML = markdown;
-            }
-            
-            // Store in session storage
-            sessionStorage.setItem(this.config.sessionStorageKey, markdown);
+            // Use the parent class's displayContent method for proper rendering
+            this.displayContent(markdown);
             
             // Only show the section if explicitly requested (user action)
             if (showSection && dataSourcesSection) {
                 dataSourcesSection.style.display = 'block';
             }
         } else {
-            contentDiv.innerHTML = '<p class="text-muted">Data sources will appear here...</p>';
-            sessionStorage.removeItem(this.config.sessionStorageKey);
+            // Clear content using parent method
+            this.clearContent();
             
             // Hide the section when no content
             if (dataSourcesSection) {
