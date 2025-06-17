@@ -31,6 +31,17 @@
         <ul id="missing-items-list" class="prerequisite-list"></ul>
     </div>
 
+    <!-- Current Hypothesis Display -->
+    <div id="current-hypo-container" style="display: none;" class="mb-3">
+        <div class="content-preview-card">
+            <div class="content-preview-header">
+                <h5><i class="bi bi-lightbulb me-2"></i>Current Hypothesis</h5>
+                <small class="text-muted">Data sources will be identified based on this hypothesis</small>
+            </div>
+            <div id="current-hypo-content" class="content-preview-body" data-raw-markdown=""></div>
+        </div>
+    </div>
+
     <!-- Compact Action Section -->
     <div class="action-section">
         <div class="d-flex justify-content-between align-items-center">
@@ -222,7 +233,7 @@ class DataDiscoveryManager extends PhaseManager {
                 });
             }
             
-            this.updatePrerequisiteUI(missing);
+            this.updatePrerequisiteUI(missing, sessionData);
             return { valid: missing.length === 0, missing };
         } catch (error) {
             console.warn('Could not check prerequisites:', error);
@@ -230,9 +241,11 @@ class DataDiscoveryManager extends PhaseManager {
         }
     }
     
-    updatePrerequisiteUI(missingPrereqs) {
+    updatePrerequisiteUI(missingPrereqs, sessionData = null) {
         const warningElement = document.getElementById('missing-prerequisites-warning');
         const generateBtn = document.getElementById('generate-data-sources-btn');
+        const currentHypoContainer = document.getElementById('current-hypo-container');
+        const currentHypoContent = document.getElementById('current-hypo-content');
         
         if (missingPrereqs.length > 0 && warningElement) {
             const itemsList = document.getElementById('missing-items-list');
@@ -243,6 +256,11 @@ class DataDiscoveryManager extends PhaseManager {
             }
             warningElement.style.display = 'block';
             
+            // Hide hypothesis display when prerequisites are missing
+            if (currentHypoContainer) {
+                currentHypoContainer.style.display = 'none';
+            }
+            
             if (generateBtn) {
                 generateBtn.disabled = true;
                 generateBtn.classList.add('btn-disabled-warning');
@@ -252,6 +270,16 @@ class DataDiscoveryManager extends PhaseManager {
         } else {
             if (warningElement) {
                 warningElement.style.display = 'none';
+            }
+            
+            // Show current hypothesis
+            if (sessionData && currentHypoContainer && currentHypoContent) {
+                const hypothesisToUse = sessionData.refined_hypothesis || sessionData.hypothesis;
+                if (hypothesisToUse && hypothesisToUse.trim()) {
+                    currentHypoContent.setAttribute('data-raw-markdown', hypothesisToUse);
+                    ContentRenderer.renderMarkdown(hypothesisToUse, currentHypoContent);
+                    currentHypoContainer.style.display = 'block';
+                }
             }
             
             if (generateBtn) {

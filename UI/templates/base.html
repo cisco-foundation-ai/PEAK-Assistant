@@ -123,6 +123,37 @@
             min-height: 200px;
         }
 
+        /* Content Preview Cards - for displaying hypothesis on other pages */
+        .content-preview-card {
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background: #ffffff;
+            box-shadow: var(--shadow-sm);
+            margin-bottom: var(--spacing-md);
+        }
+        
+        .content-preview-header {
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-bottom: 1px solid var(--border-color);
+            background: var(--light-color);
+            border-radius: var(--border-radius) var(--border-radius) 0 0;
+        }
+        
+        .content-preview-header h5 {
+            margin: 0;
+            font-size: var(--font-size-sm);
+            font-weight: 600;
+            color: var(--dark-color);
+        }
+        
+        .content-preview-body {
+            padding: var(--spacing-md);
+            max-height: 150px;
+            overflow-y: auto;
+            font-size: var(--font-size-sm);
+            line-height: 1.4;
+        }
+
         /* ==========================================================================
            COMPACT ACTION SECTIONS
            ========================================================================== */

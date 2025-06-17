@@ -82,6 +82,41 @@ class ResearchManager extends PhaseManager {
         });
     }
     
+    displayContent(content) {
+        // Override parent displayContent to handle report container visibility
+        const contentElement = document.getElementById(this.config.contentContainer);
+        const downloadContainer = document.getElementById(this.config.downloadContainer);
+        const reportContainer = document.getElementById('report-container');
+        
+        if (content && content.trim()) {
+            if (this.config.globalContentVar) {
+                window[this.config.globalContentVar] = content;
+            }
+            contentElement.dataset.rawMarkdown = content;
+            ContentRenderer.renderMarkdown(content, contentElement);
+            
+            // Show the report container
+            if (reportContainer) {
+                reportContainer.style.display = 'block';
+            }
+            
+            if (downloadContainer) {
+                downloadContainer.style.display = 'flex';
+            }
+        } else {
+            ContentRenderer.clearContent(contentElement);
+            
+            // Hide the report container
+            if (reportContainer) {
+                reportContainer.style.display = 'none';
+            }
+            
+            if (downloadContainer) {
+                downloadContainer.style.display = 'none';
+            }
+        }
+    }
+    
     setupEventListeners() {
         const generateBtn = document.getElementById('generate-btn');
         const topicInput = document.getElementById('topic-input');
@@ -166,12 +201,6 @@ class ResearchManager extends PhaseManager {
                 this.displayContent(response.content);
                 sessionStorage.setItem(this.config.sessionStorageKey, response.content);
                 
-                // Show the report container (which wraps the content-card)
-                const reportContainer = document.getElementById('report-container');
-                if (reportContainer) {
-                    reportContainer.style.display = 'block';
-                }
-                
                 uploadReportFilename.textContent = file.name + ' uploaded successfully!';
                 setTimeout(() => { uploadReportFilename.textContent = file.name; }, 3000); // Reset after a few seconds
                 
@@ -187,24 +216,12 @@ class ResearchManager extends PhaseManager {
     }
     
     onContentGenerated(response) {
-        // Show content container
-        const reportContainer = document.getElementById('report-container');
-        if (reportContainer) {
-            reportContainer.style.display = 'block';
-        }
-        
-        // Setup download button
+        // Setup download button - container visibility is handled by displayContent
         DownloadManager.setupDownloadButton(
             this.config.contentContainer,
             'research_report',
             this.config.downloadContainer
         );
-        
-        // Show download container
-        const downloadContainer = document.getElementById(this.config.downloadContainer);
-        if (downloadContainer) {
-            downloadContainer.style.display = 'flex';
-        }
     }
 }
 

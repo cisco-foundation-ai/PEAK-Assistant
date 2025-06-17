@@ -455,7 +455,7 @@ def upload_report():
         content = f.read()
     session['report_md'] = content
     session['last_topic'] = '[Uploaded]'
-    return jsonify({'success': True, 'report': content})
+    return jsonify({'success': True, 'content': content})
 
 @app.route('/api/upload-able-table', methods=['POST'])
 def upload_able_table():

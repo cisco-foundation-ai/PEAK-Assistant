@@ -32,6 +32,17 @@
         <ul id="missing-items-list" class="prerequisite-list"></ul>
     </div>
 
+    <!-- Current Hypothesis Display -->
+    <div id="current-hypo-container" style="display: none;" class="mb-3">
+        <div class="content-preview-card">
+            <div class="content-preview-header">
+                <h5><i class="bi bi-lightbulb me-2"></i>Current Hypothesis</h5>
+                <small class="text-muted">The hunt plan will be generated based on this hypothesis</small>
+            </div>
+            <div id="current-hypo-content" class="content-preview-body" data-raw-markdown=""></div>
+        </div>
+    </div>
+
     <!-- Generate Hunt Plan Section -->
     <div class="action-section mb-4">
         <div class="action-section-title mb-3">
@@ -173,7 +184,7 @@ class HuntPlanManager extends PhaseManager {
                 }
             }
             
-            this.updatePrerequisiteUI(missing);
+            this.updatePrerequisiteUI(missing, sessionData);
             return { valid: missing.length === 0, missing };
         } catch (error) {
             console.warn('Could not check prerequisites:', error);
@@ -181,9 +192,11 @@ class HuntPlanManager extends PhaseManager {
         }
     }
     
-    updatePrerequisiteUI(missingPrereqs) {
+    updatePrerequisiteUI(missingPrereqs, sessionData = null) {
         const warningElement = document.getElementById('missing-prerequisites-warning');
         const generateBtn = document.getElementById('generate-btn');
+        const currentHypoContainer = document.getElementById('current-hypo-container');
+        const currentHypoContent = document.getElementById('current-hypo-content');
         
         if (missingPrereqs.length > 0 && warningElement) {
             const itemsList = document.getElementById('missing-items-list');
@@ -194,17 +207,46 @@ class HuntPlanManager extends PhaseManager {
             }
             warningElement.style.display = 'block';
             
+            // Hide hypothesis display when prerequisites are missing
+            if (currentHypoContainer) {
+                currentHypoContainer.style.display = 'none';
+            }
+            
             if (generateBtn) {
                 generateBtn.disabled = true;
+                generateBtn.classList.add('btn-disabled-warning');
+                generateBtn.title = 'Complete all prerequisite phases first';
+                generateBtn.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i>Prerequisites Required';
             }
         } else {
             if (warningElement) {
                 warningElement.style.display = 'none';
             }
+            
+            // Show current hypothesis
+            if (sessionData && currentHypoContainer && currentHypoContent) {
+                const hypothesisToUse = sessionData.refined_hypothesis || sessionData.hypothesis;
+                if (hypothesisToUse && hypothesisToUse.trim()) {
+                    currentHypoContent.setAttribute('data-raw-markdown', hypothesisToUse);
+                    ContentRenderer.renderMarkdown(hypothesisToUse, currentHypoContent);
+                    currentHypoContainer.style.display = 'block';
+                }
+            }
+            
             if (generateBtn) {
                 generateBtn.disabled = false;
+                generateBtn.classList.remove('btn-disabled-warning');
+                generateBtn.title = 'Generate comprehensive hunt plan using AI agents';
+                generateBtn.innerHTML = '<i class="bi bi-magic me-2"></i>Generate Hunt Plan';
             }
         }
+    }
+    
+    async initialize() {
+        await super.initialize();
+        
+        // Check prerequisites on initialization
+        await this.checkPrerequisites();
     }
 }
 
