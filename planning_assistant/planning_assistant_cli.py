@@ -116,6 +116,10 @@ async def plan_hunt(
         to provide more information or suggest additional tasks. Do not include information
         about revisions you made in response to feedback from the critic agent. The only 
         output should be the Markdown document containing the hunt plan.
+
+        Anyone who reads this plan will already know it will be in Markdown format,
+        so you never begin it with "```markdown", "```" or similar. Just start with
+        the first section of the plan.
         
         When receiving feedback from a critic agent, incorporate their advice into your
         existing plan in order to provide the best quality plan.

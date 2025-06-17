@@ -15,7 +15,7 @@
     <!-- Compact Phase Header -->
     <div class="phase-header">
         <h1 class="phase-title">Generate Hunt Plan</h1>
-        <div id="download-plan-actions-container" style="display: none;">
+        <div id="plan-actions-container" style="display: none;">
             <!-- Download button will be inserted here by script -->
         </div>
     </div>
@@ -32,23 +32,24 @@
         <ul id="missing-items-list" class="prerequisite-list"></ul>
     </div>
 
-    <!-- Compact Action Section -->
-    <div class="action-section">
+    <!-- Generate Hunt Plan Section -->
+    <div class="action-section mb-4">
+        <div class="action-section-title mb-3">
+            <i class="bi bi-robot me-2"></i>AI Hunt Plan Generation
+        </div>
+        
         <div class="d-flex justify-content-between align-items-center">
             <div>
-                <div class="action-section-title">
-                    <i class="bi bi-robot me-2"></i>AI Hunt Plan Generation
-                </div>
                 <small class="text-muted">AI agents will analyze all your previous work to create a comprehensive hunting plan.</small>
             </div>
-            <button id="generate-hunt-plan-btn" class="btn btn-primary">
+            <button id="generate-btn" class="btn btn-primary">
                 <i class="bi bi-magic me-2"></i>Generate Hunt Plan
             </button>
         </div>
     </div>
 
     <!-- Content Display - Takes up most of the page -->
-    <div id="hunt-plan-container" style="display: none;">
+    <div id="plan-container" style="display: none;">
         <div class="content-card">
             <div id="plan-content" data-raw-markdown=""></div>
         </div>
@@ -58,20 +59,20 @@
 
 {% block script %}
 /**
- * Hunt Planning Phase Manager
+ * Hunt Plan Manager - Modeled after ResearchManager
  */
-class HuntPlanningManager extends PhaseManager {
+class HuntPlanManager extends PhaseManager {
     constructor() {
         super('hunt_plan', {
             apiEndpoint: '/api/hunt-plan',
             contentContainer: 'plan-content',
-            downloadContainer: 'download-plan-actions-container',
+            downloadContainer: 'plan-actions-container',
             sessionStorageKey: 'hunt_plan',
             globalContentVar: 'currentPlanMarkdown',
             responseContentKey: 'hunt_plan',
             loadingMessage: 'AI agents are creating your comprehensive hunt plan... (this may take several minutes)',
             generateButtonTitle: 'Generate comprehensive hunt plan using AI agents',
-            generateButtonText: '<i class="bi bi-magic me-2"></i>Generate AI Hunt Plan',
+            generateButtonText: '<i class="bi bi-magic me-2"></i>Generate Hunt Plan',
             prerequisites: [
                 {
                     sessionKey: 'report_md',
@@ -98,7 +99,8 @@ class HuntPlanningManager extends PhaseManager {
     }
     
     setupEventListeners() {
-        const generateBtn = document.getElementById('generate-hunt-plan-btn');
+        const generateBtn = document.getElementById('generate-btn');
+        
         if (generateBtn) {
             generateBtn.addEventListener('click', () => this.handleGenerate());
         }
@@ -113,26 +115,101 @@ class HuntPlanningManager extends PhaseManager {
         }
         
         try {
-            await this.generateContent();
-            
-            // Show content container after generation
-            const huntPlanContainer = document.getElementById('hunt-plan-container');
-            if (huntPlanContainer) {
-                huntPlanContainer.style.display = 'block';
-            }
-            
-            // Update hunt planning prerequisites check in the sidebar
-            if (typeof checkHuntPlanningPrerequisites === 'function') {
-                checkHuntPlanningPrerequisites();
-            }
+            const response = await this.generateContent();
+            // Content display is handled by the parent PhaseManager
         } catch (error) {
             // Error handling is already done in the parent class
         }
     }
+    
+    // Override to ensure container is shown when content is loaded
+    async loadInitialData() {
+        await super.loadInitialData();
+        
+        // If we have content, show the container
+        const stored = sessionStorage.getItem(this.config.sessionStorageKey);
+        if (stored && stored.trim()) {
+            const planContainer = document.getElementById('plan-container');
+            if (planContainer) {
+                planContainer.style.display = 'block';
+            }
+        }
+    }
+    
+    onContentGenerated(response) {
+        // Show content container
+        const planContainer = document.getElementById('plan-container');
+        if (planContainer) {
+            planContainer.style.display = 'block';
+        }
+        
+        // Setup download button
+        DownloadManager.setupDownloadButton(
+            this.config.contentContainer,
+            'hunt_plan',
+            this.config.downloadContainer
+        );
+        
+        // Show download container
+        const downloadContainer = document.getElementById(this.config.downloadContainer);
+        if (downloadContainer) {
+            downloadContainer.style.display = 'flex';
+        }
+    }
+    
+    async checkPrerequisites() {
+        if (!this.config.prerequisites || this.config.prerequisites.length === 0) {
+            return { valid: true, missing: [] };
+        }
+        
+        try {
+            const sessionData = await this.apiClient.getSessionData();
+            const missing = [];
+            
+            for (const prereq of this.config.prerequisites) {
+                const hasContent = sessionData[prereq.sessionKey] && sessionData[prereq.sessionKey].trim();
+                if (!hasContent) {
+                    missing.push(prereq);
+                }
+            }
+            
+            this.updatePrerequisiteUI(missing);
+            return { valid: missing.length === 0, missing };
+        } catch (error) {
+            console.warn('Could not check prerequisites:', error);
+            return { valid: true, missing: [] };
+        }
+    }
+    
+    updatePrerequisiteUI(missingPrereqs) {
+        const warningElement = document.getElementById('missing-prerequisites-warning');
+        const generateBtn = document.getElementById('generate-btn');
+        
+        if (missingPrereqs.length > 0 && warningElement) {
+            const itemsList = document.getElementById('missing-items-list');
+            if (itemsList) {
+                itemsList.innerHTML = missingPrereqs.map(prereq => 
+                    `<li><a href="${prereq.url}">${prereq.name}</a></li>`
+                ).join('');
+            }
+            warningElement.style.display = 'block';
+            
+            if (generateBtn) {
+                generateBtn.disabled = true;
+            }
+        } else {
+            if (warningElement) {
+                warningElement.style.display = 'none';
+            }
+            if (generateBtn) {
+                generateBtn.disabled = false;
+            }
+        }
+    }
 }
 
-// Initialize the Hunt Planning Manager when DOM is ready
+// Initialize the Hunt Plan Manager when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
-    window.huntPlanningManager = new HuntPlanningManager();
+    window.huntPlanManager = new HuntPlanManager();
 });
 {% endblock %}
