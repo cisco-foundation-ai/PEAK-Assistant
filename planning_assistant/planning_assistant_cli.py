@@ -144,7 +144,7 @@ async def plan_hunt(
         Ensure that the plan includes:
         - A restatement of the hypothesis.
         - An estimate of the applicable time window for the hunt.
-        - A concise of the ABLE information in table form.
+        - A concise restatement of the ABLE information in table form.
         - A concise list of the relevant Splunk indices, sourcetypes, key fields, and their
           relevance to the hunt, in table form.
         - A detailed plan for the hunt, including the steps to be taken, the data sources
@@ -157,6 +157,15 @@ async def plan_hunt(
 
         Above all else, ensure that the plan and the analysis steps actually address
         the hunting hypothesis. 
+
+        Be sure to carefully check any Splunk SPL queries provided in the plan to ensure
+        that they are correct, efficient, and tailored to the data sources specified. Keep
+        in mind that the Splunk indices may contain a very large amount of data, so
+        the queries should be as efficient as possible. Cross-reference the queries with the 
+        data discovery information to ensure that the queries are using the correct indices,
+        sourcetypes, and key fields. If the queries are not efficient or do not use
+        the correct indices, sourcetypes, or key fields, provide specific feedback on how to
+        improve them.
 
         If there are any issues with the plan, if any steps are missing or unclear, 
         or if the plan does not provide enough detail to allow the hunter to execute 
