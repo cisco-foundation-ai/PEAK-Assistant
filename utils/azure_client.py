@@ -43,12 +43,4 @@ class PEAKAssistantAzureOpenAIClient:
         if auth_params:
             params.update(auth_params)
 
-    #    # Add additional authentication headers if configured
-    #    if assistant_auth.is_enabled():
-    #        circuit_token = await circuit_auth.get_access_token()
-    #        params["api_key"] = circuit_token
-    #        params["user"] = f'{{"appkey": "{circuit_auth.app_key}"}}'
-    #    else:
-    #        params["api_key"] = os.getenv("AZURE_OPENAI_API_KEY")
-        
         return AzureOpenAIChatCompletionClient(**params)

@@ -1,5 +1,5 @@
 """
-PEAK Assistant Authentication Manager for optional OAuth integration with Cisco Circuit
+PEAK Assistant Authentication Manager 
 """
 import os
 import requests
