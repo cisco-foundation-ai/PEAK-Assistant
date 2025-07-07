@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import sys
 import argparse
 from pathlib import Path
 from dotenv import load_dotenv
@@ -13,6 +14,10 @@ from autogen_agentchat.teams import RoundRobinGroupChat
 from autogen_agentchat.ui import Console
 from autogen_ext.tools.mcp import McpWorkbench, StdioServerParams
 from autogen_agentchat.conditions import TextMentionTermination
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from utils.assistant_auth import PEAKAssistantAuthManager
+from utils.azure_client import PEAKAssistantAzureOpenAIClient
 
 def find_dotenv_file():
     """Search for a .env file in current directory and parent directories"""
@@ -186,13 +191,8 @@ async def plan_hunt(
         TextMessage(content=f"Additional local context: {local_context}\n", source="user"),
     ]
 
-    az_model_client = AzureOpenAIChatCompletionClient(
-        azure_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT"),
-        model=os.getenv("AZURE_OPENAI_MODEL"),
-        api_version=os.getenv("AZURE_OPENAI_API_VERSION"),
-        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-        api_key=os.getenv("AZURE_OPENAI_API_KEY")
-    )
+    auth_mgr = PEAKAssistantAuthManager()
+    az_model_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr)
 
     planning_agent = AssistantAgent(
         "hunt_planner",

@@ -4,6 +4,7 @@ import os
 import argparse
 import asyncio
 import re
+import sys
 from pathlib import Path
 import warnings
 from dotenv import load_dotenv
@@ -17,6 +18,10 @@ from autogen_agentchat.agents import AssistantAgent
 from autogen_agentchat.conditions import TextMentionTermination
 from autogen_agentchat.teams import SelectorGroupChat
 from autogen_agentchat.ui import Console 
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from utils.assistant_auth import PEAKAssistantAuthManager
+from utils.azure_client import PEAKAssistantAzureOpenAIClient
 
 def find_dotenv_file():
     """Search for a .env file in current directory and parent directories"""
@@ -317,13 +322,8 @@ async def researcher(
         play. ONLY RETURN THE ROLE.
     """
 
-    az_model_client = AzureOpenAIChatCompletionClient(
-        azure_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT"),
-        model=os.getenv("AZURE_OPENAI_MODEL"),
-        api_version=os.getenv("AZURE_OPENAI_API_VERSION"),
-        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-        api_key=os.getenv("AZURE_OPENAI_API_KEY")
-    )
+    auth_mgr = PEAKAssistantAuthManager()
+    az_model_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr)
 
     search_agent = AssistantAgent(
         "search",
