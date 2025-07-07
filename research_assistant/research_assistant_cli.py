@@ -14,7 +14,7 @@ from tavily import TavilyClient
 
 from autogen_agentchat.messages import TextMessage
 from autogen_ext.models.openai import AzureOpenAIChatCompletionClient
-from autogen_agentchat.agents import AssistantAgent
+from autogen_agentchat.agents import AssistantAgent, UserProxyAgent
 from autogen_agentchat.conditions import TextMentionTermination
 from autogen_agentchat.teams import SelectorGroupChat
 from autogen_agentchat.ui import Console 
@@ -62,6 +62,15 @@ async def tavily_search(
     )
 
     return search_results
+
+async def websocket_input():
+    return
+
+def get_input_function():
+    if os.getenv("FLASK_RUN_FROM_CLI") or os.getenv("WERKZEUG_RUN_MAIN"):
+        return websocket_input
+    else:
+        return input
 
 async def researcher(
         technique: str = None, 
@@ -111,6 +120,10 @@ async def researcher(
         research and ensuring that it meets the highest standards of quality so that the 
         summarizer agent can create a high-quality report.
 
+        You should provide only the minimal amount of output necessary to provide clear 
+        feedback. Do not mention or provide evidence for research items that 
+        meet the criteria. Only provide feedback for the items which do not.
+
         When critiqueing the research findings, be sure to:
         1. Assess the effectiveness and precision of search queries, suggesting 
            improvements if needed.
@@ -124,12 +137,6 @@ async def researcher(
         5. When research is incomplete, end your message with "CONTINUE RESEARCH". 
            When all requirements are met, end with "APPROVED" and provide a 
            comprehensive, well-structured summary in markdown format.
-
-        Structure your responses as follows:
-        - Progress Assessment
-        - Gaps/Issues (if any)
-        - Suggestions (if needed)
-        - Next Steps or Final Summary
 
         Ensure the research results answer ALL of the following:
         1. What is the short, commonly-accepted name for the technique (not just 
@@ -265,61 +272,66 @@ async def researcher(
         more detail if you think it is needed. If necessary, you may also ask for additional
         research to be performed to fill in gaps in the report.
 
-        If the report is complete and meets the quality standards, simply return the string 
-        "YYY-TERMINATE-YYY" on a line by itself. Do not include any other text, nor try to 
-        summarize the report. If the report is not complete or does not meet the 
+        If the report is not complete or does not meet the 
         quality standards, you should provide feedback to the summarizer agent and
         ask it to revise the report. You should also provide a list of the specific
         criteria that the report does not meet, and ask the summarizer agent to revise
         the report to meet those criteria.
+
+        You should provide only the minimal amount of output necessary to provide clear 
+        feedback. Do not mention or provide evidence for report items that 
+        meet the criteria. Only provide feedback for the items which do not.
+    """
+    termination_agent_prompt= """
+    When you are called, your job is simply to return the string "YYY-TERMINATE-YYY" 
+    on a line by itself. Do not include any other text.
     """
     selector_prompt = """
-        You are coordinating a research team by selecting the team member to speak/act next. 
+        You are coordinating a cybersecurity research team by selecting the team 
+        member to speak/act next. 
         The following team member roles are available:
 
             {roles}
 
-        The following describes the roles:
-            - search_agent: performs web searches and analyzes information.
-            - research_critic_agent: evaluates progress, ensures completeness, and 
-              suggests new research avenues.
-            - summarizer_agent: provides a detailed markdown summary of the research
-              as a report to the user.
-            - summary_critic_agent: evaluates the summary and ensures it meets 
-              the user's needs.
-
         Given the current context, select the most appropriate next speaker.
             - The search agent should search for and analyze information from
-              the Internet.
+            the Internet.
             - The research critic should evaluate progress and guide the research 
-              (select this role when there is a need to verify/evaluate progress 
-              of the research). 
+            (select this role when there is a need to verify/evaluate progress 
+            of the research). 
             - The summarizer agent should summarize the research findings (select 
-              this role when the research is complete and approved by the critic agent).
+            this role when the research is complete and approved by the research critic).
             - The summary critic agent should evaluate the report from the summarizer
-              and ensure it meets the user's needs. 
+            and ensure it meets the user's needs. 
+            - The user feedback agent should request user feedback or approval of the summarizer's 
+              report AFTER the summary critic has approved it. 
+            - The termination agent should stop the conversation after the user has approved the report.
 
         You should ONLY select the summarizer agent role if the research is complete and 
-        it has been approved by the critic agent. NEVER call the summarizer agent directly 
+        it has been approved by the research critic agent. NEVER call the summarizer agent directly 
         after the search agent. The summary critic agent CAN ask for more research, in
         which case you should select the search agent role. 
 
-        No matter what, you must ALWAYS finish the converstation with a call to the 
-        summary critic agent. You may have to call it multiple times to ensure the 
-        resulting report is the best it can be.
+        You should always follow the call to the summarizer critic with a request for 
+        user feedback. You may have to iterate the research process multiple times to ensure the 
+        resulting report is the best it can be. Based on the user feedback, you may need to 
+        revisit one or more of the preceeding roles. 
+
+        Continue the conversation until the user feedback agent has provided 
+        approval of the report. At that point, you should select the termination 
+        agent as the next speaker.
 
         Base your selection on:
             1. Current stage of research
             2. Last speaker's findings or suggestions
             3. Need for verification vs need for new information
             4. The need for addtional detail in the research or the report, if necessary
+            5. The need for additional research or more detail in the report
+            6. The user's feedback
         Read the following conversation. 
-        Then select the next role from {participants} to play. Only return the role.
+        Then select the next role to speak Only return the role name.
 
         {history}
-
-        Read the above conversation. Then select the next role from {participants} to 
-        play. ONLY RETURN THE ROLE.
     """
 
     auth_mgr = PEAKAssistantAuthManager()
@@ -327,6 +339,7 @@ async def researcher(
 
     search_agent = AssistantAgent(
         "search",
+        description="Performs web searches and analyzes information.",
         model_client=az_model_client,
         tools=[tavily_search],
         system_message=search_system_prompt
@@ -334,29 +347,47 @@ async def researcher(
 
     research_critic_agent = AssistantAgent(
         "research_critic",
+        description="Evaluates progress, ensures completeness, and suggests new research avenues.",
         model_client=az_model_client,
         system_message=research_critic_system_prompt
     )
 
     summarizer_agent = AssistantAgent(
         "summarizer",
+        description="Provides a detailed markdown summary of the research as a report to the user.",
         model_client=az_model_client,
         system_message=summarizer_system_prompt
     )
 
     summary_critic_agent = AssistantAgent(
         "summary_critic",
+        description="Evaluates the summary and ensures it meets the user's needs.",
         model_client=az_model_client,
         system_message=summary_critic_system_prompt
     )
 
-    # Define a termination condition that stops the task once the summarizer
-    # agent has completed its task
+    termination_agent = AssistantAgent(
+        "termination_agent",
+        description="Stops the conversation when the user has approved the report.",
+        model_client=az_model_client,
+        system_message=termination_agent_prompt
+    )
+
+    input_function = get_input_function()
+
+    user_feedback_agent = UserProxyAgent(
+        "user_feedback",
+        description="Provides user feedback and asks for user approval.",
+        input_func=input_function
+    )
+
+    # Define a termination condition that stops the task once the report 
+    # has been approved
     text_termination = TextMentionTermination("YYY-TERMINATE-YYY")
 
     # Create a team 
     team = SelectorGroupChat(
-        participants=[search_agent, research_critic_agent, summarizer_agent, summary_critic_agent],
+        participants=[search_agent, research_critic_agent, summarizer_agent, summary_critic_agent, user_feedback_agent, termination_agent],
         model_client=az_model_client,
         termination_condition=text_termination,
         selector_prompt=selector_prompt
