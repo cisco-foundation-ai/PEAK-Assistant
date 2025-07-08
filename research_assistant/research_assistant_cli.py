@@ -384,12 +384,13 @@ async def researcher(
         selector_prompt=selector_prompt
     )
 
+    # Always add these, no matter if it's the first run or a subsequent one
     messages = [
         TextMessage(content=f"Research this technique: {technique}\n", source="user"),
         TextMessage(content=f"Additional local context: {local_context}\n", source="user"),
     ]
 
-    # If we have messages from a previous run, we will continue the research
+    # If we have messages from a previous run, add them so we can continue the research
     if previous_run:
         messages = messages + previous_run 
 
