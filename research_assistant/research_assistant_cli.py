@@ -373,12 +373,10 @@ async def researcher(
         system_message=termination_agent_prompt
     )
 
-    input_function = get_input_function()
-
     user_feedback_agent = UserProxyAgent(
         "user_feedback",
         description="Provides user feedback and asks for user approval.",
-        input_func=input_function
+        input_func=get_input_function()
     )
 
     # Define a termination condition that stops the task once the report 
@@ -387,7 +385,14 @@ async def researcher(
 
     # Create a team 
     team = SelectorGroupChat(
-        participants=[search_agent, research_critic_agent, summarizer_agent, summary_critic_agent, user_feedback_agent, termination_agent],
+        participants=[
+                        search_agent, 
+                        research_critic_agent, 
+                        summarizer_agent, 
+                        summary_critic_agent, 
+                        user_feedback_agent, 
+                        termination_agent
+                    ],
         model_client=az_model_client,
         termination_condition=text_termination,
         selector_prompt=selector_prompt
@@ -401,7 +406,7 @@ async def researcher(
     try:
         # Run the team asynchronously
         if verbose:
-            result = await Console(team.run_stream(task=messages))
+            result = await Console(team.run_stream(task=messages), output_stats=True)
         else:
             result = await team.run(task=messages)
 
