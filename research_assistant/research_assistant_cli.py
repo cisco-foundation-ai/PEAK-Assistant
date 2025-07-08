@@ -74,14 +74,36 @@ def get_input_function():
         return input
 
 async def researcher(
-        technique: str = None, 
-        local_context: str = None,
-        verbose: bool = True,
-        previous_run: list = None
+    technique: str = None, 
+    local_context: str = None,
+    verbose: bool = False,
+    previous_run: list = None
 ) -> str:
     """
-    Threat hunting report creator.
+    Orchestrates a multi-agent, multi-stage research workflow to generate a 
+    comprehensive cybersecurity threat hunting report for a specified 
+    technique or behavior.
+
+    This function coordinates a team of specialized agents—search, research 
+    critic, summarizer, and summary critic—each with distinct roles in 
+    researching, verifying, summarizing, and validating information about a 
+    cybersecurity technique. The process is iterative and continues until a 
+    high-quality, expert-level markdown report is produced and approved.
+
+    Args:
+        technique (str, optional): The name or description of the threat actor technique or behavior to research.
+        local_context (str, optional): Additional context or constraints to guide the research (e.g., environment, use case).
+        verbose (bool, optional): If True, streams detailed output to the console; otherwise, runs silently. Defaults to False.
+        previous_run (list, optional): List of conversation messages used to continue or resume a prior research session.
+
+    Returns:
+        A TaskResult object containing all the agent messages, including the final 
+        report, or a string error message if the process fails.
+
+    Raises:
+        Exception: If an error occurs during the research or report generation process.
     """
+    
     search_system_prompt = """
         You are a world-class research assistant specializing in deep, high-quality 
         technical research to assist cybersecurity threat hunters. Given a threat actor
