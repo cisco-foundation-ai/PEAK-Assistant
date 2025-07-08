@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 import warnings
 from dotenv import load_dotenv
+import traceback
 from markdown_pdf import MarkdownPdf, Section
 
 from tavily import TavilyClient
@@ -75,7 +76,8 @@ def get_input_function():
 async def researcher(
         technique: str = None, 
         local_context: str = None,
-        verbose: bool = True
+        verbose: bool = True,
+        previous_run: list = None
 ) -> str:
     """
     Threat hunting report creator.
@@ -281,10 +283,9 @@ async def researcher(
         You should provide only the minimal amount of output necessary to provide clear 
         feedback. Do not mention or provide evidence for report items that 
         meet the criteria. Only provide feedback for the items which do not.
-    """
-    termination_agent_prompt= """
-    When you are called, your job is simply to return the string "YYY-TERMINATE-YYY" 
-    on a line by itself. Do not include any other text.
+
+        If the report meets all of the criteria, return the string "YYY-TERMINATE-YYY" 
+        on a line by itself. Do not include any other text.
     """
     selector_prompt = """
         You are coordinating a cybersecurity research team by selecting the team 
@@ -366,19 +367,6 @@ async def researcher(
         system_message=summary_critic_system_prompt
     )
 
-    termination_agent = AssistantAgent(
-        "termination_agent",
-        description="Stops the conversation when the user has approved the report.",
-        model_client=az_model_client,
-        system_message=termination_agent_prompt
-    )
-
-    user_feedback_agent = UserProxyAgent(
-        "user_feedback",
-        description="Provides user feedback and asks for user approval.",
-        input_func=get_input_function()
-    )
-
     # Define a termination condition that stops the task once the report 
     # has been approved
     text_termination = TextMentionTermination("YYY-TERMINATE-YYY")
@@ -390,8 +378,6 @@ async def researcher(
                         research_critic_agent, 
                         summarizer_agent, 
                         summary_critic_agent, 
-                        user_feedback_agent, 
-                        termination_agent
                     ],
         model_client=az_model_client,
         termination_condition=text_termination,
@@ -403,6 +389,10 @@ async def researcher(
         TextMessage(content=f"Additional local context: {local_context}\n", source="user"),
     ]
 
+    # If we have messages from a previous run, we will continue the research
+    if previous_run:
+        messages = messages + previous_run 
+
     try:
         # Run the team asynchronously
         if verbose:
@@ -413,15 +403,10 @@ async def researcher(
         # Access the content from the CreateResult object
         return result  # Use the correct attribute to access the generated content
     except Exception as e:
-        print(f"Error while preparing report: {e}")
+        print(f"Error while preparing report: {e}\n{traceback.format_exc()}")
         return "An error occurred while preparing the report."
 
 if __name__ == "__main__":
-
-    # Filter out Autogen's warning about loading teams from a config file 
-    warnings.filterwarnings("ignore", message="\n⚠️  SECURITY WARNING ⚠️\n"
-                "Loading a FunctionTool from config will execute code to import the provided global imports and and function code.\n"
-                "Only load configs from TRUSTED sources to prevent arbitrary code execution.")
 
     # Set up argument parser
     parser = argparse.ArgumentParser(description='Generate a threat hunting report for a specific technique')
@@ -461,20 +446,37 @@ if __name__ == "__main__":
             print(f"Error reading local context: {e}")
             exit(1)
 
-    # Run the researcher asynchronously
-    messages = asyncio.run(
-        researcher(
-            technique=args.technique,
-            local_context=local_context,
-            verbose=args.verbose
+    messages = list()
+    while True:
+        # Run the researcher asynchronously
+        task_result = asyncio.run(
+            researcher(
+                technique=args.technique,
+                local_context=local_context,
+                verbose=args.verbose,
+                previous_run=messages
+            )
         )
-    )
 
-    # Find the final message from the "summarizer" agent using next() and a generator expression
-    report = next(
-        (message.content for message in reversed(messages.messages) if message.source == "summarizer"),
-        None  # Default value if no "critic" message is found
-    )
+        # Find the final message from the "summarizer" agent using next() and a generator expression
+        report = next(
+            (message.content for message in reversed(task_result.messages) if message.source == "summarizer"),
+            None  # Default value if no "critic" message is found
+        )
+
+        # Display the report and ask for user feedback
+        print(report)
+        feedback = input("Please provide your feedback on the report (or press Enter to approve it): ")   
+
+        if feedback.strip():
+            # If feedback is provided, add it to the messages and loop back to
+            # the research team for further refinement
+            messages = [
+                TextMessage(content=f"The current report draft is: {report}\n", source="user"),
+                TextMessage(content=f"User feedback: {feedback}\n", source="user")
+            ]
+        else:
+            break
 
     # Extract the title from the report (assuming the first line is the title)
     title = report.splitlines()[0] if report else "untitled_report"
