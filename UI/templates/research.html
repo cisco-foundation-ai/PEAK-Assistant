@@ -10,213 +10,166 @@
 {% block nav %}{{ super() }}{% endblock %}
 
 {% block content %}
-<div class="phase-container">
-    <!-- Compact Phase Header -->
+<div class="phase-container d-flex flex-column" style="height: calc(100vh - 80px);">
+    <!-- Header -->
     <div class="phase-header">
-        <h1 class="phase-title">Topic Research</h1>
-        <div id="report-actions-container" style="display: none;">
-            <!-- Download button will be inserted here by script -->
+        <div class="d-flex justify-content-between align-items-center w-100">
+            <h1 class="phase-title mb-0">Topic Research</h1>
+            <div id="global-actions-container" class="d-flex align-items-center">
+                <div id="download-button-placeholder"></div>
+                <input type="file" id="upload-report-file" class="d-none" accept=".md,.txt">
+                <button type="button" id="upload-report-btn" class="btn btn-outline-secondary ms-2">
+                    <i class="bi bi-upload me-2"></i>Upload Report
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Display Area -->
+    <div id="report-container" class="flex-grow-1" style="overflow-y: auto; display: none;">
+        <div class="content-card">
+            <div id="report-content" data-raw-markdown=""></div>
         </div>
     </div>
     
-    <!-- Compact Phase Description -->
-    <p class="phase-description">
-        Enter a topic, threat actor technique, or behavior to generate a research report, or upload an existing report.
-    </p>
-
-    <!-- Create Research Report Section -->
-    <div class="action-section mb-4">
-        <div class="action-section-title mb-3">
-            <i class="bi bi-robot me-2"></i>Create Research Report
-        </div>
-        
-        <!-- Combined Input and Upload Section for Better Space Usage -->
-        <div class="row g-3">
-            <!-- Research Topic Section -->
-            <div class="col-md-8">
-                <div class="input-group">
-                    <input type="text" id="topic-input" class="form-control" 
-                           placeholder="e.g., Kerberoasting, Initial Access via Phishing">
-                    <button id="generate-btn" class="btn btn-primary">
-                        <i class="bi bi-magic me-2"></i>Generate Report
-                    </button>
-                </div>
-            </div>
-            
-            <!-- Upload Section -->
-            <div class="col-md-4">
-                <input type="file" id="upload-report-file" class="form-control" accept=".md,.txt" style="display: none;">
-                <button type="button" id="upload-report-btn" class="btn btn-outline-secondary w-100">
-                    <i class="bi bi-upload me-2"></i>Upload Report
-                </button>
-                <small id="upload-report-filename" class="form-text text-muted"></small>
-            </div>
+    <!-- Initial Topic Input -->
+    <div id="initial-topic-container" class="action-section mt-auto p-3">
+        <div class="input-group">
+            <input type="text" id="topic-input" class="form-control" placeholder="Enter a threat actor behavior or technique">
+            <button id="generate-btn" class="btn btn-primary">
+                <i class="bi bi-magic me-2"></i>Generate Report
+            </button>
         </div>
     </div>
 
-    <!-- Content Display - Takes up most of the page -->
-    <div id="report-container" style="display: none;">
-        <div class="content-card">
-            <div id="report-content" data-raw-markdown=""></div>
+    <!-- Feedback Input Area -->
+    <div id="feedback-container" class="mt-auto p-3" style="display: none;">
+        <div class="input-group">
+            <textarea id="feedback-input" class="form-control" rows="3" placeholder="Provide feedback to refine the report."></textarea>
+            <button id="send-feedback-btn" class="btn btn-primary">
+                <i class="bi bi-send me-2"></i>Send Feedback
+            </button>
         </div>
     </div>
 </div>
 {% endblock %}
 
 {% block script %}
-/**
- * Research Phase Manager
- */
 class ResearchManager extends PhaseManager {
     constructor() {
         super('research', {
             apiEndpoint: '/api/research',
             contentContainer: 'report-content',
-            downloadContainer: 'report-actions-container',
+            downloadContainer: 'download-button-placeholder', // New container in the header
             sessionStorageKey: 'report_md',
             globalContentVar: 'currentReportMarkdown',
             responseContentKey: 'report',
             loadingMessage: 'Generating research report... (this may take several minutes)',
-            generateButtonTitle: 'Generate comprehensive research report',
-            generateButtonText: '<i class="bi bi-magic me-2"></i>Generate Report'
         });
     }
-    
+
     displayContent(content) {
-        // Override parent displayContent to handle report container visibility
-        const contentElement = document.getElementById(this.config.contentContainer);
-        const downloadContainer = document.getElementById(this.config.downloadContainer);
+        super.displayContent(content);
         const reportContainer = document.getElementById('report-container');
+        const initialContainer = document.getElementById('initial-topic-container');
+        const feedbackContainer = document.getElementById('feedback-container');
+        const downloadPlaceholder = document.getElementById(this.config.downloadContainer);
+        const isReportPresent = content && content.trim();
+
+        reportContainer.style.display = isReportPresent ? 'block' : 'none';
+        initialContainer.style.display = isReportPresent ? 'none' : 'block';
+        feedbackContainer.style.display = isReportPresent ? 'block' : 'none';
+        downloadPlaceholder.style.display = isReportPresent ? 'block' : 'none';
         
-        if (content && content.trim()) {
-            if (this.config.globalContentVar) {
-                window[this.config.globalContentVar] = content;
-            }
-            contentElement.dataset.rawMarkdown = content;
-            ContentRenderer.renderMarkdown(content, contentElement);
-            
-            // Show the report container
-            if (reportContainer) {
-                reportContainer.style.display = 'block';
-            }
-            
-            if (downloadContainer) {
-                downloadContainer.style.display = 'flex';
-            }
+        if (isReportPresent) {
+            document.getElementById('feedback-input').value = '';
         } else {
-            ContentRenderer.clearContent(contentElement);
-            
-            // Hide the report container
-            if (reportContainer) {
-                reportContainer.style.display = 'none';
-            }
-            
-            if (downloadContainer) {
-                downloadContainer.style.display = 'none';
-            }
+            downloadPlaceholder.innerHTML = ''; // Clear download button if no report
         }
     }
-    
+
     setupEventListeners() {
-        const generateBtn = document.getElementById('generate-btn');
-        const topicInput = document.getElementById('topic-input');
-        const uploadReportBtn = document.getElementById('upload-report-btn');
-        const uploadReportFile = document.getElementById('upload-report-file');
-        
-        if (generateBtn) {
-            generateBtn.addEventListener('click', () => this.handleGenerate());
-        }
-        
-        if (topicInput) {
-            topicInput.addEventListener('keydown', (event) => {
-                if (event.key === 'Enter') {
-                    event.preventDefault();
-                    this.handleGenerate();
-                }
-            });
-        }
-        
-        if (uploadReportBtn) {
-            uploadReportBtn.addEventListener('click', () => {
-                uploadReportFile.click(); // Trigger hidden file input
-            });
-        }
-        
-        if (uploadReportFile) {
-            uploadReportFile.addEventListener('change', () => {
-                const file = uploadReportFile.files[0];
-                if (!file) {
-                    return;
-                }
-                
-                const uploadReportFilename = document.getElementById('upload-report-filename');
-                uploadReportFilename.textContent = file.name;
-                
-                // Auto-upload when file is selected (like ABLE table)
-                this.handleUpload();
-            });
-        }
+        document.getElementById('generate-btn').addEventListener('click', () => this.handleGenerate());
+        document.getElementById('topic-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') this.handleGenerate();
+        });
+
+        document.getElementById('send-feedback-btn').addEventListener('click', () => this.handleSendFeedback());
+        document.getElementById('feedback-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                this.handleSendFeedback();
+            }
+        });
+
+        const uploadBtn = document.getElementById('upload-report-btn');
+        const uploadFile = document.getElementById('upload-report-file');
+        uploadBtn.addEventListener('click', () => uploadFile.click());
+        uploadFile.addEventListener('change', () => this.handleUpload());
     }
-    
+
     async handleGenerate() {
         const topicInput = document.getElementById('topic-input');
         const topic = topicInput.value.trim();
-        
         if (!topic) {
             UIFeedback.show('error', 'Please enter a research topic.');
             return;
         }
-        
-        try {
-            const response = await this.generateContent({ topic });
-            
-            // Store topic for reference
-            sessionStorage.setItem('last_topic', topic);
-        } catch (error) {
-            // Error handling is already done in the parent class
-        }
+        this.config.loadingMessage = 'Generating initial research report...';
+        await this.generateContent({ topic });
+        sessionStorage.setItem('last_topic', topic);
     }
-    
-    async handleUpload() {
-        const uploadReportFile = document.getElementById('upload-report-file');
-        const uploadReportFilename = document.getElementById('upload-report-filename');
-        const file = uploadReportFile.files[0];
-        
-        if (!file) {
+
+    async handleSendFeedback() {
+        const feedbackInput = document.getElementById('feedback-input');
+        const feedback = feedbackInput.value.trim();
+        const previousReport = document.getElementById('report-content').dataset.rawMarkdown;
+
+        if (!feedback) {
+            UIFeedback.show('error', 'Please enter feedback to refine the report.');
+            return;
+        }
+        if (!previousReport) {
+            UIFeedback.show('error', 'Cannot send feedback without a report. Please generate a report first.');
             return;
         }
 
-        UIFeedback.hideError();
+        this.config.loadingMessage = 'Refining report based on your feedback...';
+        await this.generateContent({ 
+            topic: sessionStorage.getItem('last_topic') || 'Refining uploaded report',
+            previous_report: previousReport,
+            feedback: feedback
+        });
+    }
+
+    async handleUpload() {
+        const fileInput = document.getElementById('upload-report-file');
+        const file = fileInput.files[0];
+        if (!file) return;
+
         UIFeedback.show('loading', 'Uploading report...');
-        
         try {
             const formData = new FormData();
             formData.append('file', file);
-            
             const response = await this.apiClient.uploadFile('/api/upload-report', formData);
-            UIFeedback.hideLoading();
-            
             if (response.success) {
-                // Use parent's displayContent method which handles everything properly
                 this.displayContent(response.content);
                 sessionStorage.setItem(this.config.sessionStorageKey, response.content);
-                
-                uploadReportFilename.textContent = file.name + ' uploaded successfully!';
-                setTimeout(() => { uploadReportFilename.textContent = file.name; }, 3000); // Reset after a few seconds
-                
+                sessionStorage.removeItem('last_topic'); // Clear previous topic on new upload
                 this.onContentGenerated(response);
+                UIFeedback.show('success', `Uploaded '${file.name}' successfully.`);
             } else {
                 throw new Error(response.error || 'Upload failed');
             }
         } catch (error) {
-            UIFeedback.hideLoading();
             UIFeedback.show('error', 'Upload error: ' + error.message, error.detail);
-            uploadReportFilename.textContent = 'Upload failed. Try again.';
+        } finally {
+            UIFeedback.hideLoading();
+            fileInput.value = ''; // Reset file input
         }
     }
-    
+
     onContentGenerated(response) {
-        // Setup download button - container visibility is handled by displayContent
         DownloadManager.setupDownloadButton(
             this.config.contentContainer,
             'research_report',
@@ -225,8 +178,7 @@ class ResearchManager extends PhaseManager {
     }
 }
 
-// Initialize the Research Manager when DOM is ready
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', () => {
     window.researchManager = new ResearchManager();
 });
 {% endblock %}

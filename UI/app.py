@@ -180,31 +180,43 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 @app.route('/api/research', methods=['POST'])
 @async_action
 async def research():
-    data = request.json
+    # Generate or refine research report using AI agents
+    data = request.get_json()
     topic = data.get('topic')
-    retry_count = int(data.get('retry_count', 3))
-    verbose_mode = data.get('verbose_mode', False)
+    previous_report = data.get('previous_report')
+    feedback = data.get('feedback')
+    verbose_mode = data.get('verbose', False)
     
-    if not topic:
-        return jsonify({'success': False, 'error': 'No topic provided'}), 400
+    # Get local context from session
+    local_context = session.get('local_context', INITIAL_LOCAL_CONTEXT)
     
-    local_context = session.get('local-context', '')  # Get local context from session
+    # Import the researcher function and TextMessage
+    from research_assistant.research_assistant_cli import researcher
+    from autogen_agentchat.messages import TextMessage
+
+    previous_run = None
+    if previous_report and feedback:
+        # Construct the conversation history for refinement
+        previous_run = [
+            TextMessage(content=f"The current report draft is: {previous_report}\n", source="user"),
+            TextMessage(content=f"User feedback: {feedback}\n", source="user")
+        ]
 
     try:
-        # Use the agent framework
-        messages = await retry_api_call(
-            async_researcher, 
-            topic, 
-            local_context=local_context,  # Pass local context
+        # Run the researcher
+        result = await retry_api_call(
+            researcher, 
+            technique=topic, 
+            local_context=local_context, 
             verbose=verbose_mode,
-            max_retries=retry_count
+            previous_run=previous_run
         )
-        report_md = extract_report_md(messages)
+        
+        # Extract the report markdown
+        report_md = extract_report_md(result)
         
         # Store in session
         session['report_md'] = report_md
-        session['last_topic'] = topic
-        
         return jsonify({'success': True, 'report': report_md})
     except Exception as e:
         error_msg = str(e)
