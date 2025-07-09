@@ -134,11 +134,6 @@ async def identify_data_sources(
     if previous_run:
         messages = messages + previous_run
 
-    print("------------------------------------------------")
-    for m in messages:
-        print(f"{m.source}: {m.content}")
-    print("------------------------------------------------")
-
     # Initialize the model client
     auth_mgr = PEAKAssistantAuthManager()
     az_model_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr)
