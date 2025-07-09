@@ -1179,30 +1179,16 @@
         if (clearSessionSidebarBtn) {
             clearSessionSidebarBtn.addEventListener('click', function() {
                 if (confirm('Are you sure you want to clear all session data? This will reset the application state.')) {
-                    showLoading('Clearing session...');
-                    fetch('/clear-session', { method: 'POST' })
-                    .then(response => response.json())
-                    .then(data => {
-                        hideLoading();
-                        if (data.success) {
-                            // Clear relevant sessionStorage items
-                            const sessionKeys = [
-                                'report_md', 'last_topic', 'hypotheses', 'current_hypothesis', 
-                                'refined_hypothesis', 'able_table_md', 'data_sources_md', 
-                                'currentPlanMarkdown', 'hunt_plan'
-                            ];
-                            sessionKeys.forEach(key => sessionStorage.removeItem(key));
+                    // Clear client-side storage immediately and unconditionally.
+                    sessionStorage.clear();
+                    localStorage.clear();
 
-                            alert('Session cleared successfully. The page will now reload.');
-                            window.location.reload();
-                        } else {
-                            showError('Failed to clear session: ' + (data.error || 'Unknown error'));
-                        }
-                    })
-                    .catch(error => {
-                        hideLoading();
-                        showError('Error clearing session: ' + error.message);
-                    });
+                    // Attempt to clear server session, but don't let it block the UI reset.
+                    fetch('/api/clear-session', { method: 'POST' });
+
+                    // Inform the user and force a redirect to the home page for a clean start.
+                    alert('Session cleared. The application will now restart.');
+                    window.location.href = '/';
                 }
             });
         }

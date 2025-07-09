@@ -207,7 +207,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         this.style.color = 'white';
                         this.style.boxShadow = '0 4px 12px rgba(13,110,253,0.3)';
                         // Save and display the hypothesis
-                        saveAndDisplayHypothesis(this.dataset.value);
+                        updateCurrentHypothesisUI(this.dataset.value);
                     });
                     
                     selectElement.appendChild(optionDiv);
@@ -320,12 +320,12 @@ document.addEventListener('DOMContentLoaded', function() {
         currentHypoEdit.dataset.rawMarkdown = hypothesis; // Update for download helper
 
         if (hypothesis.trim() !== '') {
-            sessionStorage.setItem('current_hypothesis', hypothesis);
+            sessionStorage.setItem('hypothesis', hypothesis); // Standardize key
             sessionStorage.removeItem('refined_hypothesis'); // New current hypothesis invalidates refinement
             currentHypoContainer.style.display = 'block';
             downloadHypoActionsContainer.style.display = 'flex'; // Show download button
         } else {
-            sessionStorage.removeItem('current_hypothesis');
+            sessionStorage.removeItem('hypothesis');
             // Optionally hide if empty, or leave it, depending on desired UX
             // currentHypoContainer.style.display = 'none';
             // downloadHypoActionsContainer.style.display = 'none';

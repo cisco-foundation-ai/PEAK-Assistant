@@ -287,47 +287,49 @@ def save_hypothesis():
 @app.route('/api/refine', methods=['POST'])
 @async_action
 async def refine():
-    data = request.json
-    hypothesis = data.get('hypothesis') or session.get('hypothesis', '')
-    report_md = data.get('report_md') or session.get('report_md', '')
-    retry_count = int(data.get('retry_count', 3))
-    refine_option = data.get('refine', True)  # Default to true to maintain backward compatibility
+    # Refine a threat hunting hypothesis using AI agents
+    data = request.get_json()
+    hypothesis = data.get('hypothesis')
+    feedback = data.get('feedback')
+    verbose_mode = data.get('verbose', False)
     
-    if not hypothesis:
-        return jsonify({'success': False, 'error': 'No hypothesis provided'}), 400
+    # Get research report from session
+    research_report = session.get('report_md', '')
+    if not research_report:
+        return jsonify({'success': False, 'error': 'No research report found in session. Please complete the research phase first.'}), 400
     
-    # If refine is False, just save the hypothesis and return
-    if not refine_option:
-        session['hypothesis'] = hypothesis
-        session.pop('refined_hypothesis', None)
-        return jsonify({'success': True, 'refined_hypothesis': hypothesis})
+    # Get local context from session
+    local_context = session.get('local_context', INITIAL_LOCAL_CONTEXT)
     
-    verbose_mode = data.get('verbose_mode', False)
-    local_context = session.get('local-context', '')  # Get local context from session
+    # Import the refiner function and TextMessage
+    from hypothesis_assistant.hypothesis_refiner_cli import refiner
+    from autogen_agentchat.messages import TextMessage
+
+    previous_run = None
+    if feedback:
+        # Construct the conversation history for refinement
+        previous_run = [
+            TextMessage(content=f"The current refined hypothesis is: {hypothesis}\n", source="user"),
+            TextMessage(content=f"User feedback: {feedback}\n", source="user")
+        ]
 
     try:
-        refined = await retry_api_call(
-            async_refiner, 
-            hypothesis, 
-            local_context,  # Pass local context as positional argument
-            report_md, 
-            automated=True,
+        # Run the refiner
+        result = await retry_api_call(
+            refiner,
+            hypothesis=hypothesis,
+            local_context=local_context,
+            research_document=research_report,
             verbose=verbose_mode,
-            max_retries=retry_count
+            previous_run=previous_run
         )
-        # Extract the final message from the critic agent
-        accepted = None
-        if hasattr(refined, 'messages'):
-            accepted = next((m.content for m in reversed(refined.messages) if getattr(m, 'source', None) == "critic"), None)
-            if accepted:
-                accepted = accepted.replace("YYY-HYPOTHESIS-ACCEPTED-YYY", "").strip()
-        if not accepted:
-            if hasattr(refined, 'content'):
-                accepted = refined.content
-            else:
-                accepted = str(refined)
-        session['refined_hypothesis'] = accepted  # Store separately
-        return jsonify({'success': True, 'refined_hypothesis': accepted})
+        
+        # Extract the refined hypothesis
+        refined_hypothesis = extract_accepted_hypothesis(result)
+        
+        # Store in session
+        session['hypothesis'] = refined_hypothesis
+        return jsonify({'success': True, 'refined_hypothesis': refined_hypothesis})
     except Exception as e:
         error_msg = str(e)
         if "500" in error_msg and "Internal server error" in error_msg:

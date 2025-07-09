@@ -1,187 +1,153 @@
 {% extends "base.html" %}
 
-{% set prev_phase_url = "/hypothesis" %}
+{% block title %}Hypothesis Refinement - PEAK Assistant{% endblock %}
+
+{% set prev_phase_url = url_for('hypothesis_page') %}
 {% set prev_phase_name = "Hypothesis Generation" %}
-{% set next_phase_url = "/able-table" %}
-{% set next_phase_name = "Generate ABLE Table" %}
+{% set next_phase_url = url_for('able_table_page') %}
+{% set next_phase_name = "ABLE Table Generation" %}
 
 {% block nav %}{{ super() }}{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h2 class="mb-0">Hypothesis Refinement (Optional)</h2>
-    <div id="download-refined-hypo-actions-container" style="display: none;">
-        <!-- Download button will be inserted here by script -->
+<div class="phase-container d-flex flex-column" style="height: calc(100vh - 80px);">
+    <!-- Header -->
+    <div class="phase-header">
+        <h1 class="phase-title">Hypothesis Refinement</h1>
+        <p class="phase-description mb-2">
+            Review the current hypothesis. Provide feedback to the AI assistant to refine it.
+        </p>
     </div>
-</div>
 
-<div id="no-hypothesis-warning" class="alert alert-warning mb-4" style="display: none;">
-    <strong>Note:</strong> No hypothesis found. Please generate or select a hypothesis in the Hypothesis Phase first.
-</div>
+    <!-- Main Content Area: Use flex-grow-1 to take up available space -->
+    <div class="flex-grow-1" style="overflow-y: auto;">
+        <!-- Hypothesis Display Area (always visible) -->
+        <div id="hypothesis-container" class="content-card p-3 m-3">
+            <div id="hypothesis-content" data-raw-hypothesis=""></div>
+            <div id="no-hypothesis-placeholder" class="text-muted fst-italic" style="display: none;">
+                No hypothesis available. Use the feedback area below to generate one.
+            </div>
+        </div>
+    </div>
 
-<div id="current-hypo-container" style="display: none;" class="mb-4">
-    <h4><i class="bi bi-lightbulb me-2"></i>Current Hypothesis</h4>
-    <div id="current-hypo-content" class="border rounded p-3" data-raw-markdown=""></div>
-</div>
+    <!-- Warning for Missing Hypothesis -->
+    <div id="no-hypothesis-warning" class="prerequisite-warning p-4 rounded-3 m-3" style="display: none;">
+        <h5 class="mb-1"><i class="bi bi-exclamation-triangle-fill me-2"></i>Missing Hypothesis</h5>
+        <p class="mb-0">No hypothesis found. Please <a href="{{ url_for('hypothesis_page') }}" class="alert-link">create a hypothesis</a> first.</p>
+    </div>
 
-<div class="form-check form-switch mb-3">
-    <input class="form-check-input" type="checkbox" id="refine-checkbox" checked>
-    <label class="form-check-label" for="refine-checkbox">
-        Refine hypothesis automatically?
-    </label>
-</div>
-
-<div id="refine-btn-container" class="mb-3">
-    <button id="refine-btn" class="btn btn-primary">Refine Hypothesis</button>
-</div>
-
-<div id="refined-hypo-container" style="display: none;">
-    <h4>Refined Hypothesis</h4>
-    <div id="refined-hypo-content" class="border rounded p-3" data-raw-markdown=""></div>
+    <!-- Feedback Input Area: Stays at the bottom (always visible) -->
+    <div id="feedback-container" class="action-section mt-auto p-3">
+        <div class="input-group">
+            <textarea id="feedback-input" class="form-control" rows="3" placeholder="Provide feedback to refine the hypothesis."></textarea>
+            <button id="send-feedback-btn" class="btn btn-primary">
+                <i class="bi bi-send me-2"></i>Send Feedback
+            </button>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
 {% block script %}
-// Store current and refined hypothesis markdown for download
-window.currentHypothesisMarkdown = ''; // For the original hypothesis displayed
-window.currentRefinedHypothesisMarkdown = ''; // For the refined hypothesis
 
-document.addEventListener('DOMContentLoaded', function() {
-    const currentHypoContainer = document.getElementById('current-hypo-container');
-    const currentHypoContent = document.getElementById('current-hypo-content');
-    const refinedHypoContainer = document.getElementById('refined-hypo-container');
-    const refinedHypoContent = document.getElementById('refined-hypo-content');
-    const noHypothesisWarning = document.getElementById('no-hypothesis-warning');
-    const refineBtn = document.getElementById('refine-btn');
-    const refineCheckbox = document.getElementById('refine-checkbox');
-    const downloadRefinedHypoActionsContainer = document.getElementById('download-refined-hypo-actions-container');
+class RefinementManager {
+    constructor() {
 
-    // Setup combined download button for refined hypothesis
-    setupDownloadButton('refined-hypo-content', 'refined_hypothesis', 'download-refined-hypo-actions-container');
+        this.hypothesisContent = document.getElementById('hypothesis-content');
+        this.hypothesisContainer = document.getElementById('hypothesis-container');
+        this.feedbackContainer = document.getElementById('feedback-container');
+        this.noHypothesisWarning = document.getElementById('no-hypothesis-warning');
+        this.feedbackInput = document.getElementById('feedback-input');
 
-    function updateUIDisplay(sessionData) {
-        const hypothesis = sessionData.hypothesis;
-        const refinedHypothesis = sessionData.refined_hypothesis;
+        this.setupEventListeners();
+        this.loadInitialData();
+    }
 
-        if (!hypothesis || hypothesis.trim() === '') {
-            noHypothesisWarning.style.display = 'block';
-            currentHypoContainer.style.display = 'none';
-            refinedHypoContainer.style.display = 'none';
-            downloadRefinedHypoActionsContainer.style.display = 'none';
-            refineBtn.disabled = true; // Disable refine button if no hypothesis
+    setupEventListeners() {
+        document.getElementById('send-feedback-btn').addEventListener('click', () => this.handleSendFeedback());
+        this.feedbackInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                this.handleSendFeedback();
+            }
+        });
+    }
+
+    loadInitialData() {
+        console.log('RefinementManager: loading initial data...');
+        const hypothesis = sessionStorage.getItem('hypothesis');
+        console.log('RefinementManager: hypothesis from sessionStorage:', hypothesis);
+        this.displayHypothesis(hypothesis);
+    }
+
+    displayHypothesis(hypothesis) {
+        console.log('RefinementManager: displayHypothesis called with:', hypothesis);
+        const isHypothesisPresent = hypothesis && hypothesis.trim();
+        console.log('RefinementManager: isHypothesisPresent:', isHypothesisPresent);
+        const noHypothesisPlaceholder = document.getElementById('no-hypothesis-placeholder');
+
+        if (isHypothesisPresent) {
+            console.log('RefinementManager: displaying hypothesis.');
+            this.noHypothesisWarning.style.display = 'none';
+            this.hypothesisContent.style.display = 'block';
+            noHypothesisPlaceholder.style.display = 'none';
+
+            ContentRenderer.renderMarkdown(hypothesis, this.hypothesisContent);
+            this.hypothesisContent.dataset.rawHypothesis = hypothesis;
+            sessionStorage.setItem('hypothesis', hypothesis);
+            this.feedbackInput.value = '';
+        } else {
+            console.log('RefinementManager: displaying placeholder.');
+            this.noHypothesisWarning.style.display = 'none'; // Hide the warning
+            this.hypothesisContent.style.display = 'none';
+            noHypothesisPlaceholder.style.display = 'block';
+        }
+    }
+
+    async handleSendFeedback() {
+        const feedback = this.feedbackInput.value.trim();
+        const previousHypothesis = this.hypothesisContent.dataset.rawHypothesis;
+
+        if (!feedback) {
+            UIFeedback.show('error', 'Please enter feedback to refine the hypothesis.');
             return;
         }
 
-        noHypothesisWarning.style.display = 'none';
-        refineBtn.disabled = false;
-
-        // Display current hypothesis
-        window.currentHypothesisMarkdown = hypothesis;
-        currentHypoContent.dataset.rawMarkdown = hypothesis;
-        renderMarkdown(hypothesis, currentHypoContent);
-        currentHypoContainer.style.display = 'block';
-
-        // Display refined hypothesis if available
-        if (refinedHypothesis && refinedHypothesis.trim() !== '') {
-            window.currentRefinedHypothesisMarkdown = refinedHypothesis;
-            refinedHypoContent.dataset.rawMarkdown = refinedHypothesis;
-            renderMarkdown(refinedHypothesis, refinedHypoContent);
-            refinedHypoContainer.style.display = 'block';
-            downloadRefinedHypoActionsContainer.style.display = 'flex';
-            sessionStorage.setItem('refined_hypothesis', refinedHypothesis);
-        } else {
-            refinedHypoContainer.style.display = 'none';
-            downloadRefinedHypoActionsContainer.style.display = 'none';
-            window.currentRefinedHypothesisMarkdown = ''; // Clear if not present
-            refinedHypoContent.dataset.rawMarkdown = '';
-            sessionStorage.removeItem('refined_hypothesis');
-        }
-        if (typeof checkHuntPlanningPrerequisites === 'function') {
-            checkHuntPlanningPrerequisites();
-        }
-    }
-
-    function loadInitialData() {
-        showLoading('Loading hypothesis data...');
-        fetch('/api/debug-info')
-            .then(response => response.json())
-            .then(data => {
-                hideLoading();
-                if (data.session_data) {
-                    updateUIDisplay(data.session_data);
-                } else {
-                    // Handle case where session_data might be missing
-                    updateUIDisplay({}); // Pass empty object to show warnings
-                }
-            })
-            .catch(error => {
-                hideLoading();
-                showError('Error loading initial data: ' + error.message);
-                updateUIDisplay({}); // Show warnings on error too
-            });
-    }
-
-    refineBtn.addEventListener('click', function() {
-        // Clear existing refined content immediately
-        window.currentRefinedHypothesisMarkdown = '';
-        refinedHypoContent.dataset.rawMarkdown = '';
-        refinedHypoContainer.style.display = 'none';
-        downloadRefinedHypoActionsContainer.style.display = 'none';
-        sessionStorage.removeItem('refined_hypothesis');
-        
-        hideError();
-        showLoading('Refining hypothesis...');
-        
-        let retryCount = 3; // Default value
-        const storedRetryCount = localStorage.getItem('retry-count-page');
-        if (storedRetryCount) {
-            const parsedRetryCount = parseInt(storedRetryCount, 10);
-            if (!isNaN(parsedRetryCount)) {
-                retryCount = parsedRetryCount;
-            } else {
-                console.warn('Invalid retry count in localStorage for refinement, using default (3).');
-            }
+        if (!previousHypothesis) {
+            UIFeedback.show('error', 'No hypothesis to refine. Please go back to the previous step.');
+            return;
         }
 
-        const storedVerboseMode = localStorage.getItem('debug-mode-page');
-        const verboseMode = storedVerboseMode === 'true';
-        
-        const refineOption = refineCheckbox.checked;
-
+        UIFeedback.show('loading', 'Refining hypothesis based on your feedback...');
         fetch('/api/refine', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+            },
             body: JSON.stringify({ 
-                retry_count: retryCount,
-                verbose_mode: verboseMode,
-                refine: refineOption // Pass the refine option to the backend
-            })
+                hypothesis: previousHypothesis, 
+                feedback: feedback 
+            }),
         })
         .then(response => response.json())
         .then(data => {
-            hideLoading();
             if (data.success) {
-                // Re-fetch session data to update UI with potentially new hypothesis and refined_hypothesis
-                loadInitialData(); 
+                this.displayHypothesis(data.refined_hypothesis);
+                UIFeedback.show('success', 'Hypothesis refined successfully.');
             } else {
-                let errorDetail = data.detail || null;
-                if (data.error && data.error.includes('OpenAI API internal server error')) {
-                    showError(
-                        'OpenAI API internal server error. This is an issue with OpenAI\\\'s servers. Maximum retry attempts reached. \\n\\nTip: You can try again later, proceed with your current hypothesis, or increase the retry count.',
-                        errorDetail
-                    );
-                } else {
-                    showError('Error refining hypothesis: ' + (data.error || 'Unknown error'), errorDetail);
-                }
+                throw new Error(data.error || 'Refinement failed');
             }
         })
         .catch(error => {
-            hideLoading();
-            showError('Network error: ' + error.message);
+            UIFeedback.show('error', 'Refinement Error: ' + error.message);
+        })
+        .finally(() => {
+            UIFeedback.hideLoading();
         });
-    });
+    }
+}
 
-    // Initial load of data
-    loadInitialData();
+document.addEventListener('DOMContentLoaded', () => {
+    window.refinementManager = new RefinementManager();
 });
 {% endblock %}
