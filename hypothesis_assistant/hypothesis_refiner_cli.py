@@ -200,12 +200,13 @@ if __name__ == "__main__":
             exit(1)
 
     messages = list()
+    current_hypothesis = args.hypothesis
     while True:
 
         # Run the hypothesizer asynchronously
         messages = asyncio.run(
             refiner(
-                hypothesis=args.hypothesis, 
+                hypothesis=current_hypothesis,
                 local_context=local_context, 
                 research_document=research_data,
                 verbose=args.verbose,
@@ -220,16 +221,15 @@ if __name__ == "__main__":
         )
 
         # Remove the trailing "YYY-HYPOTHESIS-ACCEPTED-YYY" string
-        refined_hypothesis = refined_hypothesis_message.replace("YYY-HYPOTHESIS-ACCEPTED-YYY", "").strip()
+        current_hypothesis = refined_hypothesis_message.replace("YYY-HYPOTHESIS-ACCEPTED-YYY", "").strip()
 
         # Print the refined hypothesis and ask for user feedback
-        print(refined_hypothesis)
+        print(current_hypothesis)
         feedback = input("Please provide your feedback on the refined hypothesis (or press Enter to approve it): ")
 
         if feedback.strip():
             # If feedback is provided, add it to the messages and loop back to the refiner
             messages = [
-                TextMessage(content=f"The current refined hypothesis is: {refined_hypothesis}\n", source="user"),
                 TextMessage(content=f"User feedback: {feedback}\n", source="user")
             ]
         else:
