@@ -36,7 +36,8 @@ async def identify_data_sources(
     local_context: str = None,
     mcp_command: str = None,
     mcp_args: list = None,
-    verbose: bool = False
+    verbose: bool = False,
+    previous_run: list = None
 ) -> str:
     """
     Data agent that consumes a hunting research report and a hypothesis, then
@@ -129,6 +130,16 @@ async def identify_data_sources(
         TextMessage(content=f"Splunk MCP password: {os.getenv('SPLUNK_MCP_PASSWD')}\n", source="system")
     ]
 
+    # If we have messages from a previous run, add them so we can continue the research
+    if previous_run:
+        messages = messages + previous_run
+
+    print("------------------------------------------------")
+    for m in messages:
+        print(f"{m.source}: {m.content}")
+    print("------------------------------------------------")
+
+    # Initialize the model client
     auth_mgr = PEAKAssistantAuthManager()
     az_model_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr)
 
@@ -249,26 +260,38 @@ if __name__ == "__main__":
             print(f"Error reading local context: {e}")
             exit(1)
 
-    # Run the hypothesizer asynchronously
-    data_sources = asyncio.run(
-        identify_data_sources(
-            hypothesis=args.hypothesis, 
-            research_document=research_data, 
-            able_info=able_info,
-            local_context=local_context,
-            mcp_command=mcp_command,
-            mcp_args=mcp_args_str,
-            verbose=args.verbose
+    messages = list()
+    while True:
+        # Run the hypothesizer asynchronously
+        data_sources = asyncio.run(
+            identify_data_sources(
+                hypothesis=args.hypothesis, 
+                research_document=research_data, 
+                able_info=able_info,
+                local_context=local_context,
+                mcp_command=mcp_command,
+                mcp_args=mcp_args_str,
+                verbose=args.verbose,
+                previous_run=messages
+            )
         )
-    )
 
-    # Find the final message from the "critic" agent using next() and a generator expression
-    data_sources_message = next(
-        (message.content for message in reversed(data_sources.messages) if message.source == "Data_Discovery_Agent"),
-        None  # Default value if no "critic" message is found
-    )
+        # Find the final message from the "critic" agent using next() and a generator expression
+        data_sources_message = next(
+            (message.content for message in reversed(data_sources.messages) if message.source == "Data_Discovery_Agent"),
+            None  # Default value if no "critic" message is found
+        )
 
-    # Remove the trailing "YYY-TERMINATE-YYY" string
-#    data_sources_text = data_sources_message.replace("YYY-TERMINATE-YYY", "").strip()
+        # Display the data sources and ask for user feedback
+        print(data_sources_message)
+        feedback = input("Please provide your feedback on the data sources (or press Enter to approve it): ")   
 
-    print(data_sources_message)
+        if feedback.strip():
+            # If feedback is provided, add it to the messages and loop back to
+            # the data discovery team for further refinement
+            messages = [
+                TextMessage(content=f"The current data sources draft is: {data_sources_message}\n", source="user"),
+                TextMessage(content=f"User feedback: {feedback}\n", source="user")
+            ]
+        else:
+            break
