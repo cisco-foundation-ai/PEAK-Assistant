@@ -27,7 +27,8 @@ def find_dotenv_file():
 async def able_table(
         hypothesis: str = None, 
         research_document: str = None,
-        local_context: str = None
+        local_context: str = None,
+        previous_run: list = None
 ) -> str:
     """
     Generate a PEAK ABLE table based on the given hypothesis and research document.
@@ -118,6 +119,10 @@ async def able_table(
         UserMessage(content=f"Additional local context: {local_context}\n", source="user"),
     ]
 
+    # If we have messages from a previous run, add them so we can continue the research
+    if previous_run:
+        messages = messages + previous_run 
+
     auth_mgr = PEAKAssistantAuthManager()
     az_model_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr)
 
@@ -181,12 +186,27 @@ if __name__ == "__main__":
             print(f"Error reading local context: {e}")
             exit(1)
 
-    # Run the hypothesizer asynchronously
-    able_table = asyncio.run(
-        able_table(
-            hypothesis=args.hypothesis, 
-            research_document=research_data,
-            local_context=local_context
+    messages = list()
+    while True:
+        # Run the hypothesizer asynchronously
+        able = asyncio.run(
+            able_table(
+                hypothesis=args.hypothesis, 
+                research_document=research_data,
+                local_context=local_context,
+                previous_run=messages
+            )
         )
-    )
-    print(able_table)
+        print(able)
+
+        feedback = input("Please provide your feedback on the ABLE table (or press Enter to approve it): ")   
+
+        if feedback.strip():
+            # If feedback is provided, add it to the messages and loop back to
+            # the research team for further refinement
+            messages = [
+                UserMessage(content=f"The current ABLE draft is: {able}\n", source="user"),
+                UserMessage(content=f"User feedback: {feedback}\n", source="user")
+            ]
+        else:
+            break        
