@@ -22,10 +22,12 @@
     <!-- Main Content Area: Use flex-grow-1 to take up available space -->
     <div class="flex-grow-1" style="overflow-y: auto;">
         <!-- Hypothesis Display Area (always visible) -->
-        <div id="hypothesis-container" class="content-card p-3 m-3">
+        <!-- Current Hypothesis Display Area -->
+        <div class="content-card p-3 m-3">
+            <h5 class="text-muted">Current Hypothesis</h5>
             <div id="hypothesis-content" data-raw-hypothesis=""></div>
             <div id="no-hypothesis-placeholder" class="text-muted fst-italic" style="display: none;">
-                No hypothesis available. Use the feedback area below to generate one.
+                No hypothesis available. Please generate one on the previous page.
             </div>
         </div>
     </div>
@@ -52,12 +54,9 @@
 
 class RefinementManager {
     constructor() {
-
         this.hypothesisContent = document.getElementById('hypothesis-content');
-        this.hypothesisContainer = document.getElementById('hypothesis-container');
-        this.feedbackContainer = document.getElementById('feedback-container');
-        this.noHypothesisWarning = document.getElementById('no-hypothesis-warning');
         this.feedbackInput = document.getElementById('feedback-input');
+        this.noHypothesisWarning = document.getElementById('no-hypothesis-warning');
 
         this.setupEventListeners();
         this.loadInitialData();
@@ -74,76 +73,80 @@ class RefinementManager {
     }
 
     loadInitialData() {
-        console.log('RefinementManager: loading initial data...');
-        const hypothesis = sessionStorage.getItem('hypothesis');
-        console.log('RefinementManager: hypothesis from sessionStorage:', hypothesis);
+        // Prioritize loading the refined hypothesis, fall back to the original
+        const hypothesis = sessionStorage.getItem('refined_hypothesis') || sessionStorage.getItem('hypothesis');
         this.displayHypothesis(hypothesis);
+
+        if (hypothesis && hypothesis.trim()) {
+            // Get initial refinement when the page loads
+            this.fetchRefinement(hypothesis, null);
+        }
     }
 
     displayHypothesis(hypothesis) {
-        console.log('RefinementManager: displayHypothesis called with:', hypothesis);
         const isHypothesisPresent = hypothesis && hypothesis.trim();
-        console.log('RefinementManager: isHypothesisPresent:', isHypothesisPresent);
         const noHypothesisPlaceholder = document.getElementById('no-hypothesis-placeholder');
 
         if (isHypothesisPresent) {
-            console.log('RefinementManager: displaying hypothesis.');
             this.noHypothesisWarning.style.display = 'none';
             this.hypothesisContent.style.display = 'block';
             noHypothesisPlaceholder.style.display = 'none';
 
             ContentRenderer.renderMarkdown(hypothesis, this.hypothesisContent);
             this.hypothesisContent.dataset.rawHypothesis = hypothesis;
-            sessionStorage.setItem('hypothesis', hypothesis);
-            this.feedbackInput.value = '';
+            // Always save the latest version as the refined_hypothesis
+            sessionStorage.setItem('refined_hypothesis', hypothesis);
         } else {
-            console.log('RefinementManager: displaying placeholder.');
-            this.noHypothesisWarning.style.display = 'none'; // Hide the warning
+            this.noHypothesisWarning.style.display = 'none';
             this.hypothesisContent.style.display = 'none';
             noHypothesisPlaceholder.style.display = 'block';
         }
     }
 
-    async handleSendFeedback() {
+    async fetchRefinement(hypothesis, feedback) {
+        const endpoint = '/api/refine';
+        const payload = { hypothesis, feedback };
+        console.log('Sending to /api/refine:', payload);
+        const loadingMessage = feedback ? 'Refining based on your feedback...' : 'Getting initial refinement...';
+
+        UIFeedback.show('loading', loadingMessage);
+        try {
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await response.json();
+            if (data.success) {
+                // Directly update the main hypothesis
+                this.displayHypothesis(data.refined_hypothesis);
+                if (feedback) {
+                    this.feedbackInput.value = ''; // Clear feedback input on success
+                }
+            } else {
+                throw new Error(data.error || 'Failed to get refinement');
+            }
+        } catch (error) {
+            UIFeedback.show('error', 'Error: ' + error.message);
+        } finally {
+            UIFeedback.hideLoading();
+        }
+    }
+
+    handleSendFeedback() {
         const feedback = this.feedbackInput.value.trim();
-        const previousHypothesis = this.hypothesisContent.dataset.rawHypothesis;
+        const currentHypothesis = this.hypothesisContent.dataset.rawHypothesis;
 
         if (!feedback) {
             UIFeedback.show('error', 'Please enter feedback to refine the hypothesis.');
             return;
         }
-
-        if (!previousHypothesis) {
-            UIFeedback.show('error', 'No hypothesis to refine. Please go back to the previous step.');
+        if (!currentHypothesis) {
+            UIFeedback.show('error', 'No hypothesis to refine.');
             return;
         }
 
-        UIFeedback.show('loading', 'Refining hypothesis based on your feedback...');
-        fetch('/api/refine', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ 
-                hypothesis: previousHypothesis, 
-                feedback: feedback 
-            }),
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                this.displayHypothesis(data.refined_hypothesis);
-                UIFeedback.show('success', 'Hypothesis refined successfully.');
-            } else {
-                throw new Error(data.error || 'Refinement failed');
-            }
-        })
-        .catch(error => {
-            UIFeedback.show('error', 'Refinement Error: ' + error.message);
-        })
-        .finally(() => {
-            UIFeedback.hideLoading();
-        });
+        this.fetchRefinement(currentHypothesis, feedback);
     }
 }
 

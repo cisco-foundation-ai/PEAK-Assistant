@@ -10,7 +10,8 @@ import io
 import json
 from dotenv import load_dotenv
 from pathlib import Path
-from functools import wraps
+import logging
+from functools import wraps, partial
 from markdown_pdf import MarkdownPdf, Section
 from flask_session import Session
 from werkzeug.utils import secure_filename
@@ -80,28 +81,32 @@ def extract_report_md(messages):
             report_md = str(messages)
     return report_md
 
-def extract_accepted_hypothesis(refined):
-    # Extract the accepted/refined hypothesis string from agent output
-    accepted = None
-    if hasattr(refined, 'messages'):
-        for m in reversed(refined.messages):
-            if isinstance(m.content, str) and 'YYY-HYPOTHESIS-ACCEPTED-YYY' in m.content:
-                idx = refined.messages.index(m)
-                if idx > 0:
-                    accepted = refined.messages[idx-1].content.strip()
-                break
-    elif isinstance(refined, list):
-        for i, m in enumerate(refined):
-            if hasattr(m, 'content') and isinstance(m.content, str) and 'YYY-HYPOTHESIS-ACCEPTED-YYY' in m.content:
-                if i > 0:
-                    accepted = refined[i-1].content.strip()
-                break
-    if not accepted:
-        if hasattr(refined, 'content'):
-            accepted = refined.content
-        else:
-            accepted = str(refined)
-    return accepted
+def extract_accepted_hypothesis(task_result):
+    # Find the last message from the 'critic' agent and extract the hypothesis.
+    if hasattr(task_result, 'messages'):
+        for message in reversed(task_result.messages):
+            # Check for source attribute for newer AutoGen versions
+            source = getattr(message, 'source', None)
+            if source == "critic" and isinstance(message.content, str):
+                # Clean the hypothesis by removing the acceptance marker
+                cleaned_hypothesis = message.content.replace('YYY-HYPOTHESIS-ACCEPTED-YYY', '').strip()
+                if cleaned_hypothesis:
+                    return cleaned_hypothesis
+    
+    # Fallback for older formats or if the critic message isn't found as expected
+    if hasattr(task_result, 'messages') and task_result.messages:
+        # A less specific fallback: find the last message with the marker
+        for message in reversed(task_result.messages):
+            if isinstance(message.content, str) and 'YYY-HYPOTHESIS-ACCEPTED-YYY' in message.content:
+                cleaned_hypothesis = message.content.replace('YYY-HYPOTHESIS-ACCEPTED-YYY', '').strip()
+                if cleaned_hypothesis:
+                    return cleaned_hypothesis
+
+    # Final fallback to the last message content if all else fails
+    if hasattr(task_result, 'messages') and task_result.messages:
+        return task_result.messages[-1].content.strip()
+
+    return "Error: Could not extract a valid hypothesis from the result."
 
 # Load .env at app startup
 load_env_defaults()
@@ -191,7 +196,7 @@ async def research():
     local_context = session.get('local_context', INITIAL_LOCAL_CONTEXT)
     
     # Import the researcher function and TextMessage
-    from research_assistant.research_assistant_cli import researcher
+    from research_assistant.research_assistant_cli import researcher as async_researcher
     from autogen_agentchat.messages import TextMessage
 
     previous_run = None
@@ -205,7 +210,7 @@ async def research():
     try:
         # Run the researcher
         result = await retry_api_call(
-            researcher, 
+            async_researcher, 
             technique=topic, 
             local_context=local_context, 
             verbose=verbose_mode,
@@ -301,8 +306,6 @@ async def refine():
     # Get local context from session
     local_context = session.get('local_context', INITIAL_LOCAL_CONTEXT)
     
-    # Import the refiner function and TextMessage
-    from hypothesis_assistant.hypothesis_refiner_cli import refiner
     from autogen_agentchat.messages import TextMessage
 
     previous_run = None
@@ -314,11 +317,14 @@ async def refine():
         ]
 
     try:
-        # Run the refiner
+        # Log the hypothesis being sent to the refiner for debugging
+        logging.warning(f"Calling async_refiner with hypothesis: {hypothesis[:100]}...")
+
+        # Explicitly pass keyword arguments to the refiner function
         result = await retry_api_call(
-            refiner,
-            hypothesis=hypothesis,
-            local_context=local_context,
+            async_refiner, 
+            hypothesis=hypothesis, 
+            local_context=local_context, 
             research_document=research_report,
             verbose=verbose_mode,
             previous_run=previous_run
@@ -327,8 +333,8 @@ async def refine():
         # Extract the refined hypothesis
         refined_hypothesis = extract_accepted_hypothesis(result)
         
-        # Store in session
-        session['hypothesis'] = refined_hypothesis
+        # Store in session under the correct key
+        session['refined_hypothesis'] = refined_hypothesis
         return jsonify({'success': True, 'refined_hypothesis': refined_hypothesis})
     except Exception as e:
         error_msg = str(e)

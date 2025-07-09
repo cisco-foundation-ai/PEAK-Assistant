@@ -123,8 +123,8 @@ class AbleTableManager extends PhaseManager {
     
     async handleGenerate() {
         // Check if prerequisites are met before proceeding
-        const prereqCheck = await this.checkPrerequisites();
-        if (!prereqCheck.valid) {
+        const hypothesis = sessionStorage.getItem('refined_hypothesis') || sessionStorage.getItem('hypothesis');
+        if (!hypothesis) {
             UIFeedback.show('error', 'Please generate or select a hypothesis first.');
             return;
         }
@@ -148,7 +148,10 @@ class AbleTableManager extends PhaseManager {
                 }
             }
             
-            const requestBody = { retry_count: retryCount };
+            const requestBody = { 
+                retry_count: retryCount,
+                hypothesis: hypothesis // Pass the correct hypothesis
+            };
             await this.generateContent(requestBody);
         } catch (error) {
             // Enhanced error handling for OpenAI issues

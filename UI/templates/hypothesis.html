@@ -222,7 +222,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     firstOption.style.backgroundColor = '#0d6efd';
                     firstOption.style.color = 'white';
                     firstOption.style.boxShadow = '0 4px 12px rgba(13,110,253,0.3)';
-                    saveAndDisplayHypothesis(hypos[0]);
+                    updateCurrentHypothesisUI(hypos[0]);
                 }
             } else {
                 let errorDetail = data.detail || null;
