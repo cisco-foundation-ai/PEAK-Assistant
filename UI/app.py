@@ -351,26 +351,40 @@ async def refine():
 @async_action
 async def able_table():
     data = request.json
-    # Use refined hypothesis if available, else fallback to original
-    hypothesis = data.get('hypothesis') or session.get('refined_hypothesis') or session.get('hypothesis', '')
-    report_md = data.get('report_md') or session.get('report_md', '')
-    retry_count = int(data.get('retry_count', 3))
-    # verbose_mode is ignored for able_table, as it is not supported
-    
-    if not hypothesis:
-        return jsonify({'success': False, 'error': 'No hypothesis provided'}), 400
 
-    local_context = session.get('local-context', '')  # Get local context from session
+    # Get hypothesis, falling back through the session states
+    hypothesis = data.get('hypothesis') or session.get('refined_hypothesis') or session.get('hypothesis')
+    if not hypothesis:
+        return jsonify({'success': False, 'error': 'No hypothesis found in request or session.'}), 400
+
+    # Get other data from request and session
+    feedback = data.get('feedback')
+    current_able_table = data.get('current_able_table')
+    report_md = session.get('report_md', '')
+    local_context = session.get('local_context', INITIAL_LOCAL_CONTEXT)
     
+    # Import necessary modules
+    from able_assistant.able_assistant_cli import able_table
+    from autogen_agentchat.messages import UserMessage
+
+    # Construct the message history for feedback
+    previous_run = None
+    if feedback and current_able_table:
+        previous_run = [
+            UserMessage(content=f"The current ABLE draft is: {current_able_table}\n", source="user"),
+            UserMessage(content=f"User feedback: {feedback}\n", source="user")
+        ]
+
+    # Call the able_table function from the CLI module
     try:
         able_md = await retry_api_call(
-            async_able_table, 
-            hypothesis, 
-            report_md,
-            local_context=local_context,  # Pass local context
-            max_retries=retry_count
+            able_table,
+            hypothesis=hypothesis,
+            research_document=report_md,
+            local_context=local_context,
+            previous_run=previous_run
         )
-        # Store in session
+        # Store result in session
         session['able_table_md'] = able_md
         return jsonify({'success': True, 'able_table': able_md})
     except Exception as e:

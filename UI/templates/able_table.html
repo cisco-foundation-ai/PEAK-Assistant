@@ -8,50 +8,77 @@
 {% block nav %}{{ super() }}{% endblock %}
 
 {% block content %}
-<div class="phase-container">
-    <!-- Compact Phase Header -->
-    <div class="phase-header">
-        <h1 class="phase-title">Generate ABLE Table</h1>
-        <div id="download-able-actions-container" style="display: none;">
-            <!-- Download button will be inserted here by script -->
-        </div>
-    </div>
+<style>
+    /* Custom styles for ABLE Table page */
+    .phase-container {
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - 56px); /* Full height minus navbar */
+        overflow: hidden;
+    }
     
-    <!-- Compact Phase Description -->
-    <p class="phase-description">
-        Generate an ABLE (Actor, Behavior, Location, & Evidence) table based on your current hypothesis to structure your threat hunting approach.
-    </p>
+    .able-top-section {
+        padding-bottom: 0.5rem;
+        flex-shrink: 0;
+    }
+    
+    .able-table-container {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0.5rem;
+    }
+    
+    .feedback-container-fixed {
+        position: sticky;
+        bottom: 0;
+        background-color: var(--bs-body-bg);
+        border-top: 1px solid var(--bs-border-color);
+        padding: 0.75rem;
+        z-index: 1000;
+    }
+    
+    /* More compact elements */
+    .compact-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    
+    .compact-header h1 {
+        font-size: 1.5rem;
+        margin-bottom: 0;
+    }
+    
+    .phase-description {
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .content-preview-card {
+        margin-bottom: 0.5rem;
+    }
+    
+    .content-preview-header {
+        padding: 0.5rem;
+    }
+    
+    .content-preview-header h5 {
+        font-size: 1rem;
+        margin-bottom: 0;
+    }
+</style>
 
-    <!-- Prerequisite Warning -->
-    <div id="no-hypothesis-warning" class="prerequisite-warning" style="display: none;">
-        <h5><i class="bi bi-exclamation-triangle-fill me-2"></i>Missing Prerequisites</h5>
-        <p class="mb-1">No hypothesis found. Please generate or select a hypothesis first:</p>
-        <ul class="prerequisite-list">
-            <li><a href="/hypothesis">Generate Hypothesis</a></li>
-        </ul>
-    </div>
-
-    <!-- Current Hypothesis Display -->
-    <div id="current-hypo-container" style="display: none;" class="mb-3">
-        <div class="content-preview-card">
-            <div class="content-preview-header">
-                <h5><i class="bi bi-lightbulb me-2"></i>Current Hypothesis</h5>
-                <small class="text-muted">The ABLE table will be generated based on this hypothesis</small>
-            </div>
-            <div id="current-hypo-content" class="content-preview-body" data-raw-markdown=""></div>
-        </div>
-    </div>
-
-    <!-- Compact Action Section -->
-    <div class="action-section">
-        <div class="d-flex justify-content-between align-items-center">
-            <div>
-                <div class="action-section-title">
-                    <i class="bi bi-robot me-2"></i>AI ABLE Table Generation
-                </div>
-                <small class="text-muted">AI will structure your hypothesis into Actor, Behavior, Location, & Evidence components for systematic hunting.</small>
-            </div>
+<div class="phase-container">
+    <!-- Top Section (Header, description, hypothesis) -->
+    <div class="able-top-section">
+        <!-- Compact Phase Header -->
+        <div class="compact-header">
+            <h1 class="phase-title">Generate ABLE Table</h1>
             <div class="d-flex gap-2">
+                <div id="download-able-actions-container">
+                    <!-- Download button will be inserted here by script -->
+                </div>
                 <button id="generate-able-btn" class="btn btn-primary">
                     <i class="bi bi-table me-2"></i>Generate ABLE Table
                 </button>
@@ -64,12 +91,52 @@
                 </div>
             </div>
         </div>
-    </div>
+        
+        <!-- Compact Phase Description -->
+        <p class="phase-description">
+            Generate an ABLE (Actor, Behavior, Location, & Evidence) table based on your current hypothesis to structure your threat hunting approach.
+        </p>
+
+        <!-- Prerequisite Warning -->
+        <div id="no-hypothesis-warning" class="prerequisite-warning" style="display: none;">
+            <h5><i class="bi bi-exclamation-triangle-fill me-2"></i>Missing Prerequisites</h5>
+            <p class="mb-1">No hypothesis found. Please generate or select a hypothesis first:</p>
+            <ul class="prerequisite-list">
+                <li><a href="/hypothesis">Generate Hypothesis</a></li>
+            </ul>
+        </div>
+
+        <!-- Current Hypothesis Display -->
+        <div id="current-hypo-container">
+            <div class="content-preview-card">
+                <div class="content-preview-header">
+                    <h5><i class="bi bi-lightbulb me-2"></i>Current Hypothesis</h5>
+                </div>
+                <div id="current-hypo-content" class="content-preview-body" data-raw-markdown=""></div>
+            </div>
+        </div>
+
+        <!-- No description text here to maximize space -->
+    </div><!-- End of able-top-section -->
 
     <!-- Content Display - Takes up most of the page -->
-    <div id="able-table-container" style="display: none;">
-        <div class="content-card">
-            <div id="able-table-content" data-raw-markdown=""></div>
+    <div id="able-table-container" class="able-table-container">
+        <div class="content-card m-2">
+            <div id="able-table-content" data-raw-markdown="">
+                <div id="able-table-placeholder" class="text-muted fst-italic p-3">
+                    The generated ABLE table will appear here. Click "Generate ABLE Table" to begin.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feedback Input Area: Fixed at the bottom -->
+    <div id="feedback-container" class="feedback-container-fixed">
+        <div class="input-group">
+            <textarea id="feedback-input" class="form-control" rows="3" placeholder="Provide feedback to refine the ABLE table."></textarea>
+            <button id="send-feedback-btn" class="btn btn-primary">
+                <i class="bi bi-send me-2"></i>Send Feedback
+            </button>
         </div>
     </div>
 </div>
@@ -80,251 +147,170 @@
 /**
  * ABLE Table Phase Manager
  */
-class AbleTableManager extends PhaseManager {
+class AbleTableManager {
     constructor() {
-        super('able_table', {
-            apiEndpoint: '/api/able-table',
-            contentContainer: 'able-table-content',
-            downloadContainer: 'download-able-actions-container',
-            sessionStorageKey: 'able_table_md',
-            globalContentVar: 'currentAbleTableMarkdown',
-            responseContentKey: 'able_table',
-            loadingMessage: 'Generating ABLE Table...',
-            generateButtonTitle: 'Generate ABLE table based on current hypothesis',
-            generateButtonText: '<i class="bi bi-table me-2"></i>Generate ABLE Table',
-            prerequisites: [
-                {
-                    sessionKey: 'hypothesis',
-                    name: 'Hypothesis',
-                    url: '/hypothesis'
-                }
-            ]
-        });
-        
+        this.apiEndpoint = '/api/able-table';
+        this.contentContainer = document.getElementById('able-table-content');
+        this.downloadContainer = document.getElementById('download-able-actions-container');
+        this.sessionStorageKey = 'able_table_md';
+
+        this.feedbackInput = document.getElementById('feedback-input');
+        this.currentHypoContent = document.getElementById('current-hypo-content');
+
+        this.setupEventListeners();
         this.setupUploadHandlers();
+        this.initializePage();
     }
-    
+
     setupEventListeners() {
-        const generateBtn = document.getElementById('generate-able-btn');
-        if (generateBtn) {
-            generateBtn.addEventListener('click', () => this.handleGenerate());
-        }
+        document.getElementById('generate-able-btn').addEventListener('click', () => this.handleGenerate());
+        document.getElementById('send-feedback-btn').addEventListener('click', () => this.handleSendFeedback());
+
+        this.feedbackInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                this.handleSendFeedback();
+            }
+        });
     }
-    
+
     setupUploadHandlers() {
         const uploadBtn = document.getElementById('upload-able-table-btn');
         const fileInput = document.getElementById('upload-able-table-file');
-        
+
         if (uploadBtn && fileInput) {
             uploadBtn.addEventListener('click', () => fileInput.click());
             fileInput.addEventListener('change', (event) => this.handleFileUpload(event));
         }
     }
-    
+
+    initializePage() {
+        this.displayHypothesis();
+        const existingTable = sessionStorage.getItem(this.sessionStorageKey);
+        if (existingTable) {
+            this.updateContent(existingTable);
+        }
+    }
+
+    displayHypothesis() {
+        const hypothesis = sessionStorage.getItem('refined_hypothesis') || sessionStorage.getItem('hypothesis');
+        if (hypothesis) {
+            document.getElementById('current-hypo-container').style.display = 'block';
+            document.getElementById('no-hypothesis-warning').style.display = 'none';
+            ContentRenderer.renderMarkdown(hypothesis, this.currentHypoContent);
+            this.currentHypoContent.dataset.rawMarkdown = hypothesis;
+        } else {
+            document.getElementById('no-hypothesis-warning').style.display = 'block';
+            document.getElementById('current-hypo-container').style.display = 'none';
+        }
+    }
+
+    updateContent(markdown) {
+        const placeholder = document.getElementById('able-table-placeholder');
+        if (placeholder) {
+            placeholder.style.display = 'none';
+        }
+        ContentRenderer.renderMarkdown(markdown, this.contentContainer);
+        this.contentContainer.dataset.rawMarkdown = markdown;
+        sessionStorage.setItem(this.sessionStorageKey, markdown);
+        DownloadManager.setupDownloadButton('able-table-content', 'able_table', 'download-able-actions-container');
+        this.downloadContainer.style.display = 'flex';
+    }
+
+    async generateContent(requestBody) {
+        UIFeedback.show('loading', 'Generating ABLE Table...');
+        try {
+            const response = await fetch(this.apiEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            });
+            const data = await response.json();
+            if (data.success) {
+                this.updateContent(data.able_table);
+            } else {
+                throw new Error(data.error || 'Failed to generate content');
+            }
+        } catch (error) {
+            UIFeedback.show('error', 'Error: ' + error.message);
+        } finally {
+            UIFeedback.hideLoading();
+        }
+    }
+
     async handleGenerate() {
-        // Check if prerequisites are met before proceeding
         const hypothesis = sessionStorage.getItem('refined_hypothesis') || sessionStorage.getItem('hypothesis');
         if (!hypothesis) {
             UIFeedback.show('error', 'Please generate or select a hypothesis first.');
             return;
         }
-        
-        // Hide content section before generating
-        const ableTableContainer = document.getElementById('able-table-container');
-        if (ableTableContainer) {
-            ableTableContainer.style.display = 'none';
-        }
-        
-        try {
-            // Get retry count from localStorage
-            let retryCount = 3; // Default value
-            const storedRetryCount = localStorage.getItem('retry-count-page');
-            if (storedRetryCount) {
-                const parsedRetryCount = parseInt(storedRetryCount, 10);
-                if (!isNaN(parsedRetryCount)) {
-                    retryCount = parsedRetryCount;
-                } else {
-                    console.warn('Invalid retry count in localStorage for ABLE table, using default (3).');
-                }
-            }
-            
-            const requestBody = { 
-                retry_count: retryCount,
-                hypothesis: hypothesis // Pass the correct hypothesis
-            };
-            await this.generateContent(requestBody);
-        } catch (error) {
-            // Enhanced error handling for OpenAI issues
-            if (error.message && error.message.includes('OpenAI API internal server error')) {
-                UIFeedback.show('error', 
-                    'OpenAI API internal server error. This is an issue with OpenAI\'s servers. Maximum retry attempts reached.\n\nTip: You can try again later, refine your hypothesis, or increase the retry count.'
-                );
-            }
-            // Other error handling is done in the parent class
-        }
+        await this.generateContent({ hypothesis: hypothesis });
     }
-    
+
+    async handleSendFeedback() {
+        const feedback = this.feedbackInput.value.trim();
+        if (!feedback) {
+            UIFeedback.show('error', 'Please enter feedback to refine the ABLE table.');
+            return;
+        }
+
+        const currentAbleTable = this.contentContainer.dataset.rawMarkdown;
+        if (!currentAbleTable) {
+            UIFeedback.show('error', 'No ABLE table content found to provide feedback on.');
+            return;
+        }
+
+        const hypothesis = sessionStorage.getItem('refined_hypothesis') || sessionStorage.getItem('hypothesis');
+        if (!hypothesis) {
+            UIFeedback.show('error', 'No hypothesis found to generate the ABLE table.');
+            return;
+        }
+
+        const requestBody = {
+            hypothesis: hypothesis,
+            feedback: feedback,
+            current_able_table: currentAbleTable
+        };
+
+        await this.generateContent(requestBody);
+        this.feedbackInput.value = '';
+    }
+
     async handleFileUpload(event) {
         const file = event.target.files[0];
         if (!file) return;
-        
+
         const uploadFilename = document.getElementById('upload-able-table-filename');
         if (uploadFilename) {
             uploadFilename.textContent = file.name;
         }
-        
+
         const formData = new FormData();
         formData.append('file', file);
-        
+
         try {
             UIFeedback.showLoading('Uploading ABLE table...');
-            
             const response = await fetch('/api/upload-able-table', {
                 method: 'POST',
                 body: formData
             });
-            
             const data = await response.json();
             UIFeedback.hideLoading();
-            
+
             if (data.success) {
                 this.updateContent(data.able_table);
                 if (uploadFilename) {
                     uploadFilename.textContent = file.name + ' uploaded successfully!';
                     setTimeout(() => { uploadFilename.textContent = file.name; }, 3000);
                 }
-                
-                // Refresh hypothesis display and other UI elements
-                await this.initialize();
             } else {
                 UIFeedback.show('error', data.error || 'Failed to upload ABLE table.');
-                if (uploadFilename) {
-                    uploadFilename.textContent = 'Upload failed. Try again.';
-                }
             }
         } catch (error) {
             UIFeedback.hideLoading();
-            UIFeedback.show('error', 'Error uploading file: ' + error.message);
-            if (uploadFilename) {
-                uploadFilename.textContent = 'Upload failed. Try again.';
-            }
+            UIFeedback.show('error', 'Upload failed: ' + error.message);
         }
-        
-        // Clear file input
         event.target.value = '';
-    }
-    
-    async checkPrerequisites() {
-        try {
-            const sessionData = await this.apiClient.getSessionData();
-            const missing = [];
-            
-            // Check for hypothesis (refined or original)
-            const hypothesisToUse = sessionData.refined_hypothesis || sessionData.hypothesis;
-            if (!hypothesisToUse || !hypothesisToUse.trim()) {
-                missing.push({
-                    sessionKey: 'hypothesis',
-                    name: 'Hypothesis',
-                    url: '/hypothesis'
-                });
-            }
-            
-            this.updatePrerequisiteUI(missing, sessionData);
-            return { valid: missing.length === 0, missing };
-        } catch (error) {
-            console.warn('Could not check prerequisites:', error);
-            return { valid: true, missing: [] };
-        }
-    }
-    
-    updatePrerequisiteUI(missingPrereqs, sessionData = null) {
-        const warningElement = document.getElementById('no-hypothesis-warning');
-        const generateBtn = document.getElementById('generate-able-btn');
-        const currentHypoContainer = document.getElementById('current-hypo-container');
-        const currentHypoContent = document.getElementById('current-hypo-content');
-        
-        if (missingPrereqs.length > 0 && warningElement) {
-            warningElement.style.display = 'block';
-            currentHypoContainer.style.display = 'none';
-            
-            if (generateBtn) {
-                generateBtn.disabled = true;
-                generateBtn.classList.add('btn-disabled-warning');
-                generateBtn.title = 'Generate or select a hypothesis first';
-                generateBtn.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i>Hypothesis Required';
-            }
-        } else {
-            if (warningElement) {
-                warningElement.style.display = 'none';
-            }
-            
-            // Show current hypothesis
-            if (sessionData && currentHypoContainer && currentHypoContent) {
-                const hypothesisToUse = sessionData.refined_hypothesis || sessionData.hypothesis;
-                if (hypothesisToUse && hypothesisToUse.trim()) {
-                    currentHypoContent.setAttribute('data-raw-markdown', hypothesisToUse);
-                    if (typeof renderMarkdown === 'function') {
-                        renderMarkdown(hypothesisToUse, currentHypoContent);
-                    } else {
-                        currentHypoContent.innerHTML = hypothesisToUse;
-                    }
-                    currentHypoContainer.style.display = 'block';
-                }
-            }
-            
-            if (generateBtn) {
-                generateBtn.disabled = false;
-                generateBtn.classList.remove('btn-disabled-warning');
-                generateBtn.title = 'Generate ABLE table based on current hypothesis';
-                generateBtn.innerHTML = '<i class="bi bi-table me-2"></i>Generate ABLE Table';
-            }
-        }
-    }
-    
-    onContentGenerated(response) {
-        // Show content container
-        const ableTableContainer = document.getElementById('able-table-container');
-        if (ableTableContainer) {
-            ableTableContainer.style.display = 'block';
-        }
-        
-        // Setup download button
-        DownloadManager.setupDownloadButton(
-            this.config.contentContainer,
-            'able_table',
-            this.config.downloadContainer
-        );
-        
-        // Show download container
-        const downloadContainer = document.getElementById(this.config.downloadContainer);
-        if (downloadContainer) {
-            downloadContainer.style.display = 'flex';
-        }
-    }
-    
-    async initialize() {
-        await super.initialize();
-        
-        // Load session data and update UI
-        try {
-            const sessionData = await this.apiClient.getSessionData();
-            
-            // Check prerequisites and update hypothesis display
-            await this.checkPrerequisites();
-            
-            // Load existing ABLE table if available
-            if (sessionData.able_table_md && sessionData.able_table_md.trim()) {
-                this.updateContent(sessionData.able_table_md);
-            }
-        } catch (error) {
-            console.warn('Could not load session data:', error);
-            // Still try to check prerequisites with empty data
-            this.updatePrerequisiteUI([{
-                sessionKey: 'hypothesis',
-                name: 'Hypothesis',
-                url: '/hypothesis'
-            }]);
-        }
     }
 }
 
