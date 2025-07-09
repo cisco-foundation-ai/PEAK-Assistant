@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # filepath: /Users/dabianco/projects/SURGe/PEAK-Assistant/UI/app_flask.py
 from flask import Flask, render_template, request, jsonify, Response, send_file, session
+from werkzeug.utils import secure_filename
 import tempfile
 import os
 import sys
@@ -14,7 +15,8 @@ import logging
 from functools import wraps, partial
 from markdown_pdf import MarkdownPdf, Section
 from flask_session import Session
-from werkzeug.utils import secure_filename
+
+from autogen_agentchat.messages import TextMessage
 from flask_sqlalchemy import SQLAlchemy
 from datetime import timedelta
 
@@ -413,26 +415,34 @@ async def data_discovery():
     hypothesis = data.get('hypothesis') or session.get('refined_hypothesis') or session.get('hypothesis', '')
     report_md = data.get('report_md') or session.get('report_md', '')
     able_table_md = data.get('able_table_md') or session.get('able_table_md', '')
+    feedback = data.get('feedback')
+    current_data_sources = data.get('current_data_sources')
     retry_count = int(data.get('retry_count', 3))
     verbose_mode = data.get('verbose_mode', False)
     local_context = session.get('local-context', '')  # Get local context from session
-    
+
     if not hypothesis:
         return jsonify({'success': False, 'error': 'No hypothesis provided'}), 400
-    
+
     if not report_md:
         return jsonify({'success': False, 'error': 'No research report available'}), 400
-    
+
     # Get MCP configuration from environment variables
     mcp_command = os.getenv('SPLUNK_MCP_COMMAND')
     mcp_args = os.getenv('SPLUNK_MCP_ARGS')
-    
+
     if not mcp_command or not mcp_args:
         return jsonify({
             'success': False, 
             'error': 'Splunk MCP configuration missing. Please ensure SPLUNK_MCP_COMMAND and SPLUNK_MCP_ARGS environment variables are set.'
         }), 500
-    
+
+    # Set up the conversation history
+    messages = []
+    if feedback and current_data_sources:
+        messages.append(TextMessage(content=f"The current data sources draft is: {current_data_sources}\n", source="user"))
+        messages.append(TextMessage(content=f"User feedback: {feedback}\n", source="user"))
+
     try:
         result = await retry_api_call(
             async_identify_data_sources, 
@@ -443,6 +453,7 @@ async def data_discovery():
             mcp_command=mcp_command,
             mcp_args=mcp_args,
             verbose=verbose_mode,
+            previous_run=messages,
             max_retries=retry_count
         )
         # Extract the final message from the "Data_Discovery_Agent" similar to CLI version
