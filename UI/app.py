@@ -584,6 +584,8 @@ async def hunt_plan():
     data = request.json or {}
     retry_count = int(data.get('retry_count', 3))
     verbose_mode = data.get('verbose_mode', False)
+    feedback = data.get('feedback', '')
+    current_hunt_plan = data.get('current_hunt_plan', '')
     
     # Get required data from the request body, falling back to session
     research_document = data.get('report_md') or session.get('report_md', '')
@@ -591,6 +593,23 @@ async def hunt_plan():
     able_info = data.get('able_table_md') or session.get('able_table_md', '')
     data_discovery = data.get('data_sources_md') or session.get('data_sources_md', '')
     local_context = session.get('local-context', '')
+    
+    # Get conversation history or initialize if this is the first call
+    previous_messages = session.get('hunt_plan_messages', [])
+    # If there's feedback, add messages for the feedback loop
+    if feedback and current_hunt_plan:
+        previous_messages = [
+            TextMessage(content=f"The current plan draft is: {current_hunt_plan}\n", source="user"),
+            TextMessage(content=f"User feedback: {feedback}\n", source="user")
+        ]
+    
+    # Convert previous_messages to TextMessage objects if they're stored as dictionaries
+    textmessage_list = []
+    for msg in previous_messages:
+        if isinstance(msg, dict) and 'content' in msg and 'source' in msg:
+            textmessage_list.append(TextMessage(content=msg['content'], source=msg['source']))
+        elif hasattr(msg, 'content') and hasattr(msg, 'source'):
+            textmessage_list.append(msg)
     
     # Check prerequisites
     missing_items = []
@@ -619,7 +638,8 @@ async def hunt_plan():
             data_discovery=data_discovery,
             local_context=local_context,
             verbose=verbose_mode,
-            max_retries=retry_count
+            max_retries=retry_count,
+            previous_run=textmessage_list
         )
         
         # Extract the final message from the "hunt_planner" agent
@@ -635,8 +655,22 @@ async def hunt_plan():
             else:
                 hunt_plan = str(result)
         
+        # Convert result messages to serializable format
+        result_messages = []
+        if hasattr(result, 'messages'):
+            for msg in result.messages:
+                if hasattr(msg, 'content') and hasattr(msg, 'source'):
+                    result_messages.append({'content': msg.content, 'source': msg.source})
+        
         # Store in session
         session['hunt_plan'] = hunt_plan
+        # Store serialized messages (dictionaries) in the session
+        serialized_messages = []
+        for msg in textmessage_list:
+            if hasattr(msg, 'content') and hasattr(msg, 'source'):
+                serialized_messages.append({'content': msg.content, 'source': msg.source})
+        
+        session['hunt_plan_messages'] = serialized_messages + result_messages
         return jsonify({
             'success': True, 
             'hunt_plan': hunt_plan
