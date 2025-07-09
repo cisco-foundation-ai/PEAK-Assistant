@@ -281,9 +281,7 @@ class AbleTableManager {
         if (!file) return;
 
         const uploadFilename = document.getElementById('upload-able-table-filename');
-        if (uploadFilename) {
-            uploadFilename.textContent = file.name;
-        }
+        // Don't set filename text here to avoid the brief flash when it's cleared later
 
         const formData = new FormData();
         formData.append('file', file);
@@ -300,8 +298,7 @@ class AbleTableManager {
             if (data.success) {
                 this.updateContent(data.able_table);
                 if (uploadFilename) {
-                    uploadFilename.textContent = file.name + ' uploaded successfully!';
-                    setTimeout(() => { uploadFilename.textContent = file.name; }, 3000);
+                    uploadFilename.textContent = '';
                 }
             } else {
                 UIFeedback.show('error', data.error || 'Failed to upload ABLE table.');

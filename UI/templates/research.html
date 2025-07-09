@@ -157,7 +157,7 @@ class ResearchManager extends PhaseManager {
                 sessionStorage.setItem(this.config.sessionStorageKey, response.content);
                 sessionStorage.removeItem('last_topic'); // Clear previous topic on new upload
                 this.onContentGenerated(response);
-                UIFeedback.show('success', `Uploaded '${file.name}' successfully.`);
+                // Success feedback removed as it's obvious when content loads
             } else {
                 throw new Error(response.error || 'Upload failed');
             }

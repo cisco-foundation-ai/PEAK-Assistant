@@ -287,17 +287,14 @@ class DataDiscoveryManager {
         if (!file) return;
 
         const uploadFilename = document.getElementById('upload-data-sources-filename');
-        if (uploadFilename) {
-            uploadFilename.textContent = file.name;
-        }
+        // Don't set filename text here to avoid the brief flash when it's cleared later
 
         const reader = new FileReader();
         reader.onload = (e) => {
             const content = e.target.result;
             this.updateContent(content);
             if (uploadFilename) {
-                uploadFilename.textContent = file.name + ' uploaded successfully!';
-                setTimeout(() => { uploadFilename.textContent = ''; }, 3000);
+                uploadFilename.textContent = '';
             }
         };
         reader.readAsText(file);
