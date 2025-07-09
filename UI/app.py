@@ -585,11 +585,11 @@ async def hunt_plan():
     retry_count = int(data.get('retry_count', 3))
     verbose_mode = data.get('verbose_mode', False)
     
-    # Get required data from session
-    research_document = session.get('report_md', '')
-    hypothesis = session.get('refined_hypothesis') or session.get('hypothesis', '')
-    able_info = session.get('able_table_md', '')
-    data_discovery = session.get('data_sources_md', '')
+    # Get required data from the request body, falling back to session
+    research_document = data.get('report_md') or session.get('report_md', '')
+    hypothesis = data.get('hypothesis') or session.get('refined_hypothesis') or session.get('hypothesis', '')
+    able_info = data.get('able_table_md') or session.get('able_table_md', '')
+    data_discovery = data.get('data_sources_md') or session.get('data_sources_md', '')
     local_context = session.get('local-context', '')
     
     # Check prerequisites

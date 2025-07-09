@@ -1044,7 +1044,7 @@
                 }
             }
             
-            async generateContent(requestData = {}) {
+            async generateContent(requestBody = {}) {
                 if (!this.config.apiEndpoint) {
                     throw new Error('API endpoint not configured');
                 }
@@ -1054,9 +1054,7 @@
                 UIFeedback.show('loading', this.config.loadingMessage || 'Generating content...');
                 
                 try {
-                    const response = await this.apiClient.callWithRetry(this.config.apiEndpoint, requestData);
-                    UIFeedback.hideLoading();
-                    
+                    const response = await this.apiClient.post(this.config.apiEndpoint, requestBody);
                     if (response.success) {
                         const content = response[this.config.responseContentKey] || response.content;
                         this.displayContent(content);
@@ -1065,15 +1063,18 @@
                             sessionStorage.setItem(this.config.sessionStorageKey, content);
                         }
                         
-                        this.onContentGenerated(response);
+                        if (this.onContentGenerated) {
+                            this.onContentGenerated(response);
+                        }
                         return response;
                     } else {
                         throw new Error(response.error || 'Generation failed');
                     }
                 } catch (error) {
-                    UIFeedback.hideLoading();
-                    UIFeedback.show('error', 'Error generating content: ' + error.message, error.detail);
+                    UIFeedback.show('error', 'Error generating content: ' + error.message);
                     throw error;
+                } finally {
+                    UIFeedback.hideLoading();
                 }
             }
             
