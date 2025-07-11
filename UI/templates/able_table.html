@@ -25,7 +25,6 @@
     .able-table-container {
         flex: 1;
         overflow-y: auto;
-        padding: 0.5rem;
     }
     
     .feedback-container-fixed {
@@ -80,7 +79,7 @@
                     <!-- Download button will be inserted here by script -->
                 </div>
                 <button id="generate-able-btn" class="btn btn-primary">
-                    <i class="bi bi-table me-2"></i>Generate ABLE Table
+                    <i class="bi bi-robot me-2"></i>Generate ABLE Table
                 </button>
                 <div class="upload-container">
                     <input type="file" id="upload-able-table-file" class="form-control" accept=".md,.txt" style="display: none;">
@@ -121,7 +120,7 @@
 
     <!-- Content Display - Takes up most of the page -->
     <div id="able-table-container" class="able-table-container">
-        <div class="content-card m-2">
+        <div class="content-card">
             <div id="able-table-content" data-raw-markdown="">
                 <div id="able-table-placeholder" class="text-muted fst-italic p-3">
                     The generated ABLE table will appear here. Click "Generate ABLE Table" to begin.

@@ -977,20 +977,31 @@
             }
             
             async loadInitialData() {
+                console.log(`[${this.phaseId}] 1. Starting loadInitialData.`);
                 const stored = sessionStorage.getItem(this.config.sessionStorageKey);
+                console.log(`[${this.phaseId}] 2. Checked sessionStorage for key '${this.config.sessionStorageKey}'. Found content length: ${stored ? stored.length : 'null'}`);
+
                 if (stored && stored.trim()) {
+                    console.log(`[${this.phaseId}] 3a. Found data in sessionStorage. Displaying it.`);
                     this.displayContent(stored);
                 } else {
+                    console.log(`[${this.phaseId}] 3b. No data in sessionStorage. Falling back to server.`);
                     // Fallback to server session
                     try {
                         const sessionData = await this.apiClient.getSessionData();
+                        console.log(`[${this.phaseId}] 4. Fetched session data from server:`, sessionData);
                         const content = sessionData[this.config.sessionStorageKey];
+                        console.log(`[${this.phaseId}] 5. Extracted content for key '${this.config.sessionStorageKey}'. Found content length: ${content ? content.length : 'null'}`);
+
                         if (content && content.trim()) {
+                            console.log(`[${this.phaseId}] 6a. Found data on server. Displaying it and setting sessionStorage.`);
                             this.displayContent(content);
                             sessionStorage.setItem(this.config.sessionStorageKey, content);
+                        } else {
+                            console.log(`[${this.phaseId}] 6b. No data found on server for this key.`);
                         }
                     } catch (error) {
-                        console.warn('Could not load initial data:', error);
+                        console.warn(`[${this.phaseId}] Error loading initial data from server:`, error);
                     }
                 }
                 
@@ -1054,7 +1065,7 @@
                 UIFeedback.show('loading', this.config.loadingMessage || 'Generating content...');
                 
                 try {
-                    const response = await this.apiClient.post(this.config.apiEndpoint, requestBody);
+                    const response = await this.apiClient.callWithRetry(this.config.apiEndpoint, requestBody);
                     if (response.success) {
                         const content = response[this.config.responseContentKey] || response.content;
                         this.displayContent(content);
@@ -1178,18 +1189,28 @@
         // Clear Session button in sidebar
         const clearSessionSidebarBtn = document.getElementById('clear-session-sidebar-btn');
         if (clearSessionSidebarBtn) {
-            clearSessionSidebarBtn.addEventListener('click', function() {
+            clearSessionSidebarBtn.addEventListener('click', async function() {
                 if (confirm('Are you sure you want to clear all session data? This will reset the application state.')) {
-                    // Clear client-side storage immediately and unconditionally.
+                    // Clear client-side storage immediately.
                     sessionStorage.clear();
                     localStorage.clear();
 
-                    // Attempt to clear server session, but don't let it block the UI reset.
-                    fetch('/api/clear-session', { method: 'POST' });
+                    try {
+                        // Wait for the server to confirm the session is cleared.
+                        const response = await fetch('/api/clear-session', { method: 'POST' });
+                        if (!response.ok) {
+                            const errorData = await response.json().catch(() => ({}));
+                            throw new Error(errorData.error || 'Failed to clear server session.');
+                        }
+                        
+                        // Now that server and client are clear, inform the user and redirect.
+                        alert('Session cleared. The application will now restart.');
+                        window.location.href = '/';
 
-                    // Inform the user and force a redirect to the home page for a clean start.
-                    alert('Session cleared. The application will now restart.');
-                    window.location.href = '/';
+                    } catch (error) {
+                        console.error('Error clearing session:', error);
+                        alert('Could not fully clear the session. Please try again. Error: ' + error.message);
+                    }
                 }
             });
         }

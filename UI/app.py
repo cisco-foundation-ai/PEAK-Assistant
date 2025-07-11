@@ -4,6 +4,7 @@ from flask import Flask, render_template, request, jsonify, Response, send_file,
 from werkzeug.utils import secure_filename
 import tempfile
 import os
+import re
 import sys
 import asyncio
 import time
@@ -259,7 +260,15 @@ async def hypothesize():
         )
         
         if isinstance(hypos, str):
-            hypos = hypos.splitlines()
+            # Split into lines first
+            lines = hypos.splitlines()
+            cleaned_hypos = []
+            for line in lines:
+                # Remove leading numbers, dots, dashes, or asterisks followed by a space
+                cleaned_line = re.sub(r'^\s*\d+\.\s*|^\s*[-*]\s*', '', line).strip()
+                if cleaned_line:
+                    cleaned_hypos.append(cleaned_line)
+            hypos = cleaned_hypos
         
         # Store in session
         session['hypotheses'] = hypos
@@ -502,6 +511,8 @@ def upload_report():
     session['last_topic'] = '[Uploaded]'
     return jsonify({'success': True, 'content': content})
 
+
+
 @app.route('/api/upload-able-table', methods=['POST'])
 def upload_able_table():
     if 'file' not in request.files:
@@ -686,9 +697,47 @@ async def hunt_plan():
         else:
             return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/clear-session', methods=['POST'])
+@app.route('/api/save-selected-hypothesis', methods=['POST'])
+def save_selected_hypothesis():
+    """Save a selected hypothesis to the session directly."""
+    data = request.json
+    if not data or 'hypothesis' not in data:
+        return jsonify({'success': False, 'error': 'No hypothesis provided'}), 400
+        
+    hypothesis = data['hypothesis']
+    session['hypothesis'] = hypothesis
+    # When a new base hypothesis is selected, any previous refinement is invalid.
+    session.pop('refined_hypothesis', None)
+    print(f"Saved selected hypothesis to session: {hypothesis[:50]}...")
+    
+    return jsonify({'success': True})
+
+
+@app.route('/api/upload-hypothesis', methods=['POST'])
+def upload_hypothesis():
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'No file part in the request.'}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'success': False, 'error': 'No file selected for uploading.'}), 400
+    if file:
+        try:
+            content = file.read().decode('utf-8')
+            # Save to session
+            session['hypothesis'] = content
+            # Clear any old refined hypothesis
+            session.pop('refined_hypothesis', None)
+            return jsonify({'success': True, 'hypothesis': content})
+        except Exception as e:
+            return jsonify({'success': False, 'error': f'Error reading file: {e}'}), 500
+    return jsonify({'success': False, 'error': 'An unknown error occurred.'}), 500
+
+
+@app.route('/api/clear-session', methods=['POST'])
 def clear_session():
+    # Clear the session data from the server's storage.
     session.clear()
+    # The client-side code will handle the redirect after this is successful.
     return jsonify({'success': True})
 
 # ===== Page Routes =====

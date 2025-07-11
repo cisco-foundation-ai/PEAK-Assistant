@@ -27,7 +27,6 @@
     .data-sources-container {
         flex: 1;
         overflow-y: auto;
-        padding: 0.5rem;
     }
     
     .feedback-container-fixed {
@@ -63,7 +62,7 @@
                     <!-- Download button will be inserted here by script -->
                 </div>
                 <button class="btn btn-primary" id="generate-data-sources-btn">
-                    <i class="bi bi-search me-2"></i>Identify Data Sources
+                    <i class="bi bi-robot me-2"></i>Identify Data Sources
                 </button>
                 <div class="upload-container">
                     <input type="file" id="data-sources-file-input" class="form-control" accept=".md,.txt" style="display: none;">
@@ -103,7 +102,7 @@
     <!-- Content Display - Takes up most of the page -->
     <!-- Content Display - Takes up most of the page -->
     <div id="data-sources-container" class="data-sources-container">
-        <div class="content-card m-2">
+        <div class="content-card">
             <div id="data-sources-content" data-raw-markdown="">
                 <div id="data-sources-placeholder" class="text-muted fst-italic p-3">
                     The identified data sources will appear here. Click "Identify Data Sources" to begin.

@@ -12,12 +12,17 @@
 {% block content %}
 <div class="phase-container d-flex flex-column" style="height: calc(100vh - 80px);">
     <!-- Header -->
-    <div class="phase-header">
-        <h1 class="phase-title">Hypothesis Refinement</h1>
-        <p class="phase-description mb-2">
-            Review the current hypothesis. Provide feedback to the AI assistant to refine it.
-        </p>
+    <div class="phase-header d-flex justify-content-between align-items-center">
+        <h1 class="phase-title mb-0">Hypothesis Refinement</h1>
+        <button id="refine-btn" class="btn btn-primary">
+            <i class="bi bi-robot me-2"></i>Refine Hypothesis
+        </button>
     </div>
+
+    <!-- Compact Phase Description -->
+    <p class="phase-description">
+        Review the current hypothesis. Provide feedback to the AI assistant to refine it.
+    </p>
 
     <!-- Main Content Area: Use flex-grow-1 to take up available space -->
     <div class="flex-grow-1" style="overflow-y: auto;">
@@ -63,6 +68,7 @@ class RefinementManager {
     }
 
     setupEventListeners() {
+        document.getElementById('refine-btn').addEventListener('click', () => this.handleRefine());
         document.getElementById('send-feedback-btn').addEventListener('click', () => this.handleSendFeedback());
         this.feedbackInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -77,10 +83,7 @@ class RefinementManager {
         const hypothesis = sessionStorage.getItem('refined_hypothesis') || sessionStorage.getItem('hypothesis');
         this.displayHypothesis(hypothesis);
 
-        if (hypothesis && hypothesis.trim()) {
-            // Get initial refinement when the page loads
-            this.fetchRefinement(hypothesis, null);
-        }
+
     }
 
     displayHypothesis(hypothesis) {
@@ -147,6 +150,15 @@ class RefinementManager {
         }
 
         this.fetchRefinement(currentHypothesis, feedback);
+    }
+
+    handleRefine() {
+        const currentHypothesis = this.hypothesisContent.dataset.rawHypothesis;
+        if (!currentHypothesis) {
+            UIFeedback.show('error', 'No hypothesis to refine.');
+            return;
+        }
+        this.fetchRefinement(currentHypothesis, null);
     }
 }
 
