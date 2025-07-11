@@ -202,6 +202,7 @@ class HuntPlanManager {
 
     updateContent(markdown) {
         ContentRenderer.renderMarkdown(markdown, this.contentContainer);
+        this.contentContainer.dataset.rawMarkdown = markdown;
         sessionStorage.setItem(this.sessionStorageKey, markdown);
         DownloadManager.setupDownloadButton('plan-content', 'hunt_plan', 'plan-actions-container');
         this.downloadContainer.style.display = 'flex';
