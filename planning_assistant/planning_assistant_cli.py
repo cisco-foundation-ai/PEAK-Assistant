@@ -35,7 +35,8 @@ async def plan_hunt(
     able_info: str = None,
     data_discovery: str = None,
     local_context: str = None,
-    verbose: bool = False
+    verbose: bool = False,
+    previous_run: list = None
 ) -> str:
     """
     Agent that consumes data produced by all the other PEAK Prepare-phase agents and
@@ -191,6 +192,10 @@ async def plan_hunt(
         TextMessage(content=f"Additional local context: {local_context}\n", source="user"),
     ]
 
+    # If we have messages from a previous run, add them so we can continue the planning
+    if previous_run:
+        messages = messages + previous_run 
+
     auth_mgr = PEAKAssistantAuthManager()
     az_model_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr)
 
@@ -217,7 +222,7 @@ async def plan_hunt(
 
     try:
         if verbose:
-            result = await Console(team.run_stream(task=messages))
+            result = await Console(team.run_stream(task=messages), output_stats=True)
         else:
             result = await team.run(task=messages)
         return result
@@ -305,22 +310,36 @@ if __name__ == "__main__":
             print(f"Error reading local context: {e}")
             exit(1)
 
-    # Run the hypothesizer asynchronously
-    data_sources = asyncio.run(
-        plan_hunt(
-            hypothesis=args.hypothesis, 
-            research_document=research_data, 
-            able_info=able_info,
-            data_discovery=data_discovery,
-            local_context=local_context,
-            verbose=args.verbose
+    messages = list()
+    while True:
+        # Run the hypothesizer asynchronously
+        data_sources = asyncio.run(
+            plan_hunt(
+                hypothesis=args.hypothesis, 
+                research_document=research_data, 
+                able_info=able_info,
+                data_discovery=data_discovery,
+                local_context=local_context,
+                verbose=args.verbose,
+                previous_run=messages
+            )
         )
-    )
 
-    # Find the final message from the "hunt_planner" agent using next() and a generator expression
-    hunt_plan = next(
-        (message.content for message in reversed(data_sources.messages) if message.source == "hunt_planner"),
-        None  # Default value if no "hunt_planner" message is found
-    )
+        # Find the final message from the "hunt_planner" agent using next() and a generator expression
+        hunt_plan = next(
+            (message.content for message in reversed(data_sources.messages) if message.source == "hunt_planner"),
+            None  # Default value if no "hunt_planner" message is found
+        )
 
-    print(hunt_plan)
+        print(hunt_plan)
+        feedback = input("Please provide your feedback on the plan (or press Enter to approve it): ")   
+
+        if feedback.strip():
+            # If feedback is provided, add it to the messages and loop back to
+            # the research team for further refinement
+            messages = [
+                TextMessage(content=f"The current plan draft is: {hunt_plan}\n", source="user"),
+                TextMessage(content=f"User feedback: {feedback}\n", source="user")
+            ]
+        else:
+            break        

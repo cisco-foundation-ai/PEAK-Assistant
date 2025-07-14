@@ -32,8 +32,8 @@ async def refiner(
         hypothesis: str = None, 
         local_context: str = None, 
         research_document: str = None, 
-        automated: bool = False, 
-        verbose: bool = False
+        verbose: bool = False,
+        previous_run: list = None
 ) -> str:
     """
     Threat hunting hypothesis refiner agent that combines user input, a markdown document, and its own prompt
@@ -80,7 +80,7 @@ async def refiner(
         is specific enough, whether it is relevant to the research document, and whether it is actionable. 
         
         For each input hypothesis, if you believe it is a "good" hypothesis, you will return the hypothesis as-is, 
-        followed by the string "YYY-HYPOTHESIS-CANDIDATE-YYY" on a new line. For "good" hypotheses, do not
+        followed by the string "YYY-HYPOTHESIS-ACCEPTED-YYY" on a new line. For "good" hypotheses, do not
         include any additional commentary or notes of your own. If the hypothesis is not a good
         hypothesis, you will return a list of up to 5 reasons why you believe it is not a good hypothesis and 
         what the user could do to correct these issues. Do not improve the hypothesis yourself.
@@ -99,9 +99,6 @@ async def refiner(
         system_message=refiner_system_prompt
     )
 
-    if automated:
-        critic_system_prompt = critic_system_prompt.replace("YYY-HYPOTHESIS-CANDIDATE-YYY", "YYY-HYPOTHESIS-ACCEPTED-YYY")
-
     # Create the critic agent.
     critic_agent = AssistantAgent(
         "critic",
@@ -109,34 +106,30 @@ async def refiner(
         system_message=critic_system_prompt
     )
 
-    if not automated:
-        # Put the human in the loop
-        human_feedback = UserProxyAgent(
-            "human_feedback"
-        ) 
-        agent_list = [critic_agent, human_feedback, refiner_agent]
-    else:
-        agent_list = [critic_agent, refiner_agent]
-
     # Define a termination condition that stops the task if the critic approves.
     text_termination = TextMentionTermination("YYY-HYPOTHESIS-ACCEPTED-YYY")
 
     # Create a team with the primary and critic agents.
     team = RoundRobinGroupChat(
-        agent_list,
+        [critic_agent, refiner_agent],
         termination_condition=text_termination
     )
 
+    # Always add these, no matter if it's the first run or a subsequent one
     messages = [
         TextMessage(content=f"Here is the user's hypothesis: {hypothesis}\n", source="user"),
         TextMessage(content=f"Here is the research document:\n{research_document}\n", source="user"),
         TextMessage(content=f"Additional local context: {local_context}\n", source="user"),
     ]
 
+    # If we have messages from a previous run, add them so we can continue the research
+    if previous_run:
+        messages = messages + previous_run 
+
     try:
         # Run the team asynchronously
         if verbose:
-            result = await Console(team.run_stream(task=messages))
+            result = await Console(team.run_stream(task=messages), output_stats=True)
         else:
             result = await team.run(task=messages)
 
@@ -206,26 +199,39 @@ if __name__ == "__main__":
             print(f"Error reading local context: {e}")
             exit(1)
 
-    # Run the hypothesizer asynchronously
-    messages = asyncio.run(
-        refiner(
-            hypothesis=args.hypothesis, 
-            local_context=local_context, 
-            research_document=research_data,
-            automated=args.automated,
-            verbose=args.verbose
+    messages = list()
+    current_hypothesis = args.hypothesis
+    while True:
+
+        # Run the hypothesizer asynchronously
+        messages = asyncio.run(
+            refiner(
+                hypothesis=current_hypothesis,
+                local_context=local_context, 
+                research_document=research_data,
+                verbose=args.verbose,
+                previous_run=messages
+            )
         )
-    )
 
-    # Find the final message from the "critic" agent using next() and a generator expression
-    refined_hypothesis_message = next(
-        (message.content for message in reversed(messages.messages) if message.source == "critic"),
-        None  # Default value if no "critic" message is found
-    )
+        # Find the final message from the "critic" agent using next() and a generator expression
+        refined_hypothesis_message = next(
+            (message.content for message in reversed(messages.messages) if message.source == "critic"),
+            None  # Default value if no "critic" message is found
+        )
 
-    # Remove the trailing "YYY-HYPOTHESIS-ACCEPTED-YYY" string
-    refined_hypothesis = refined_hypothesis_message.replace("YYY-HYPOTHESIS-ACCEPTED-YYY", "").strip()
+        # Remove the trailing "YYY-HYPOTHESIS-ACCEPTED-YYY" string
+        current_hypothesis = refined_hypothesis_message.replace("YYY-HYPOTHESIS-ACCEPTED-YYY", "").strip()
 
-    # Print the refined hypothesis
-    print("Refined Hypothesis:")
-    print(refined_hypothesis)
+        # Print the refined hypothesis and ask for user feedback
+        print(current_hypothesis)
+        feedback = input("Please provide your feedback on the refined hypothesis (or press Enter to approve it): ")
+
+        if feedback.strip():
+            # If feedback is provided, add it to the messages and loop back to the refiner
+            messages = [
+                TextMessage(content=f"User feedback: {feedback}\n", source="user")
+            ]
+        else:
+            break
+

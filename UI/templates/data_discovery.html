@@ -10,19 +10,74 @@
 {% block nav %}{{ super() }}{% endblock %}
 
 {% block content %}
-<div class="phase-container">
-    <!-- Compact Phase Header -->
-    <div class="phase-header">
-        <h1 class="phase-title">Data Discovery</h1>
-        <div id="download-data-actions-container" style="display: none;">
-            <!-- Download button will be inserted here by script -->
-        </div>
-    </div>
+<style>
+    /* Custom styles for Data Discovery page */
+    .phase-container {
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - 56px); /* Full height minus navbar */
+        overflow: hidden;
+    }
     
-    <!-- Compact Phase Description -->
-    <p class="phase-description">
-        Identify potential data sources based on your research report, hypothesis, and ABLE table.
-    </p>
+    .discovery-top-section {
+        padding-bottom: 0.5rem;
+        flex-shrink: 0;
+    }
+    
+    .data-sources-container {
+        flex: 1;
+        overflow-y: auto;
+    }
+    
+    .feedback-container-fixed {
+        position: sticky;
+        bottom: 0;
+        background-color: var(--bs-body-bg);
+        border-top: 1px solid var(--bs-border-color);
+        padding: 0.75rem;
+        z-index: 1000;
+    }
+    
+    /* More compact elements */
+    .compact-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    
+    .compact-header h1 {
+        font-size: 1.5rem;
+        margin-bottom: 0;
+    }
+</style>
+<div class="phase-container">
+    <!-- Top Section (Header, description, hypothesis) -->
+    <div class="discovery-top-section">
+        <!-- Compact Phase Header -->
+        <div class="compact-header">
+            <h1 class="phase-title">Data Discovery</h1>
+            <div class="d-flex gap-2">
+                <div id="download-data-actions-container">
+                    <!-- Download button will be inserted here by script -->
+                </div>
+                <button class="btn btn-primary" id="generate-data-sources-btn">
+                    <i class="bi bi-robot me-2"></i>Identify Data Sources
+                </button>
+                <div class="upload-container">
+                    <input type="file" id="data-sources-file-input" class="form-control" accept=".md,.txt" style="display: none;">
+                    <button type="button" class="btn btn-outline-secondary" id="upload-data-sources-btn">
+                        <i class="bi bi-upload me-1"></i>Upload
+                    </button>
+                    <small id="upload-data-sources-filename" class="form-text text-muted"></small>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Compact Phase Description -->
+        <p class="phase-description">
+            Identify potential data sources based on your research report, hypothesis, and ABLE table.
+        </p>
 
     <!-- Prerequisite Warning -->
     <div id="missing-prerequisites-warning" class="prerequisite-warning" style="display: none;">
@@ -42,36 +97,27 @@
         </div>
     </div>
 
-    <!-- Compact Action Section -->
-    <div class="action-section">
-        <div class="d-flex justify-content-between align-items-center">
-            <div>
-                <div class="action-section-title">
-                    <i class="bi bi-robot me-2"></i>AI Data Source Identification
-                </div>
-                <small class="text-muted">AI will analyze your research and hypothesis to identify relevant data sources for hunting.</small>
-            </div>
-            <div class="d-flex gap-2">
-                <button class="btn btn-primary" id="generate-data-sources-btn">
-                    <i class="bi bi-search me-2"></i>Identify Data Sources
-                </button>
-                <div class="upload-container">
-                    <input type="file" id="data-sources-file-input" class="form-control" accept=".md,.txt" style="display: none;">
-                    <button type="button" class="btn btn-outline-secondary" id="upload-data-sources-btn">
-                        <i class="bi bi-upload me-1"></i>Upload
-                    </button>
-                    <small id="upload-data-sources-filename" class="form-text text-muted"></small>
+    </div><!-- End of discovery-top-section -->
+
+    <!-- Content Display - Takes up most of the page -->
+    <!-- Content Display - Takes up most of the page -->
+    <div id="data-sources-container" class="data-sources-container">
+        <div class="content-card">
+            <div id="data-sources-content" data-raw-markdown="">
+                <div id="data-sources-placeholder" class="text-muted fst-italic p-3">
+                    The identified data sources will appear here. Click "Identify Data Sources" to begin.
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Content Display - Takes up most of the page -->
-    <div id="data-sources-section" style="display: none;">
-        <div class="content-card">
-            <div id="data-sources-content" data-raw-markdown="">
-                <p class="text-muted">Data sources will appear here...</p>
-            </div>
+    <!-- Feedback Input Area: Fixed at the bottom -->
+    <div id="feedback-container" class="feedback-container-fixed">
+        <div class="input-group">
+            <textarea id="feedback-input" class="form-control" rows="3" placeholder="Provide feedback to refine the data sources."></textarea>
+            <button id="send-feedback-btn" class="btn btn-primary">
+                <i class="bi bi-send me-2"></i>Send Feedback
+            </button>
         </div>
     </div>
 </div>
@@ -82,340 +128,179 @@
 /**
  * Data Discovery Phase Manager
  */
-class DataDiscoveryManager extends PhaseManager {
+class DataDiscoveryManager {
     constructor() {
-        super('data_sources', {
-            apiEndpoint: '/api/data-discovery',
-            contentContainer: 'data-sources-content',
-            downloadContainer: 'download-data-actions-container',
-            sessionStorageKey: 'data_sources_md',
-            globalContentVar: 'currentDataSourcesMarkdown',
-            responseContentKey: 'data_sources',
-            loadingMessage: 'Identifying data sources... (this may take a moment)',
-            generateButtonTitle: 'Identify data sources for hunting',
-            generateButtonText: '<i class="bi bi-search me-2"></i>Identify Data Sources',
-            prerequisites: [
-                {
-                    sessionKey: 'report_md',
-                    name: 'Research Document',
-                    url: '/research'
-                },
-                {
-                    sessionKey: 'hypothesis',
-                    name: 'Hypothesis',
-                    url: '/hypothesis'
-                },
-                {
-                    sessionKey: 'able_table_md',
-                    name: 'ABLE Table',
-                    url: '/able-table'
-                }
-            ]
-        });
-        
+        this.apiEndpoint = '/api/data-discovery';
+        this.contentContainer = document.getElementById('data-sources-content');
+        this.downloadContainer = document.getElementById('download-data-actions-container');
+        this.sessionStorageKey = 'data_sources_md';
+
+        this.feedbackInput = document.getElementById('feedback-input');
+        this.currentHypoContent = document.getElementById('current-hypo-content');
+
+        this.setupEventListeners();
         this.setupUploadHandlers();
+        this.initializePage();
     }
-    
+
     setupEventListeners() {
-        const generateBtn = document.getElementById('generate-data-sources-btn');
-        if (generateBtn) {
-            generateBtn.addEventListener('click', () => this.handleGenerate());
-        }
+        document.getElementById('generate-data-sources-btn').addEventListener('click', () => this.handleGenerate());
+        document.getElementById('send-feedback-btn').addEventListener('click', () => this.handleSendFeedback());
+
+        this.feedbackInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                this.handleSendFeedback();
+            }
+        });
     }
-    
+
     setupUploadHandlers() {
         const uploadBtn = document.getElementById('upload-data-sources-btn');
         const fileInput = document.getElementById('data-sources-file-input');
-        
+
         if (uploadBtn && fileInput) {
             uploadBtn.addEventListener('click', () => fileInput.click());
             fileInput.addEventListener('change', (event) => this.handleFileUpload(event));
         }
     }
-    
+
+    async initializePage() {
+        await this.checkPrerequisites();
+        const existingData = sessionStorage.getItem(this.sessionStorageKey);
+        if (existingData) {
+            this.updateContent(existingData);
+        }
+    }
+
+    async checkPrerequisites() {
+        const prerequisites = [
+            { key: 'report_md', name: 'Research Document', url: '/research' },
+            { key: 'hypothesis', name: 'Hypothesis', url: '/hypothesis' }
+        ];
+        const missing = [];
+        for (const prereq of prerequisites) {
+            let item = sessionStorage.getItem(prereq.key);
+            if(prereq.key === 'hypothesis') {
+                item = sessionStorage.getItem('refined_hypothesis') || item;
+            }
+            if (!item) {
+                missing.push(prereq);
+            }
+        }
+
+        const warningContainer = document.getElementById('missing-prerequisites-warning');
+        const listElement = document.getElementById('missing-items-list');
+        const generateBtn = document.getElementById('generate-data-sources-btn');
+
+        if (missing.length > 0) {
+            warningContainer.style.display = 'block';
+            listElement.innerHTML = missing.map(p => `<li><a href="${p.url}">${p.name}</a></li>`).join('');
+            generateBtn.disabled = true;
+            return false;
+        } else {
+            warningContainer.style.display = 'none';
+            generateBtn.disabled = false;
+            // Display hypothesis
+            const hypothesis = sessionStorage.getItem('refined_hypothesis') || sessionStorage.getItem('hypothesis');
+            if(hypothesis) {
+                document.getElementById('current-hypo-container').style.display = 'block';
+                ContentRenderer.renderMarkdown(hypothesis, this.currentHypoContent);
+            }
+            return true;
+        }
+    }
+
+    updateContent(markdown) {
+        const placeholder = document.getElementById('data-sources-placeholder');
+        if (placeholder) {
+            placeholder.style.display = 'none';
+        }
+        ContentRenderer.renderMarkdown(markdown, this.contentContainer);
+        this.contentContainer.dataset.rawMarkdown = markdown;
+        sessionStorage.setItem(this.sessionStorageKey, markdown);
+        DownloadManager.setupDownloadButton('data-sources-content', 'data_sources', 'download-data-actions-container');
+        this.downloadContainer.style.display = 'flex';
+    }
+
+    async generateContent(requestBody) {
+        UIFeedback.show('loading', 'Identifying data sources... (this may take a moment)');
+        try {
+            const response = await fetch(this.apiEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            });
+            const data = await response.json();
+            if (data.success) {
+                this.updateContent(data.data_sources);
+            } else {
+                throw new Error(data.error || 'Failed to generate content');
+            }
+        } catch (error) {
+            UIFeedback.show('error', 'Error: ' + error.message);
+        } finally {
+            UIFeedback.hideLoading();
+        }
+    }
+
     async handleGenerate() {
-        // Check if prerequisites are met before proceeding
-        const prereqCheck = await this.checkPrerequisites();
-        if (!prereqCheck.valid) {
-            UIFeedback.show('error', 'Please complete all prerequisite phases first.');
+        const canProceed = await this.checkPrerequisites();
+        if (!canProceed) return;
+
+        const requestBody = {
+            hypothesis: sessionStorage.getItem('refined_hypothesis') || sessionStorage.getItem('hypothesis'),
+            report_md: sessionStorage.getItem('report_md'),
+            able_table_md: sessionStorage.getItem('able_table_md')
+        };
+        await this.generateContent(requestBody);
+    }
+
+    async handleSendFeedback() {
+        const feedback = this.feedbackInput.value.trim();
+        if (!feedback) {
+            UIFeedback.show('error', 'Please enter feedback to refine the data sources.');
             return;
         }
-        
-        // Hide content section before generating
-        const dataSourcesSection = document.getElementById('data-sources-section');
-        if (dataSourcesSection) {
-            dataSourcesSection.style.display = 'none';
+
+        const currentDataSources = this.contentContainer.dataset.rawMarkdown;
+        if (!currentDataSources) {
+            UIFeedback.show('error', 'No data sources found to provide feedback on.');
+            return;
         }
-        
-        try {
-            await this.generateContent();
-        } catch (error) {
-            // Error handling is already done in the parent class
-        }
+
+        const requestBody = {
+            hypothesis: sessionStorage.getItem('refined_hypothesis') || sessionStorage.getItem('hypothesis'),
+            report_md: sessionStorage.getItem('report_md'),
+            able_table_md: sessionStorage.getItem('able_table_md'),
+            feedback: feedback,
+            current_data_sources: currentDataSources
+        };
+
+        await this.generateContent(requestBody);
+        this.feedbackInput.value = '';
     }
-    
-    async handleFileUpload(event) {
+
+    handleFileUpload(event) {
         const file = event.target.files[0];
         if (!file) return;
-        
-        const uploadFilename = document.getElementById('upload-data-sources-filename');
-        if (uploadFilename) {
-            uploadFilename.textContent = file.name;
-        }
-        
-        const formData = new FormData();
-        formData.append('file', file);
-        
-        try {
-            UIFeedback.showLoading('Uploading data sources...');
-            
-            const response = await fetch('/api/upload-data-sources', {
-                method: 'POST',
-                body: formData
-            });
-            
-            const data = await response.json();
-            UIFeedback.hideLoading();
-            
-            if (data.success) {
-                this.updateContent(data.data_sources, true);
-                if (uploadFilename) {
-                    uploadFilename.textContent = file.name + ' uploaded successfully!';
-                    setTimeout(() => { uploadFilename.textContent = file.name; }, 3000);
-                }
-            } else {
-                UIFeedback.show('error', data.error || 'Failed to upload data sources.');
-                if (uploadFilename) {
-                    uploadFilename.textContent = 'Upload failed. Try again.';
-                }
-            }
-        } catch (error) {
-            UIFeedback.hideLoading();
-            UIFeedback.show('error', 'Error uploading file: ' + error.message);
-            if (uploadFilename) {
-                uploadFilename.textContent = 'Upload failed. Try again.';
-            }
-        }
-        
-        // Clear file input
-        event.target.value = '';
-    }
-    
-    async checkPrerequisites() {
-        try {
-            const sessionData = await this.apiClient.getSessionData();
-            const missing = [];
-            
-            // Check for research document
-            if (!sessionData.report_md || !sessionData.report_md.trim()) {
-                missing.push({
-                    sessionKey: 'report_md',
-                    name: 'Research Document',
-                    url: '/research'
-                });
-            }
-            
-            // Check for hypothesis (refined or original)
-            if (!sessionData.refined_hypothesis && !sessionData.hypothesis) {
-                missing.push({
-                    sessionKey: 'hypothesis',
-                    name: 'Hypothesis',
-                    url: '/hypothesis'
-                });
-            }
-            
-            // Check for ABLE table
-            if (!sessionData.able_table_md) {
-                missing.push({
-                    sessionKey: 'able_table_md',
-                    name: 'ABLE Table',
-                    url: '/able-table'
-                });
-            }
-            
-            this.updatePrerequisiteUI(missing, sessionData);
-            return { valid: missing.length === 0, missing };
-        } catch (error) {
-            console.warn('Could not check prerequisites:', error);
-            return { valid: true, missing: [] };
-        }
-    }
-    
-    updatePrerequisiteUI(missingPrereqs, sessionData = null) {
-        const warningElement = document.getElementById('missing-prerequisites-warning');
-        const generateBtn = document.getElementById('generate-data-sources-btn');
-        const currentHypoContainer = document.getElementById('current-hypo-container');
-        const currentHypoContent = document.getElementById('current-hypo-content');
-        
-        if (missingPrereqs.length > 0 && warningElement) {
-            const itemsList = document.getElementById('missing-items-list');
-            if (itemsList) {
-                itemsList.innerHTML = missingPrereqs.map(prereq => 
-                    `<li><a href="${prereq.url}">${prereq.name}</a></li>`
-                ).join('');
-            }
-            warningElement.style.display = 'block';
-            
-            // Hide hypothesis display when prerequisites are missing
-            if (currentHypoContainer) {
-                currentHypoContainer.style.display = 'none';
-            }
-            
-            if (generateBtn) {
-                generateBtn.disabled = true;
-                generateBtn.classList.add('btn-disabled-warning');
-                generateBtn.title = 'Complete all prerequisite phases first';
-                generateBtn.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i>Prerequisites Required';
-            }
-        } else {
-            if (warningElement) {
-                warningElement.style.display = 'none';
-            }
-            
-            // Show current hypothesis
-            if (sessionData && currentHypoContainer && currentHypoContent) {
-                const hypothesisToUse = sessionData.refined_hypothesis || sessionData.hypothesis;
-                if (hypothesisToUse && hypothesisToUse.trim()) {
-                    currentHypoContent.setAttribute('data-raw-markdown', hypothesisToUse);
-                    ContentRenderer.renderMarkdown(hypothesisToUse, currentHypoContent);
-                    currentHypoContainer.style.display = 'block';
-                }
-            }
-            
-            if (generateBtn) {
-                generateBtn.disabled = false;
-                generateBtn.classList.remove('btn-disabled-warning');
-                generateBtn.title = 'Identify data sources for hunting';
-                generateBtn.innerHTML = '<i class="bi bi-search me-2"></i>Identify Data Sources';
-            }
-        }
-    }
-    
-    updateContent(markdown, showSection = true) {
-        // Store content in global variables
-        window.currentDataSourcesMarkdown = markdown;
-        
-        const dataSourcesSection = document.getElementById('data-sources-section');
-        
-        if (markdown && markdown.trim()) {
-            // Use the parent class's displayContent method for proper rendering
-            this.displayContent(markdown);
-            
-            // Only show the section if explicitly requested (user action)
-            if (showSection && dataSourcesSection) {
-                dataSourcesSection.style.display = 'block';
-            }
-        } else {
-            // Clear content using parent method
-            this.clearContent();
-            
-            // Hide the section when no content
-            if (dataSourcesSection) {
-                dataSourcesSection.style.display = 'none';
-            }
-        }
-        
-        // Setup download button
-        if (markdown && markdown.trim()) {
-            DownloadManager.setupDownloadButton(
-                this.config.contentContainer,
-                'data_sources',
-                this.config.downloadContainer
-            );
-            
-            const downloadContainer = document.getElementById(this.config.downloadContainer);
-            if (downloadContainer) {
-                downloadContainer.style.display = 'flex';
-            }
-        } else {
-            const downloadContainer = document.getElementById(this.config.downloadContainer);
-            if (downloadContainer) {
-                downloadContainer.style.display = 'none';
-            }
-        }
-        
-        // Check navigation button state
-        this.checkNavigationButtonState();
-    }
-    
-    checkNavigationButtonState() {
-        // Check if hunt planning prerequisites are met
-        const researchDone = sessionStorage.getItem('report_md')?.trim();
-        const hypothesisDone = sessionStorage.getItem('refined_hypothesis')?.trim() || sessionStorage.getItem('current_hypothesis')?.trim();
-        const ableDone = sessionStorage.getItem('able_table_md')?.trim();
-        const discoveryDone = sessionStorage.getItem('data_sources_md')?.trim();
 
-        const allPrerequisitesMet = researchDone && hypothesisDone && ableDone && discoveryDone;
-        
-        // Find the navigation button (hunt planning "next" button)
-        const navButtons = document.querySelectorAll('.top-navigation .btn-outline-primary');
-        navButtons.forEach(btn => {
-            if (btn.href && btn.href.includes('/hunt-planning')) {
-                if (!allPrerequisitesMet) {
-                    btn.classList.add('disabled');
-                    btn.style.opacity = '0.6';
-                    btn.style.cursor = 'not-allowed';
-                    btn.addEventListener('click', function(e) {
-                        if (this.classList.contains('disabled')) {
-                            e.preventDefault();
-                            return false;
-                        }
-                    });
-                } else {
-                    btn.classList.remove('disabled');
-                    btn.style.opacity = '';
-                    btn.style.cursor = '';
-                }
+        const uploadFilename = document.getElementById('upload-data-sources-filename');
+        // Don't set filename text here to avoid the brief flash when it's cleared later
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const content = e.target.result;
+            this.updateContent(content);
+            if (uploadFilename) {
+                uploadFilename.textContent = '';
             }
-        });
-    }
-    
-    onContentGenerated(response) {
-        // Show content container
-        const dataSourcesSection = document.getElementById('data-sources-section');
-        if (dataSourcesSection) {
-            dataSourcesSection.style.display = 'block';
-        }
-        
-        // Setup download button
-        DownloadManager.setupDownloadButton(
-            this.config.contentContainer,
-            'data_sources',
-            this.config.downloadContainer
-        );
-        
-        // Show download container
-        const downloadContainer = document.getElementById(this.config.downloadContainer);
-        if (downloadContainer) {
-            downloadContainer.style.display = 'flex';
-        }
-    }
-    
-    async initialize() {
-        await super.initialize();
-        
-        // Load existing content but don't show section on initial load
-        try {
-            const response = await fetch(this.config.apiEndpoint, {
-                method: 'GET',
-                headers: { 'Accept': 'application/json' }
-            });
-            
-            const data = await response.json();
-            if (data.data_sources_md) {
-                // Load content but don't show the section until user takes action
-                this.updateContent(data.data_sources_md, false);
-            }
-        } catch (error) {
-            console.warn('Could not load existing data sources:', error);
-        }
-        
-        // Check prerequisites on initialization
-        await this.checkPrerequisites();
+        };
+        reader.readAsText(file);
+        event.target.value = '';
     }
 }
 
-// Initialize the Data Discovery Manager when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
     window.dataDiscoveryManager = new DataDiscoveryManager();
 });

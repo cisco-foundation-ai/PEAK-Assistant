@@ -9,17 +9,26 @@
 
 {% block content %}
 <div class="phase-container">
-    <!-- Compact Phase Header -->
-    <div class="phase-header">
-        <h1 class="phase-title">Hypothesis Generation</h1>
-        <div id="download-hypo-actions-container" style="display: none;">
-            <!-- Download button will be inserted here by script -->
+    <!-- Header -->
+    <div class="phase-header d-flex justify-content-between align-items-center">
+        <h1 class="phase-title mb-0">Hypothesis Generation</h1>
+        <div class="d-flex gap-2">
+            <div id="download-hypo-actions-container" class="me-2" style="display: none;"><!-- Download button will be inserted here by setupDownloadButton --></div>
+            <button id="get-hypos-btn" class="btn btn-primary">
+                <i class="bi bi-robot me-2"></i>Get Suggestions
+            </button>
+            <div class="upload-container">
+                <input type="file" id="upload-hypo-file" class="d-none" accept=".md,.txt">
+                <button type="button" id="upload-hypo-btn" class="btn btn-outline-secondary">
+                    <i class="bi bi-upload me-1"></i>Upload
+                </button>
+            </div>
         </div>
     </div>
 
     <!-- Compact Phase Description -->
     <p class="phase-description">
-        Generate or input hypothesis based on your research findings. AI can suggest hypotheses or you can create your own.
+        Generate or input a hypothesis based on your research findings. You can have the AI suggest hypotheses, upload an existing one, or create your own manually below.
     </p>
 
     <!-- Warning for Missing Research -->
@@ -28,47 +37,24 @@
         <p class="mb-0">No research report found. Please <a href="/research">generate a research report</a> first.</p>
     </div>
 
-    <!-- Compact Mode Selection and Actions -->
-    <div class="row g-3 mb-3">
-        <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center">
-                <div class="d-flex gap-3">
-                    <div class="form-check">
-                        <input class="form-check-input" type="radio" name="hypoMode" id="hypoModeAuto" value="auto" checked>
-                        <label class="form-check-label" for="hypoModeAuto">
-                            <i class="bi bi-robot me-1"></i>AI Generated
-                        </label>
-                    </div>
-                    <div class="form-check">
-                        <input class="form-check-input" type="radio" name="hypoMode" id="hypoModeManual" value="manual">
-                        <label class="form-check-label" for="hypoModeManual">
-                            <i class="bi bi-pencil me-1"></i>Manual Input
-                        </label>
-                    </div>
-                </div>
-                
-                <!-- Auto Hypothesis Button -->
-                <div id="hypo-auto-section">
-                    <button id="get-hypos-btn" class="btn btn-primary btn-sm">
-                        <i class="bi bi-lightbulb me-1"></i>Get Suggestions
-                    </button>
-                </div>
-
-                <!-- Manual Hypothesis Button -->
-                <div id="hypo-manual-section" style="display: none;">
-                    <button id="submit-hypo-btn" class="btn btn-primary btn-sm">
-                        <i class="bi bi-check-circle me-1"></i>Submit
-                    </button>
-                </div>
-            </div>
+        <div id="current-hypo-saved-msg" class="alert alert-success py-1" style="display:none;">
+            <i class="bi bi-check-circle me-2"></i>Hypothesis saved successfully!
         </div>
+    
+    <!-- Hidden element for hypothesis storage (needed by download function) -->
+    <div id="current-hypo-container" style="display: none;">
+        <textarea id="current-hypo-edit" style="display: none;"></textarea>
     </div>
 
     <!-- Manual Input Section (full width when active) -->
-    <div id="hypo-manual-input-section" class="mb-3" style="display: none;">
+    <div id="hypo-manual-input-section" class="mb-3">
         <textarea id="hypo-input" class="form-control" rows="3" 
                   placeholder="Describe the threat hypothesis you want to test..."></textarea>
+
+
     </div>
+    
+
 
     <!-- AI Generation Section (full width) -->
     <div id="hypo-select-container" class="mb-3" style="display: none;">
@@ -76,316 +62,170 @@
             <!-- Options will be dynamically inserted here -->
         </div>
     </div>
-
-    <!-- Current Hypothesis Display -->
-    <div id="current-hypo-container" class="content-card" style="display: none;">
-        <h5><i class="bi bi-lightbulb me-2"></i>Current Hypothesis</h5>
-        <textarea id="current-hypo-edit" class="form-control" rows="3" 
-                  style="resize: vertical;" data-raw-markdown=""></textarea>
-        <div id="current-hypo-saved-msg" class="alert alert-success py-1" style="display:none;">
-            <i class="bi bi-check-circle me-2"></i>Hypothesis saved successfully!
-        </div>
-    </div>
 </div>
 {% endblock %}
 
 {% block script %}
-// Store current hypothesis markdown for download
-window.currentHypothesisMarkdown = '';
-
-// Add this at the top of the script block to get the server-passed value
-window.currentHypothesisFromServer = "{{ current_hypothesis|e|replace('\\n', '\\\\n')|replace('\\r', '') }}";
-
+// Final, corrected script block. Cache-buster: 1626013041
 document.addEventListener('DOMContentLoaded', function() {
-    const currentHypoEdit = document.getElementById('current-hypo-edit');
-    const currentHypoContainer = document.getElementById('current-hypo-container');
-    const downloadHypoActionsContainer = document.getElementById('download-hypo-actions-container');
+    // --- Element Getters ---
+    const getSuggestionsBtn = document.getElementById('get-hypos-btn');
+    const hypoSelectContainer = document.getElementById('hypo-select-container');
+    const hypoSelect = document.getElementById('hypo-select');
+    const hypoInput = document.getElementById('hypo-input');
+    const noResearchWarning = document.getElementById('no-research-warning');
+    const uploadBtn = document.getElementById('upload-hypo-btn');
+    const fileInput = document.getElementById('upload-hypo-file');
 
-    // Setup combined download button for hypothesis
-    // Note: 'current-hypo-edit' is used as targetContentId, its data-raw-markdown will be used.
-    setupDownloadButton('current-hypo-edit', 'hypothesis', 'download-hypo-actions-container');
-
-    // Toggle hypothesis input mode
-    document.querySelectorAll('input[name="hypoMode"]').forEach(radio => {
-        radio.addEventListener('change', function() {
-            if (this.value === 'auto') {
-                document.getElementById('hypo-auto-section').style.display = 'block';
-                document.getElementById('hypo-manual-section').style.display = 'none';
-                document.getElementById('hypo-manual-input-section').style.display = 'none';
-                // Keep AI suggestions visible if they exist
-            } else {
-                document.getElementById('hypo-auto-section').style.display = 'none';
-                document.getElementById('hypo-manual-section').style.display = 'block';
-                document.getElementById('hypo-manual-input-section').style.display = 'block';
-                // Hide AI suggestions when switching to manual mode
-                document.getElementById('hypo-select-container').style.display = 'none';
-            }
-        });
-    });
-
-    // Get hypotheses suggestions
-    document.getElementById('get-hypos-btn').addEventListener('click', function() {
-        // Clear existing content immediately
-        document.getElementById('hypo-select-container').style.display = 'none';
-        document.getElementById('hypo-select').innerHTML = '';
-        updateCurrentHypothesisUI('');
-        
-        hideError();
-        showLoading('Getting hypotheses...');
-        
-        let retryCount = 3; // Default value
-        const storedRetryCount = localStorage.getItem('retry-count-page');
-        if (storedRetryCount) {
-            const parsedRetryCount = parseInt(storedRetryCount, 10);
-            if (!isNaN(parsedRetryCount)) {
-                retryCount = parsedRetryCount;
-            } else {
-                console.warn('Invalid retry count in localStorage for hypothesis, using default (3).');
-            }
-        }
-        
-        fetch('/api/hypothesize', {
+    // --- State Management & UI Updates ---
+    function saveHypothesis(hypothesisText) {
+        if (typeof hypothesisText !== 'string' || hypothesisText.trim() === '') return;
+        console.log('Saving hypothesis:', hypothesisText);
+        sessionStorage.setItem('hypothesis', hypothesisText);
+        sessionStorage.removeItem('refined_hypothesis'); // Clear stale refined data
+        fetch('/api/save-selected-hypothesis', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                retry_count: retryCount,
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            hideLoading();
-            
-            if (data.success) {
-                const selectElement = document.getElementById('hypo-select');
-                selectElement.innerHTML = '';
-                
-                const hypos = data.hypotheses.filter(h => h.trim() !== '');
-                hypos.forEach((hypo, idx) => {
-                    const optionDiv = document.createElement('div');
-                    optionDiv.className = 'hypothesis-option';
-                    optionDiv.textContent = hypo;
-                    optionDiv.dataset.value = hypo;
-                    
-                    // Add inline styles as backup
-                    optionDiv.style.padding = '16px';
-                    optionDiv.style.borderBottom = '1px solid #dee2e6';
-                    optionDiv.style.cursor = 'pointer';
-                    optionDiv.style.transition = 'all 0.3s ease';
-                    optionDiv.style.backgroundColor = '#ffffff';
-                    
-                    // Add hover effects with JavaScript since CSS might not be working
-                    optionDiv.addEventListener('mouseenter', function() {
-                        if (!this.classList.contains('selected')) {
-                            this.style.backgroundColor = '#f8f9fa';
-                            this.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
-                            this.style.transform = 'translateY(-2px)';
-                            this.style.borderLeft = '4px solid #0d6efd';
-                        }
-                    });
-                    
-                    optionDiv.addEventListener('mouseleave', function() {
-                        if (!this.classList.contains('selected')) {
-                            this.style.backgroundColor = '#ffffff';
-                            this.style.boxShadow = 'none';
-                            this.style.transform = 'translateY(0)';
-                            this.style.borderLeft = 'none';
-                        }
-                    });
-                    
-                    // Add click handler
-                    optionDiv.addEventListener('click', function() {
-                        // Remove selected class from all options
-                        selectElement.querySelectorAll('.hypothesis-option').forEach(opt => {
-                            opt.classList.remove('selected');
-                            opt.style.backgroundColor = '#ffffff';
-                            opt.style.color = '#000000';
-                            opt.style.boxShadow = 'none';
-                        });
-                        // Add selected class to clicked option
-                        this.classList.add('selected');
-                        this.style.backgroundColor = '#0d6efd';
-                        this.style.color = 'white';
-                        this.style.boxShadow = '0 4px 12px rgba(13,110,253,0.3)';
-                        // Save and display the hypothesis
-                        saveAndDisplayHypothesis(this.dataset.value);
-                    });
-                    
-                    selectElement.appendChild(optionDiv);
-                });
-                
-                document.getElementById('hypo-select-container').style.display = 'block';
-                
-                if (hypos.length > 0) {
-                    // Automatically select and save the first hypothesis
-                    const firstOption = selectElement.querySelector('.hypothesis-option');
-                    firstOption.classList.add('selected');
-                    firstOption.style.backgroundColor = '#0d6efd';
-                    firstOption.style.color = 'white';
-                    firstOption.style.boxShadow = '0 4px 12px rgba(13,110,253,0.3)';
-                    saveAndDisplayHypothesis(hypos[0]);
-                }
-            } else {
-                let errorDetail = data.detail || null;
-                if (data.error && data.error.includes('OpenAI API internal server error')) {
-                    showError(
-                        'OpenAI API internal server error. This is an issue with OpenAI\\\'s servers, not with your code. Maximum retry attempts reached. \\n\\nTip: You can try again later or increase the retry count.',
-                        errorDetail
-                    );
-                } else {
-                    showError('Error generating hypotheses: ' + (data.error || 'Unknown error'), errorDetail);
-                }
-            }
-        })
-        .catch(error => {
-            hideLoading();
-            showError('Network error: ' + error.message);
-        });
-    });
-
-    // Submit manual hypothesis
-    function submitManualHypothesis() {
-        const hypothesis = document.getElementById('hypo-input').value.trim();
-        if (!hypothesis) {
-            showError('Please enter a hypothesis.');
-            return;
-        }
-        saveAndDisplayHypothesis(hypothesis);
-    }
-    
-    document.getElementById('submit-hypo-btn').addEventListener('click', submitManualHypothesis);
-    
-    // Handle Enter key in manual input textarea
-    document.getElementById('hypo-input').addEventListener('keydown', function(event) {
-        if (event.key === 'Enter' && !event.shiftKey) {
-            event.preventDefault(); // Prevent line break
-            submitManualHypothesis();
-        }
-        // Allow Shift+Enter for line breaks if needed
-    });
-
-    // Auto-save current hypothesis when user stops typing or leaves the field
-    let saveTimeout;
-    currentHypoEdit.addEventListener('input', function() {
-        clearTimeout(saveTimeout);
-        saveTimeout = setTimeout(() => {
-            const hypothesis = currentHypoEdit.value.trim();
-            if (hypothesis) {
-                saveAndDisplayHypothesis(hypothesis, false); // Don't show saved message for auto-save
-            }
-        }, 1000); // Save after 1 second of no typing
-    });
-
-    // Also save on blur (when user clicks away)
-    currentHypoEdit.addEventListener('blur', function() {
-        clearTimeout(saveTimeout);
-        const hypothesis = currentHypoEdit.value.trim();
-        if (hypothesis) {
-            saveAndDisplayHypothesis(hypothesis, false);
-        }
-    });
-
-    function saveAndDisplayHypothesis(hypothesis, showSavedMessage = false) {
-        showLoading('Saving hypothesis...');
-        fetch('/api/save-hypothesis', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ hypothesis: hypothesis })
-        })
-        .then(response => response.json())
-        .then(data => {
-            hideLoading();
-            if (data.success) {
-                updateCurrentHypothesisUI(hypothesis);
-                hideError();
-                if (showSavedMessage) {
-                    const savedMsg = document.getElementById('current-hypo-saved-msg');
-                    savedMsg.style.display = 'inline';
-                    setTimeout(() => { savedMsg.style.display = 'none'; }, 2000);
-                }
-            } else {
-                showError('Failed to save hypothesis: ' + (data.error || 'Unknown error'));
-            }
-        })
-        .catch(error => {
-            hideLoading();
-            showError('Failed to save hypothesis: ' + error.message);
-        });
+            body: JSON.stringify({ hypothesis: hypothesisText })
+        }).catch(error => console.error('Failed to save hypothesis to server:', error));
     }
 
-    function updateCurrentHypothesisUI(hypothesis) {
-        if (hypothesis === null || typeof hypothesis === 'undefined') return;
-
-        currentHypoEdit.value = hypothesis;
-        window.currentHypothesisMarkdown = hypothesis; // Update for download
-        currentHypoEdit.dataset.rawMarkdown = hypothesis; // Update for download helper
-
-        if (hypothesis.trim() !== '') {
-            sessionStorage.setItem('current_hypothesis', hypothesis);
-            sessionStorage.removeItem('refined_hypothesis'); // New current hypothesis invalidates refinement
-            currentHypoContainer.style.display = 'block';
-            downloadHypoActionsContainer.style.display = 'flex'; // Show download button
-        } else {
-            sessionStorage.removeItem('current_hypothesis');
-            // Optionally hide if empty, or leave it, depending on desired UX
-            // currentHypoContainer.style.display = 'none';
-            // downloadHypoActionsContainer.style.display = 'none';
-        }
-        if (typeof checkHuntPlanningPrerequisites === 'function') {
-            checkHuntPlanningPrerequisites();
-        }
-    }
-    
-    // Load initial hypothesis from server/session
     function loadInitialData() {
-        // Try to load from what server passed during render first
-        let initialHypothesis = window.currentHypothesisFromServer;
-
-        if (initialHypothesis && initialHypothesis.trim() !== '') {
-            updateCurrentHypothesisUI(initialHypothesis);
+        const savedHypothesis = sessionStorage.getItem('hypothesis');
+        if (savedHypothesis) {
+            console.log('Loading saved hypothesis from sessionStorage.');
+            hypoInput.value = savedHypothesis;
         } else {
-            // Fallback to fetching from debug-info if server-passed is empty
-            // This covers cases where the page is reloaded without a new POST
+            console.log('No hypothesis in sessionStorage, checking server.');
             fetch('/api/debug-info')
-                .then(response => response.json())
-                .then(debugData => {
-                    const session = debugData.session_data || {};
-                    if (session.hypothesis && session.hypothesis.trim() !== '') {
-                        updateCurrentHypothesisUI(session.hypothesis);
-                    } else if (session.refined_hypothesis && session.refined_hypothesis.trim() !== '') {
-                        // If no 'hypothesis', but 'refined_hypothesis' exists, it implies user went back
-                        // For this page, we should show the editable 'hypothesis'
-                        // If 'hypothesis' is truly empty, we don't show refined here.
-                        // This logic might need adjustment based on exact flow desired.
-                    }
-                    // Check for research report to show warning
-                    if (!session.report_md || session.report_md.trim() === '') {
-                        document.getElementById('no-research-warning').style.display = 'block';
+                .then(r => r.json())
+                .then(data => {
+                    const sessionHypo = data?.session_data?.hypothesis;
+                    if (sessionHypo) {
+                        console.log('Loaded hypothesis from server.');
+                        hypoInput.value = sessionHypo;
+                        sessionStorage.setItem('hypothesis', sessionHypo); // Prime sessionStorage
                     }
                 })
-                .catch(error => console.error("Error fetching initial session data for hypothesis:", error));
-        }
-        // Check for research report if not already done by debug-info
-        if (!initialHypothesis || initialHypothesis.trim() === '') {
-             fetch('/api/debug-info') // Could be redundant if above fetch runs
-                .then(response => response.json())
-                .then(debugData => {
-                    const session = debugData.session_data || {};
-                     if (!session.report_md || session.report_md.trim() === '') {
-                        document.getElementById('no-research-warning').style.display = 'block';
-                    }
-                });
+                .catch(e => console.error('Failed to fetch initial data:', e));
         }
 
-
+        fetch('/api/debug-info')
+            .then(r => r.json())
+            .then(data => {
+                if (!data?.session_data?.report_md) {
+                    if (noResearchWarning) noResearchWarning.style.display = 'block';
+                }
+            });
     }
 
-    loadInitialData();
+    // --- Event Listeners ---
+    if (getSuggestionsBtn) {
+        getSuggestionsBtn.addEventListener('click', function() {
+            if (hypoSelectContainer) hypoSelectContainer.style.display = 'block';
+            if (hypoSelect) hypoSelect.innerHTML = ''; // Clear previous results
 
+            UIFeedback.show('loading', 'Getting AI suggestions...');
+
+            fetch('/api/hypothesize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            })
+            .then(response => {
+                if (!response.ok) throw new Error(`Server error: ${response.statusText}`);
+                return response.json();
+            })
+            .then(data => {
+                UIFeedback.hideLoading();
+                if (!hypoSelect) return;
+
+                if (data.success && data.hypotheses && data.hypotheses.length > 0) {
+                    data.hypotheses.forEach((hypo, idx) => {
+                        if (typeof hypo !== 'string' || hypo.trim() === '') return;
+                        const optionDiv = document.createElement('div');
+                        optionDiv.className = 'hypothesis-option p-3 mb-2 border rounded';
+                        optionDiv.dataset.value = hypo;
+                        optionDiv.innerHTML = `<p class="mb-0">${hypo.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>`;
+                        hypoSelect.appendChild(optionDiv);
+                    });
+                } else {
+                    UIFeedback.show('error', data.error || 'No suggestions were generated.');
+                }
+            })
+            .catch(error => {
+                UIFeedback.hideLoading();
+                UIFeedback.show('error', `Error: ${error.message}`);
+            });
+        });
+    }
+
+    if (hypoSelect) {
+        hypoSelect.addEventListener('click', function(event) {
+            const selectedOption = event.target.closest('.hypothesis-option');
+            if (!selectedOption) return;
+            document.querySelectorAll('.hypothesis-option').forEach(opt => opt.classList.remove('selected'));
+            selectedOption.classList.add('selected');
+            const hypothesisText = selectedOption.dataset.value;
+            hypoInput.value = hypothesisText;
+            saveHypothesis(hypothesisText);
+        });
+    }
+
+    if (hypoInput) {
+        hypoInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                saveHypothesis(this.value.trim());
+                // Optionally, provide feedback that it was saved
+                this.blur(); // Remove focus from the textarea
+            }
+        });
+
+        hypoInput.addEventListener('blur', function() {
+            saveHypothesis(this.value.trim());
+        });
+    }
+    
+    if(uploadBtn && fileInput){
+        uploadBtn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+            const formData = new FormData();
+            formData.append('file', file);
+            if (typeof UIFeedback !== 'undefined') UIFeedback.show('loading', 'Uploading hypothesis...');
+            fetch('/api/upload-hypothesis', { method: 'POST', body: formData })
+                .then(r => r.json())
+                .then(data => {
+                    if (typeof UIFeedback !== 'undefined') UIFeedback.hideLoading();
+                    if (data.success && data.hypothesis) {
+                        hypoInput.value = data.hypothesis;
+                        saveHypothesis(data.hypothesis);
+                    } else {
+                        if (typeof UIFeedback !== 'undefined') UIFeedback.show('error', data.error || 'Upload failed');
+                    }
+                })
+                .catch(error => {
+                    if (typeof UIFeedback !== 'undefined') UIFeedback.hideLoading();
+                    if (typeof UIFeedback !== 'undefined') UIFeedback.show('error', 'Upload failed: ' + error.message);
+                });
+            event.target.value = '';
+        });
+    }
+
+    // --- Manual Buttons (exposed to global scope for HTML onclick) ---
+
+
+
+    // --- Initial Load ---
+    loadInitialData();
 });
 {% endblock %}
 
 {% block style %}
 <style>
+
     .hypothesis-options {
         border: 1px solid #dee2e6;
         border-radius: 0.375rem;
@@ -394,21 +234,22 @@ document.addEventListener('DOMContentLoaded', function() {
         background-color: #ffffff;
     }
     
-    .hypothesis-option {
-        padding: 16px;
-        border-bottom: 1px solid #dee2e6;
+    #hypo-select .hypothesis-option {
+        padding: 1rem;
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
         cursor: pointer !important;
         transition: all 0.3s ease !important;
         line-height: 1.5;
         word-wrap: break-word;
         background-color: #ffffff !important;
         position: relative;
-        margin: 0;
+        margin-bottom: 0.75rem !important; /* Increased spacing */
         display: block;
     }
     
-    .hypothesis-option:last-child {
-        border-bottom: none;
+    #hypo-select .hypothesis-option:last-child {
+        margin-bottom: 0;
     }
     
     .hypothesis-option:hover {
@@ -453,6 +294,16 @@ document.addEventListener('DOMContentLoaded', function() {
         opacity: 1;
         color: white;
         font-weight: bold;
+    }
+</style>
+
+<style>
+    /* Force override for hypothesis option cards */
+    #hypo-select .hypothesis-option {
+        border: 1px solid #ced4da !important;
+        border-radius: .375rem !important;
+        margin-bottom: .75rem !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
     }
 </style>
 {% endblock %}

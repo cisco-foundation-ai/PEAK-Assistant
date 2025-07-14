@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 # filepath: /Users/dabianco/projects/SURGe/PEAK-Assistant/UI/app_flask.py
 from flask import Flask, render_template, request, jsonify, Response, send_file, session
+from werkzeug.utils import secure_filename
 import tempfile
 import os
+import re
 import sys
 import asyncio
 import time
@@ -10,10 +12,12 @@ import io
 import json
 from dotenv import load_dotenv
 from pathlib import Path
-from functools import wraps
+import logging
+from functools import wraps, partial
 from markdown_pdf import MarkdownPdf, Section
 from flask_session import Session
-from werkzeug.utils import secure_filename
+
+from autogen_agentchat.messages import TextMessage
 from flask_sqlalchemy import SQLAlchemy
 from datetime import timedelta
 
@@ -80,28 +84,32 @@ def extract_report_md(messages):
             report_md = str(messages)
     return report_md
 
-def extract_accepted_hypothesis(refined):
-    # Extract the accepted/refined hypothesis string from agent output
-    accepted = None
-    if hasattr(refined, 'messages'):
-        for m in reversed(refined.messages):
-            if isinstance(m.content, str) and 'YYY-HYPOTHESIS-ACCEPTED-YYY' in m.content:
-                idx = refined.messages.index(m)
-                if idx > 0:
-                    accepted = refined.messages[idx-1].content.strip()
-                break
-    elif isinstance(refined, list):
-        for i, m in enumerate(refined):
-            if hasattr(m, 'content') and isinstance(m.content, str) and 'YYY-HYPOTHESIS-ACCEPTED-YYY' in m.content:
-                if i > 0:
-                    accepted = refined[i-1].content.strip()
-                break
-    if not accepted:
-        if hasattr(refined, 'content'):
-            accepted = refined.content
-        else:
-            accepted = str(refined)
-    return accepted
+def extract_accepted_hypothesis(task_result):
+    # Find the last message from the 'critic' agent and extract the hypothesis.
+    if hasattr(task_result, 'messages'):
+        for message in reversed(task_result.messages):
+            # Check for source attribute for newer AutoGen versions
+            source = getattr(message, 'source', None)
+            if source == "critic" and isinstance(message.content, str):
+                # Clean the hypothesis by removing the acceptance marker
+                cleaned_hypothesis = message.content.replace('YYY-HYPOTHESIS-ACCEPTED-YYY', '').strip()
+                if cleaned_hypothesis:
+                    return cleaned_hypothesis
+    
+    # Fallback for older formats or if the critic message isn't found as expected
+    if hasattr(task_result, 'messages') and task_result.messages:
+        # A less specific fallback: find the last message with the marker
+        for message in reversed(task_result.messages):
+            if isinstance(message.content, str) and 'YYY-HYPOTHESIS-ACCEPTED-YYY' in message.content:
+                cleaned_hypothesis = message.content.replace('YYY-HYPOTHESIS-ACCEPTED-YYY', '').strip()
+                if cleaned_hypothesis:
+                    return cleaned_hypothesis
+
+    # Final fallback to the last message content if all else fails
+    if hasattr(task_result, 'messages') and task_result.messages:
+        return task_result.messages[-1].content.strip()
+
+    return "Error: Could not extract a valid hypothesis from the result."
 
 # Load .env at app startup
 load_env_defaults()
@@ -180,31 +188,43 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 @app.route('/api/research', methods=['POST'])
 @async_action
 async def research():
-    data = request.json
+    # Generate or refine research report using AI agents
+    data = request.get_json()
     topic = data.get('topic')
-    retry_count = int(data.get('retry_count', 3))
-    verbose_mode = data.get('verbose_mode', False)
+    previous_report = data.get('previous_report')
+    feedback = data.get('feedback')
+    verbose_mode = data.get('verbose', False)
     
-    if not topic:
-        return jsonify({'success': False, 'error': 'No topic provided'}), 400
+    # Get local context from session
+    local_context = session.get('local_context', INITIAL_LOCAL_CONTEXT)
     
-    local_context = session.get('local-context', '')  # Get local context from session
+    # Import the researcher function and TextMessage
+    from research_assistant.research_assistant_cli import researcher as async_researcher
+    from autogen_agentchat.messages import TextMessage
+
+    previous_run = None
+    if previous_report and feedback:
+        # Construct the conversation history for refinement
+        previous_run = [
+            TextMessage(content=f"The current report draft is: {previous_report}\n", source="user"),
+            TextMessage(content=f"User feedback: {feedback}\n", source="user")
+        ]
 
     try:
-        # Use the agent framework
-        messages = await retry_api_call(
+        # Run the researcher
+        result = await retry_api_call(
             async_researcher, 
-            topic, 
-            local_context=local_context,  # Pass local context
+            technique=topic, 
+            local_context=local_context, 
             verbose=verbose_mode,
-            max_retries=retry_count
+            previous_run=previous_run
         )
-        report_md = extract_report_md(messages)
+        
+        # Extract the report markdown
+        report_md = extract_report_md(result)
         
         # Store in session
         session['report_md'] = report_md
-        session['last_topic'] = topic
-        
         return jsonify({'success': True, 'report': report_md})
     except Exception as e:
         error_msg = str(e)
@@ -240,7 +260,15 @@ async def hypothesize():
         )
         
         if isinstance(hypos, str):
-            hypos = hypos.splitlines()
+            # Split into lines first
+            lines = hypos.splitlines()
+            cleaned_hypos = []
+            for line in lines:
+                # Remove leading numbers, dots, dashes, or asterisks followed by a space
+                cleaned_line = re.sub(r'^\s*\d+\.\s*|^\s*[-*]\s*', '', line).strip()
+                if cleaned_line:
+                    cleaned_hypos.append(cleaned_line)
+            hypos = cleaned_hypos
         
         # Store in session
         session['hypotheses'] = hypos
@@ -275,47 +303,50 @@ def save_hypothesis():
 @app.route('/api/refine', methods=['POST'])
 @async_action
 async def refine():
-    data = request.json
-    hypothesis = data.get('hypothesis') or session.get('hypothesis', '')
-    report_md = data.get('report_md') or session.get('report_md', '')
-    retry_count = int(data.get('retry_count', 3))
-    refine_option = data.get('refine', True)  # Default to true to maintain backward compatibility
+    # Refine a threat hunting hypothesis using AI agents
+    data = request.get_json()
+    hypothesis = data.get('hypothesis')
+    feedback = data.get('feedback')
+    verbose_mode = data.get('verbose', False)
     
-    if not hypothesis:
-        return jsonify({'success': False, 'error': 'No hypothesis provided'}), 400
+    # Get research report from session
+    research_report = session.get('report_md', '')
+    if not research_report:
+        return jsonify({'success': False, 'error': 'No research report found in session. Please complete the research phase first.'}), 400
     
-    # If refine is False, just save the hypothesis and return
-    if not refine_option:
-        session['hypothesis'] = hypothesis
-        session.pop('refined_hypothesis', None)
-        return jsonify({'success': True, 'refined_hypothesis': hypothesis})
+    # Get local context from session
+    local_context = session.get('local_context', INITIAL_LOCAL_CONTEXT)
     
-    verbose_mode = data.get('verbose_mode', False)
-    local_context = session.get('local-context', '')  # Get local context from session
+    from autogen_agentchat.messages import TextMessage
+
+    previous_run = None
+    if feedback:
+        # Construct the conversation history for refinement
+        previous_run = [
+            TextMessage(content=f"The current refined hypothesis is: {hypothesis}\n", source="user"),
+            TextMessage(content=f"User feedback: {feedback}\n", source="user")
+        ]
 
     try:
-        refined = await retry_api_call(
+        # Log the hypothesis being sent to the refiner for debugging
+        logging.warning(f"Calling async_refiner with hypothesis: {hypothesis[:100]}...")
+
+        # Explicitly pass keyword arguments to the refiner function
+        result = await retry_api_call(
             async_refiner, 
-            hypothesis, 
-            local_context,  # Pass local context as positional argument
-            report_md, 
-            automated=True,
+            hypothesis=hypothesis, 
+            local_context=local_context, 
+            research_document=research_report,
             verbose=verbose_mode,
-            max_retries=retry_count
+            previous_run=previous_run
         )
-        # Extract the final message from the critic agent
-        accepted = None
-        if hasattr(refined, 'messages'):
-            accepted = next((m.content for m in reversed(refined.messages) if getattr(m, 'source', None) == "critic"), None)
-            if accepted:
-                accepted = accepted.replace("YYY-HYPOTHESIS-ACCEPTED-YYY", "").strip()
-        if not accepted:
-            if hasattr(refined, 'content'):
-                accepted = refined.content
-            else:
-                accepted = str(refined)
-        session['refined_hypothesis'] = accepted  # Store separately
-        return jsonify({'success': True, 'refined_hypothesis': accepted})
+        
+        # Extract the refined hypothesis
+        refined_hypothesis = extract_accepted_hypothesis(result)
+        
+        # Store in session under the correct key
+        session['refined_hypothesis'] = refined_hypothesis
+        return jsonify({'success': True, 'refined_hypothesis': refined_hypothesis})
     except Exception as e:
         error_msg = str(e)
         if "500" in error_msg and "Internal server error" in error_msg:
@@ -331,26 +362,40 @@ async def refine():
 @async_action
 async def able_table():
     data = request.json
-    # Use refined hypothesis if available, else fallback to original
-    hypothesis = data.get('hypothesis') or session.get('refined_hypothesis') or session.get('hypothesis', '')
-    report_md = data.get('report_md') or session.get('report_md', '')
-    retry_count = int(data.get('retry_count', 3))
-    # verbose_mode is ignored for able_table, as it is not supported
-    
-    if not hypothesis:
-        return jsonify({'success': False, 'error': 'No hypothesis provided'}), 400
 
-    local_context = session.get('local-context', '')  # Get local context from session
+    # Get hypothesis, falling back through the session states
+    hypothesis = data.get('hypothesis') or session.get('refined_hypothesis') or session.get('hypothesis')
+    if not hypothesis:
+        return jsonify({'success': False, 'error': 'No hypothesis found in request or session.'}), 400
+
+    # Get other data from request and session
+    feedback = data.get('feedback')
+    current_able_table = data.get('current_able_table')
+    report_md = session.get('report_md', '')
+    local_context = session.get('local_context', INITIAL_LOCAL_CONTEXT)
     
+    # Import necessary modules
+    from able_assistant.able_assistant_cli import able_table
+    from autogen_agentchat.messages import UserMessage
+
+    # Construct the message history for feedback
+    previous_run = None
+    if feedback and current_able_table:
+        previous_run = [
+            UserMessage(content=f"The current ABLE draft is: {current_able_table}\n", source="user"),
+            UserMessage(content=f"User feedback: {feedback}\n", source="user")
+        ]
+
+    # Call the able_table function from the CLI module
     try:
         able_md = await retry_api_call(
-            async_able_table, 
-            hypothesis, 
-            report_md,
-            local_context=local_context,  # Pass local context
-            max_retries=retry_count
+            able_table,
+            hypothesis=hypothesis,
+            research_document=report_md,
+            local_context=local_context,
+            previous_run=previous_run
         )
-        # Store in session
+        # Store result in session
         session['able_table_md'] = able_md
         return jsonify({'success': True, 'able_table': able_md})
     except Exception as e:
@@ -379,26 +424,34 @@ async def data_discovery():
     hypothesis = data.get('hypothesis') or session.get('refined_hypothesis') or session.get('hypothesis', '')
     report_md = data.get('report_md') or session.get('report_md', '')
     able_table_md = data.get('able_table_md') or session.get('able_table_md', '')
+    feedback = data.get('feedback')
+    current_data_sources = data.get('current_data_sources')
     retry_count = int(data.get('retry_count', 3))
     verbose_mode = data.get('verbose_mode', False)
     local_context = session.get('local-context', '')  # Get local context from session
-    
+
     if not hypothesis:
         return jsonify({'success': False, 'error': 'No hypothesis provided'}), 400
-    
+
     if not report_md:
         return jsonify({'success': False, 'error': 'No research report available'}), 400
-    
+
     # Get MCP configuration from environment variables
     mcp_command = os.getenv('SPLUNK_MCP_COMMAND')
     mcp_args = os.getenv('SPLUNK_MCP_ARGS')
-    
+
     if not mcp_command or not mcp_args:
         return jsonify({
             'success': False, 
             'error': 'Splunk MCP configuration missing. Please ensure SPLUNK_MCP_COMMAND and SPLUNK_MCP_ARGS environment variables are set.'
         }), 500
-    
+
+    # Set up the conversation history
+    messages = []
+    if feedback and current_data_sources:
+        messages.append(TextMessage(content=f"The current data sources draft is: {current_data_sources}\n", source="user"))
+        messages.append(TextMessage(content=f"User feedback: {feedback}\n", source="user"))
+
     try:
         result = await retry_api_call(
             async_identify_data_sources, 
@@ -409,6 +462,7 @@ async def data_discovery():
             mcp_command=mcp_command,
             mcp_args=mcp_args,
             verbose=verbose_mode,
+            previous_run=messages,
             max_retries=retry_count
         )
         # Extract the final message from the "Data_Discovery_Agent" similar to CLI version
@@ -456,6 +510,8 @@ def upload_report():
     session['report_md'] = content
     session['last_topic'] = '[Uploaded]'
     return jsonify({'success': True, 'content': content})
+
+
 
 @app.route('/api/upload-able-table', methods=['POST'])
 def upload_able_table():
@@ -539,13 +595,32 @@ async def hunt_plan():
     data = request.json or {}
     retry_count = int(data.get('retry_count', 3))
     verbose_mode = data.get('verbose_mode', False)
+    feedback = data.get('feedback', '')
+    current_hunt_plan = data.get('current_hunt_plan', '')
     
-    # Get required data from session
-    research_document = session.get('report_md', '')
-    hypothesis = session.get('refined_hypothesis') or session.get('hypothesis', '')
-    able_info = session.get('able_table_md', '')
-    data_discovery = session.get('data_sources_md', '')
+    # Get required data from the request body, falling back to session
+    research_document = data.get('report_md') or session.get('report_md', '')
+    hypothesis = data.get('hypothesis') or session.get('refined_hypothesis') or session.get('hypothesis', '')
+    able_info = data.get('able_table_md') or session.get('able_table_md', '')
+    data_discovery = data.get('data_sources_md') or session.get('data_sources_md', '')
     local_context = session.get('local-context', '')
+    
+    # Get conversation history or initialize if this is the first call
+    previous_messages = session.get('hunt_plan_messages', [])
+    # If there's feedback, add messages for the feedback loop
+    if feedback and current_hunt_plan:
+        previous_messages = [
+            TextMessage(content=f"The current plan draft is: {current_hunt_plan}\n", source="user"),
+            TextMessage(content=f"User feedback: {feedback}\n", source="user")
+        ]
+    
+    # Convert previous_messages to TextMessage objects if they're stored as dictionaries
+    textmessage_list = []
+    for msg in previous_messages:
+        if isinstance(msg, dict) and 'content' in msg and 'source' in msg:
+            textmessage_list.append(TextMessage(content=msg['content'], source=msg['source']))
+        elif hasattr(msg, 'content') and hasattr(msg, 'source'):
+            textmessage_list.append(msg)
     
     # Check prerequisites
     missing_items = []
@@ -574,7 +649,8 @@ async def hunt_plan():
             data_discovery=data_discovery,
             local_context=local_context,
             verbose=verbose_mode,
-            max_retries=retry_count
+            max_retries=retry_count,
+            previous_run=textmessage_list
         )
         
         # Extract the final message from the "hunt_planner" agent
@@ -590,8 +666,22 @@ async def hunt_plan():
             else:
                 hunt_plan = str(result)
         
+        # Convert result messages to serializable format
+        result_messages = []
+        if hasattr(result, 'messages'):
+            for msg in result.messages:
+                if hasattr(msg, 'content') and hasattr(msg, 'source'):
+                    result_messages.append({'content': msg.content, 'source': msg.source})
+        
         # Store in session
         session['hunt_plan'] = hunt_plan
+        # Store serialized messages (dictionaries) in the session
+        serialized_messages = []
+        for msg in textmessage_list:
+            if hasattr(msg, 'content') and hasattr(msg, 'source'):
+                serialized_messages.append({'content': msg.content, 'source': msg.source})
+        
+        session['hunt_plan_messages'] = serialized_messages + result_messages
         return jsonify({
             'success': True, 
             'hunt_plan': hunt_plan
@@ -607,9 +697,47 @@ async def hunt_plan():
         else:
             return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/clear-session', methods=['POST'])
+@app.route('/api/save-selected-hypothesis', methods=['POST'])
+def save_selected_hypothesis():
+    """Save a selected hypothesis to the session directly."""
+    data = request.json
+    if not data or 'hypothesis' not in data:
+        return jsonify({'success': False, 'error': 'No hypothesis provided'}), 400
+        
+    hypothesis = data['hypothesis']
+    session['hypothesis'] = hypothesis
+    # When a new base hypothesis is selected, any previous refinement is invalid.
+    session.pop('refined_hypothesis', None)
+    print(f"Saved selected hypothesis to session: {hypothesis[:50]}...")
+    
+    return jsonify({'success': True})
+
+
+@app.route('/api/upload-hypothesis', methods=['POST'])
+def upload_hypothesis():
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'No file part in the request.'}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'success': False, 'error': 'No file selected for uploading.'}), 400
+    if file:
+        try:
+            content = file.read().decode('utf-8')
+            # Save to session
+            session['hypothesis'] = content
+            # Clear any old refined hypothesis
+            session.pop('refined_hypothesis', None)
+            return jsonify({'success': True, 'hypothesis': content})
+        except Exception as e:
+            return jsonify({'success': False, 'error': f'Error reading file: {e}'}), 500
+    return jsonify({'success': False, 'error': 'An unknown error occurred.'}), 500
+
+
+@app.route('/api/clear-session', methods=['POST'])
 def clear_session():
+    # Clear the session data from the server's storage.
     session.clear()
+    # The client-side code will handle the redirect after this is successful.
     return jsonify({'success': True})
 
 # ===== Page Routes =====

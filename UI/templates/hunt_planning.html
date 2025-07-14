@@ -11,19 +11,67 @@
 {% endblock %}
 
 {% block content %}
-<div class="phase-container">
-    <!-- Compact Phase Header -->
-    <div class="phase-header">
-        <h1 class="phase-title">Generate Hunt Plan</h1>
-        <div id="plan-actions-container" style="display: none;">
-            <!-- Download button will be inserted here by script -->
-        </div>
-    </div>
+<style>
+    /* Custom styles for Hunt Planning page */
+    .phase-container {
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - 56px); /* Full height minus navbar */
+        overflow: hidden;
+    }
     
-    <!-- Compact Phase Description -->
-    <p class="phase-description">
-        Use AI agents to combine your research, hypothesis, ABLE table, and data sources into a comprehensive hunt plan.
-    </p>
+    .hunt-top-section {
+        padding-bottom: 0.5rem;
+        flex-shrink: 0;
+    }
+    
+    .plan-container {
+        flex: 1;
+        overflow-y: auto;
+    }
+    
+    .feedback-container-fixed {
+        position: sticky;
+        bottom: 0;
+        background-color: var(--bs-body-bg);
+        border-top: 1px solid var(--bs-border-color);
+        padding: 0.75rem;
+        z-index: 1000;
+    }
+    
+    /* More compact elements */
+    .compact-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    
+    .compact-header h1 {
+        font-size: 1.5rem;
+        margin-bottom: 0;
+    }
+</style>
+<div class="phase-container">
+    <!-- Top Section (Header, description, hypothesis) -->
+    <div class="hunt-top-section">
+        <!-- Compact Phase Header -->
+        <div class="compact-header">
+            <h1 class="phase-title">Generate Hunt Plan</h1>
+            <div class="d-flex gap-2">
+                <div id="plan-actions-container">
+                    <!-- Download button will be inserted here by script -->
+                </div>
+                <button id="generate-btn" class="btn btn-primary">
+                    <i class="bi bi-robot me-2"></i>Generate Hunt Plan
+                </button>
+            </div>
+        </div>
+        
+        <!-- Compact Phase Description -->
+        <p class="phase-description">
+            Use AI agents to combine your research, hypothesis, ABLE table, and data sources into a comprehensive hunt plan.
+        </p>
 
     <!-- Prerequisite Warning -->
     <div id="missing-prerequisites-warning" class="prerequisite-warning" style="display: none;">
@@ -32,37 +80,38 @@
         <ul id="missing-items-list" class="prerequisite-list"></ul>
     </div>
 
-    <!-- Current Hypothesis Display -->
+    <!-- Current Hypothesis Display - More Compact Version -->
     <div id="current-hypo-container" style="display: none;" class="mb-3">
         <div class="content-preview-card">
-            <div class="content-preview-header">
-                <h5><i class="bi bi-lightbulb me-2"></i>Current Hypothesis</h5>
-                <small class="text-muted">The hunt plan will be generated based on this hypothesis</small>
+            <div class="content-preview-header d-flex justify-content-between align-items-center">
+                <h5 class="m-0"><i class="bi bi-lightbulb me-2"></i>Current Hypothesis</h5>
             </div>
             <div id="current-hypo-content" class="content-preview-body" data-raw-markdown=""></div>
         </div>
     </div>
 
-    <!-- Generate Hunt Plan Section -->
-    <div class="action-section mb-4">
-        <div class="action-section-title mb-3">
-            <i class="bi bi-robot me-2"></i>AI Hunt Plan Generation
-        </div>
-        
-        <div class="d-flex justify-content-between align-items-center">
-            <div>
-                <small class="text-muted">AI agents will analyze all your previous work to create a comprehensive hunting plan.</small>
+    </div><!-- End of hunt-top-section -->
+    
+    <!-- Content Display - Takes up most of the page -->
+    <div id="plan-container" class="plan-container">
+        <div id="plan-content-wrapper" style="display: none;">
+            <div class="content-card">
+                <div id="plan-content" data-raw-markdown="">
+                    <div id="plan-placeholder" class="text-muted fst-italic p-3">
+                        The generated hunt plan will appear here. Click "Generate Hunt Plan" to begin.
+                    </div>
+                </div>
             </div>
-            <button id="generate-btn" class="btn btn-primary">
-                <i class="bi bi-magic me-2"></i>Generate Hunt Plan
-            </button>
         </div>
     </div>
-
-    <!-- Content Display - Takes up most of the page -->
-    <div id="plan-container" style="display: none;">
-        <div class="content-card">
-            <div id="plan-content" data-raw-markdown=""></div>
+    
+    <!-- Feedback Input Area - Always visible at the bottom -->
+    <div id="feedback-container" class="feedback-container-fixed">
+        <div class="input-group">
+            <textarea id="feedback-input" class="form-control" rows="3" placeholder="Provide feedback to refine the hunt plan."></textarea>
+            <button id="send-feedback-btn" class="btn btn-primary">
+                <i class="bi bi-send me-2"></i>Send Feedback
+            </button>
         </div>
     </div>
 </div>
@@ -72,181 +121,178 @@
 /**
  * Hunt Plan Manager - Modeled after ResearchManager
  */
-class HuntPlanManager extends PhaseManager {
+class HuntPlanManager {
     constructor() {
-        super('hunt_plan', {
-            apiEndpoint: '/api/hunt-plan',
-            contentContainer: 'plan-content',
-            downloadContainer: 'plan-actions-container',
-            sessionStorageKey: 'hunt_plan',
-            globalContentVar: 'currentPlanMarkdown',
-            responseContentKey: 'hunt_plan',
-            loadingMessage: 'AI agents are creating your comprehensive hunt plan... (this may take several minutes)',
-            generateButtonTitle: 'Generate comprehensive hunt plan using AI agents',
-            generateButtonText: '<i class="bi bi-magic me-2"></i>Generate Hunt Plan',
-            prerequisites: [
-                {
-                    sessionKey: 'report_md',
-                    name: 'Research Document',
-                    url: '/research'
-                },
-                {
-                    sessionKey: 'hypothesis',
-                    name: 'Hypothesis',
-                    url: '/hypothesis'
-                },
-                {
-                    sessionKey: 'able_table_md',
-                    name: 'ABLE Table',
-                    url: '/able-table'
-                },
-                {
-                    sessionKey: 'data_sources_md',
-                    name: 'Data Discovery',
-                    url: '/data-discovery'
-                }
-            ]
-        });
+        this.apiEndpoint = '/api/hunt-plan';
+        this.contentContainer = document.getElementById('plan-content');
+        this.downloadContainer = document.getElementById('plan-actions-container');
+        this.sessionStorageKey = 'hunt_plan';
+
+        this.setupEventListeners();
+        this.initializePage();
     }
-    
+
     setupEventListeners() {
-        const generateBtn = document.getElementById('generate-btn');
-        
-        if (generateBtn) {
-            generateBtn.addEventListener('click', () => this.handleGenerate());
+        document.getElementById('generate-btn').addEventListener('click', () => this.handleGenerate());
+        document.getElementById('send-feedback-btn').addEventListener('click', () => this.handleFeedback());
+    }
+
+    async initializePage() {
+        await this.checkPrerequisites();
+        const existingData = sessionStorage.getItem(this.sessionStorageKey);
+        if (existingData) {
+            this.updateContent(existingData);
+            document.getElementById('plan-container').style.display = 'block';
         }
     }
-    
-    async handleGenerate() {
-        // Check if prerequisites are met before proceeding
-        const prereqCheck = await this.checkPrerequisites();
-        if (!prereqCheck.valid) {
-            UIFeedback.show('error', 'Please complete all prerequisite phases first.');
-            return;
-        }
-        
-        try {
-            const response = await this.generateContent();
-            // Content display is handled by the parent PhaseManager
-        } catch (error) {
-            // Error handling is already done in the parent class
-        }
-    }
-    
-    // Override to ensure container is shown when content is loaded
-    async loadInitialData() {
-        await super.loadInitialData();
-        
-        // If we have content, show the container
-        const stored = sessionStorage.getItem(this.config.sessionStorageKey);
-        if (stored && stored.trim()) {
-            const planContainer = document.getElementById('plan-container');
-            if (planContainer) {
-                planContainer.style.display = 'block';
-            }
-        }
-    }
-    
-    onContentGenerated(response) {
-        // Show content container
-        const planContainer = document.getElementById('plan-container');
-        if (planContainer) {
-            planContainer.style.display = 'block';
-        }
-        
-        // Setup download button
-        DownloadManager.setupDownloadButton(
-            this.config.contentContainer,
-            'hunt_plan',
-            this.config.downloadContainer
-        );
-        
-        // Show download container
-        const downloadContainer = document.getElementById(this.config.downloadContainer);
-        if (downloadContainer) {
-            downloadContainer.style.display = 'flex';
-        }
-    }
-    
+
     async checkPrerequisites() {
-        if (!this.config.prerequisites || this.config.prerequisites.length === 0) {
-            return { valid: true, missing: [] };
-        }
-        
-        try {
-            const sessionData = await this.apiClient.getSessionData();
-            const missing = [];
-            
-            for (const prereq of this.config.prerequisites) {
-                const hasContent = sessionData[prereq.sessionKey] && sessionData[prereq.sessionKey].trim();
-                if (!hasContent) {
-                    missing.push(prereq);
+        const prerequisites = [
+            { key: 'report_md', name: 'Research Document', url: '/research' },
+            { key: 'hypothesis', name: 'Hypothesis', url: '/hypothesis' },
+            { key: 'able_table_md', name: 'ABLE Table', url: '/able-table' },
+            { key: 'data_sources_md', name: 'Data Discovery', url: '/data-discovery' }
+        ];
+
+        const missing = [];
+        const sessionDataForUI = {};
+
+        for (const prereq of prerequisites) {
+            let hasContent = sessionStorage.getItem(prereq.key)?.trim();
+            sessionDataForUI[prereq.key] = hasContent;
+
+            if (prereq.key === 'hypothesis') {
+                const refinedHypo = sessionStorage.getItem('refined_hypothesis')?.trim();
+                if (refinedHypo) {
+                    hasContent = true;
+                    sessionDataForUI['refined_hypothesis'] = refinedHypo;
                 }
             }
-            
-            this.updatePrerequisiteUI(missing, sessionData);
-            return { valid: missing.length === 0, missing };
-        } catch (error) {
-            console.warn('Could not check prerequisites:', error);
-            return { valid: true, missing: [] };
+
+            if (!hasContent) {
+                missing.push(prereq);
+            }
         }
+
+        this.updatePrerequisiteUI(missing, sessionDataForUI);
+        return missing.length === 0;
     }
-    
-    updatePrerequisiteUI(missingPrereqs, sessionData = null) {
+
+    updatePrerequisiteUI(missingPrereqs, sessionData) {
         const warningElement = document.getElementById('missing-prerequisites-warning');
         const generateBtn = document.getElementById('generate-btn');
         const currentHypoContainer = document.getElementById('current-hypo-container');
         const currentHypoContent = document.getElementById('current-hypo-content');
-        
-        if (missingPrereqs.length > 0 && warningElement) {
-            const itemsList = document.getElementById('missing-items-list');
-            if (itemsList) {
-                itemsList.innerHTML = missingPrereqs.map(prereq => 
-                    `<li><a href="${prereq.url}">${prereq.name}</a></li>`
-                ).join('');
-            }
+
+        if (missingPrereqs.length > 0) {
             warningElement.style.display = 'block';
-            
-            // Hide hypothesis display when prerequisites are missing
-            if (currentHypoContainer) {
-                currentHypoContainer.style.display = 'none';
-            }
-            
-            if (generateBtn) {
-                generateBtn.disabled = true;
-                generateBtn.classList.add('btn-disabled-warning');
-                generateBtn.title = 'Complete all prerequisite phases first';
-                generateBtn.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i>Prerequisites Required';
-            }
+            document.getElementById('missing-items-list').innerHTML = missingPrereqs.map(p => `<li><a href="${p.url}">${p.name}</a></li>`).join('');
+            generateBtn.disabled = true;
+            currentHypoContainer.style.display = 'none';
         } else {
-            if (warningElement) {
-                warningElement.style.display = 'none';
-            }
-            
-            // Show current hypothesis
-            if (sessionData && currentHypoContainer && currentHypoContent) {
-                const hypothesisToUse = sessionData.refined_hypothesis || sessionData.hypothesis;
-                if (hypothesisToUse && hypothesisToUse.trim()) {
-                    currentHypoContent.setAttribute('data-raw-markdown', hypothesisToUse);
-                    ContentRenderer.renderMarkdown(hypothesisToUse, currentHypoContent);
-                    currentHypoContainer.style.display = 'block';
-                }
-            }
-            
-            if (generateBtn) {
-                generateBtn.disabled = false;
-                generateBtn.classList.remove('btn-disabled-warning');
-                generateBtn.title = 'Generate comprehensive hunt plan using AI agents';
-                generateBtn.innerHTML = '<i class="bi bi-magic me-2"></i>Generate Hunt Plan';
+            warningElement.style.display = 'none';
+            generateBtn.disabled = false;
+            const hypothesisToUse = sessionData.refined_hypothesis || sessionData.hypothesis;
+            if (hypothesisToUse) {
+                ContentRenderer.renderMarkdown(hypothesisToUse, currentHypoContent);
+                currentHypoContainer.style.display = 'block';
             }
         }
     }
-    
-    async initialize() {
-        await super.initialize();
+
+    updateContent(markdown) {
+        ContentRenderer.renderMarkdown(markdown, this.contentContainer);
+        this.contentContainer.dataset.rawMarkdown = markdown;
+        sessionStorage.setItem(this.sessionStorageKey, markdown);
+        DownloadManager.setupDownloadButton('plan-content', 'hunt_plan', 'plan-actions-container');
+        this.downloadContainer.style.display = 'flex';
+        document.getElementById('plan-content-wrapper').style.display = 'block';
         
-        // Check prerequisites on initialization
-        await this.checkPrerequisites();
+        // Hide the placeholder text if there is markdown content
+        const placeholder = document.getElementById('plan-placeholder');
+        if (placeholder && markdown) {
+            placeholder.style.display = 'none';
+        }
+    }
+    
+    async handleFeedback() {
+        const feedbackInput = document.getElementById('feedback-input');
+        const feedback = feedbackInput.value.trim();
+        
+        if (!feedback) {
+            UIFeedback.show('error', 'Please enter feedback before submitting.');
+            return;
+        }
+        
+        const currentPlan = sessionStorage.getItem(this.sessionStorageKey);
+        if (!currentPlan) {
+            UIFeedback.show('error', 'No existing hunt plan found to refine.');
+            return;
+        }
+        
+        const requestBody = {
+            report_md: sessionStorage.getItem('report_md'),
+            hypothesis: sessionStorage.getItem('refined_hypothesis') || sessionStorage.getItem('hypothesis'),
+            able_table_md: sessionStorage.getItem('able_table_md'),
+            data_sources_md: sessionStorage.getItem('data_sources_md'),
+            feedback: feedback,
+            current_hunt_plan: currentPlan
+        };
+        
+        UIFeedback.show('loading', 'AI agents are refining your hunt plan based on feedback... (this may take several minutes)');
+        try {
+            const response = await fetch(this.apiEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                this.updateContent(data.hunt_plan);
+                feedbackInput.value = ''; // Clear the feedback input
+            } else {
+                throw new Error(data.error || 'Failed to refine hunt plan');
+            }
+        } catch (error) {
+            UIFeedback.show('error', 'Error refining plan: ' + error.message);
+        } finally {
+            UIFeedback.hideLoading();
+        }
+    }
+
+    async handleGenerate() {
+        const canProceed = await this.checkPrerequisites();
+        if (!canProceed) {
+            UIFeedback.show('error', 'Please complete all prerequisite phases first.');
+            return;
+        }
+
+        const requestBody = {
+            report_md: sessionStorage.getItem('report_md'),
+            hypothesis: sessionStorage.getItem('refined_hypothesis') || sessionStorage.getItem('hypothesis'),
+            able_table_md: sessionStorage.getItem('able_table_md'),
+            data_sources_md: sessionStorage.getItem('data_sources_md')
+        };
+
+        UIFeedback.show('loading', 'AI agents are creating your comprehensive hunt plan... (this may take several minutes)');
+        try {
+            const response = await fetch(this.apiEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            });
+            const data = await response.json();
+            if (data.success) {
+                this.updateContent(data.hunt_plan);
+            } else {
+                throw new Error(data.error || 'Failed to generate content');
+            }
+        } catch (error) {
+            UIFeedback.show('error', 'Error generating content: ' + error.message);
+        } finally {
+            UIFeedback.hideLoading();
+        }
     }
 }
 
