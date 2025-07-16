@@ -105,11 +105,31 @@ def extract_accepted_hypothesis(task_result):
                 if cleaned_hypothesis:
                     return cleaned_hypothesis
 
-    # Final fallback to the last message content if all else fails
-    if hasattr(task_result, 'messages') and task_result.messages:
-        return task_result.messages[-1].content.strip()
+    # Final fallback - return the raw content if available
+    if hasattr(task_result, 'content'):
+        return task_result.content
+    elif hasattr(task_result, 'messages') and task_result.messages:
+        return task_result.messages[-1].content if task_result.messages[-1].content else str(task_result)
+    else:
+        return str(task_result)
 
-    return "Error: Could not extract a valid hypothesis from the result."
+def handle_async_api_errors(f):
+    """Unified error handling decorator for async API routes"""
+    @wraps(f)
+    async def decorated_function(*args, **kwargs):
+        try:
+            return await f(*args, **kwargs)
+        except Exception as e:
+            error_msg = str(e)
+            if "500" in error_msg and "Internal server error" in error_msg:
+                return jsonify({
+                    'success': False, 
+                    'error': 'OpenAI API internal server error. Maximum retry attempts reached.',
+                    'detail': str(e)
+                }), 500
+            else:
+                return jsonify({'success': False, 'error': str(e)}), 500
+    return decorated_function
 
 # Load .env at app startup
 load_env_defaults()
@@ -187,6 +207,7 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 @app.route('/api/research', methods=['POST'])
 @async_action
+@handle_async_api_errors
 async def research():
     # Generate or refine research report using AI agents
     data = request.get_json()
@@ -210,35 +231,25 @@ async def research():
             TextMessage(content=f"User feedback: {feedback}\n", source="user")
         ]
 
-    try:
-        # Run the researcher
-        result = await retry_api_call(
-            async_researcher, 
-            technique=topic, 
-            local_context=local_context, 
-            verbose=verbose_mode,
-            previous_run=previous_run
-        )
-        
-        # Extract the report markdown
-        report_md = extract_report_md(result)
-        
-        # Store in session
-        session['report_md'] = report_md
-        return jsonify({'success': True, 'report': report_md})
-    except Exception as e:
-        error_msg = str(e)
-        if "500" in error_msg and "Internal server error" in error_msg:
-            return jsonify({
-                'success': False, 
-                'error': 'OpenAI API internal server error. Maximum retry attempts reached.',
-                'detail': str(e)
-            }), 500
-        else:
-            return jsonify({'success': False, 'error': str(e)}), 500
+    # Run the researcher
+    result = await retry_api_call(
+        async_researcher, 
+        technique=topic, 
+        local_context=local_context, 
+        verbose=verbose_mode,
+        previous_run=previous_run
+    )
+    
+    # Extract the report markdown
+    report_md = extract_report_md(result)
+    
+    # Store in session
+    session['report_md'] = report_md
+    return jsonify({'success': True, 'report': report_md})
 
 @app.route('/api/hypothesize', methods=['POST'])
 @async_action
+@handle_async_api_errors
 async def hypothesize():
     data = request.json
     report_md = data.get('report_md') or session.get('report_md', '')
@@ -250,40 +261,29 @@ async def hypothesize():
 
     local_context = session.get('local-context', '')  # Get local context from session
     
-    try:
-        hypos = await retry_api_call(
-            async_hypothesizer, 
-            report_md, 
-            report_md,  # This seems to be duplicated, raw_text is the second param
-            local_context=local_context,  # Pass local context
-            max_retries=retry_count
-        )
-        
-        if isinstance(hypos, str):
-            # Split into lines first
-            lines = hypos.splitlines()
-            cleaned_hypos = []
-            for line in lines:
-                # Remove leading numbers, dots, dashes, or asterisks followed by a space
-                cleaned_line = re.sub(r'^\s*\d+\.\s*|^\s*[-*]\s*', '', line).strip()
-                if cleaned_line:
-                    cleaned_hypos.append(cleaned_line)
-            hypos = cleaned_hypos
-        
-        # Store in session
-        session['hypotheses'] = hypos
-        
-        return jsonify({'success': True, 'hypotheses': hypos})
-    except Exception as e:
-        error_msg = str(e)
-        if "500" in error_msg and "Internal server error" in error_msg:
-            return jsonify({
-                'success': False, 
-                'error': 'OpenAI API internal server error. Maximum retry attempts reached.',
-                'detail': str(e)
-            }), 500
-        else:
-            return jsonify({'success': False, 'error': str(e)}), 500
+    hypos = await retry_api_call(
+        async_hypothesizer, 
+        report_md, 
+        report_md,  # This seems to be duplicated, raw_text is the second param
+        local_context=local_context,  # Pass local context
+        max_retries=retry_count
+    )
+    
+    if isinstance(hypos, str):
+        # Split into lines first
+        lines = hypos.splitlines()
+        cleaned_hypos = []
+        for line in lines:
+            # Remove leading numbers, dots, dashes, or asterisks followed by a space
+            cleaned_line = re.sub(r'^\s*\d+\.\s*|^\s*[-*]\s*', '', line).strip()
+            if cleaned_line:
+                cleaned_hypos.append(cleaned_line)
+        hypos = cleaned_hypos
+    
+    # Store in session
+    session['hypotheses'] = hypos
+    
+    return jsonify({'success': True, 'hypotheses': hypos})
 
 @app.route('/api/save-hypothesis', methods=['POST'])
 def save_hypothesis():
@@ -302,6 +302,7 @@ def save_hypothesis():
 
 @app.route('/api/refine', methods=['POST'])
 @async_action
+@handle_async_api_errors
 async def refine():
     # Refine a threat hunting hypothesis using AI agents
     data = request.get_json()
@@ -327,39 +328,29 @@ async def refine():
             TextMessage(content=f"User feedback: {feedback}\n", source="user")
         ]
 
-    try:
-        # Log the hypothesis being sent to the refiner for debugging
-        logging.warning(f"Calling async_refiner with hypothesis: {hypothesis[:100]}...")
+    # Log the hypothesis being sent to the refiner for debugging
+    logging.warning(f"Calling async_refiner with hypothesis: {hypothesis[:100]}...")
 
-        # Explicitly pass keyword arguments to the refiner function
-        result = await retry_api_call(
-            async_refiner, 
-            hypothesis=hypothesis, 
-            local_context=local_context, 
-            research_document=research_report,
-            verbose=verbose_mode,
-            previous_run=previous_run
-        )
-        
-        # Extract the refined hypothesis
-        refined_hypothesis = extract_accepted_hypothesis(result)
-        
-        # Store in session under the correct key
-        session['refined_hypothesis'] = refined_hypothesis
-        return jsonify({'success': True, 'refined_hypothesis': refined_hypothesis})
-    except Exception as e:
-        error_msg = str(e)
-        if "500" in error_msg and "Internal server error" in error_msg:
-            return jsonify({
-                'success': False, 
-                'error': 'OpenAI API internal server error. Maximum retry attempts reached.',
-                'detail': str(e)
-            }), 500
-        else:
-            return jsonify({'success': False, 'error': str(e)}), 500
+    # Explicitly pass keyword arguments to the refiner function
+    result = await retry_api_call(
+        async_refiner, 
+        hypothesis=hypothesis, 
+        local_context=local_context, 
+        research_document=research_report,
+        verbose=verbose_mode,
+        previous_run=previous_run
+    )
+    
+    # Extract the refined hypothesis
+    refined_hypothesis = extract_accepted_hypothesis(result)
+    
+    # Store in session under the correct key
+    session['refined_hypothesis'] = refined_hypothesis
+    return jsonify({'success': True, 'refined_hypothesis': refined_hypothesis})
 
 @app.route('/api/able-table', methods=['POST'])
 @async_action
+@handle_async_api_errors
 async def able_table():
     data = request.json
 
@@ -387,30 +378,20 @@ async def able_table():
         ]
 
     # Call the able_table function from the CLI module
-    try:
-        able_md = await retry_api_call(
-            able_table,
-            hypothesis=hypothesis,
-            research_document=report_md,
-            local_context=local_context,
-            previous_run=previous_run
-        )
-        # Store result in session
-        session['able_table_md'] = able_md
-        return jsonify({'success': True, 'able_table': able_md})
-    except Exception as e:
-        error_msg = str(e)
-        if "500" in error_msg and "Internal server error" in error_msg:
-            return jsonify({
-                'success': False, 
-                'error': 'OpenAI API internal server error. Maximum retry attempts reached.',
-                'detail': str(e)
-            }), 500
-        else:
-            return jsonify({'success': False, 'error': str(e)}), 500
+    able_md = await retry_api_call(
+        able_table,
+        hypothesis=hypothesis,
+        research_document=report_md,
+        local_context=local_context,
+        previous_run=previous_run
+    )
+    # Store result in session
+    session['able_table_md'] = able_md
+    return jsonify({'success': True, 'able_table': able_md})
 
 @app.route('/api/data-discovery', methods=['GET', 'POST'])
 @async_action
+@handle_async_api_errors
 async def data_discovery():
     if request.method == 'GET':
         # Return existing data sources from session
@@ -452,45 +433,34 @@ async def data_discovery():
         messages.append(TextMessage(content=f"The current data sources draft is: {current_data_sources}\n", source="user"))
         messages.append(TextMessage(content=f"User feedback: {feedback}\n", source="user"))
 
-    try:
-        result = await retry_api_call(
-            async_identify_data_sources, 
-            hypothesis, 
-            report_md,
-            able_info=able_table_md,
-            local_context=local_context,  # Pass local context to the function
-            mcp_command=mcp_command,
-            mcp_args=mcp_args,
-            verbose=verbose_mode,
-            previous_run=messages,
-            max_retries=retry_count
+    result = await retry_api_call(
+        async_identify_data_sources, 
+        hypothesis, 
+        report_md,
+        able_info=able_table_md,
+        local_context=local_context,  # Pass local context to the function
+        mcp_command=mcp_command,
+        mcp_args=mcp_args,
+        verbose=verbose_mode,
+        previous_run=messages,
+        max_retries=retry_count
+    )
+    # Extract the final message from the "Data_Discovery_Agent" similar to CLI version
+    data_sources_md = None
+    if hasattr(result, 'messages'):
+        data_sources_md = next(
+            (message.content for message in reversed(result.messages) if getattr(message, 'source', None) == "Data_Discovery_Agent"),
+            None
         )
-        # Extract the final message from the "Data_Discovery_Agent" similar to CLI version
-        data_sources_md = None
-        if hasattr(result, 'messages'):
-            data_sources_md = next(
-                (message.content for message in reversed(result.messages) if getattr(message, 'source', None) == "Data_Discovery_Agent"),
-                None
-            )
-        if not data_sources_md:
-            if hasattr(result, 'content'):
-                data_sources_md = result.content
-            else:
-                data_sources_md = str(result)
-        
-        # Store in session
-        session['data_sources_md'] = data_sources_md
-        return jsonify({'success': True, 'data_sources': data_sources_md})
-    except Exception as e:
-        error_msg = str(e)
-        if "500" in error_msg and "Internal server error" in error_msg:
-            return jsonify({
-                'success': False, 
-                'error': 'OpenAI API internal server error. Maximum retry attempts reached.',
-                'detail': str(e)
-            }), 500
+    if not data_sources_md:
+        if hasattr(result, 'content'):
+            data_sources_md = result.content
         else:
-            return jsonify({'success': False, 'error': str(e)}), 500
+            data_sources_md = str(result)
+    
+    # Store in session
+    session['data_sources_md'] = data_sources_md
+    return jsonify({'success': True, 'data_sources': data_sources_md})
 
 @app.route('/api/upload-report', methods=['POST'])
 def upload_report():
