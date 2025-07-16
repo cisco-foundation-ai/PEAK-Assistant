@@ -4,10 +4,12 @@ import os
 import sys
 import asyncio
 import httpx 
+import uuid 
 
 from dotenv import load_dotenv
 from pathlib import Path
 
+from mcp import types
 from mcp.server.fastmcp import FastMCP 
 
 # Add the parent directory to sys.path so we can import our modules
@@ -32,8 +34,29 @@ def find_dotenv_file():
         current_dir = current_dir.parent
     return None  # No .env file found
 
+def embeddable_object(data: str, content_type: str = "text/markdown") -> types.EmbeddedResource:
+    """
+    Create an embeddable resource from the provided data. This "encourages" the LLM chat interface
+    to display the results to the user as an Artifact rather than digest and summarize it.
+    """
+    uri = f"report://{uuid.uuid4()}.md"
+    resource = types.TextResourceContents(
+        uri=uri,
+        text=data,
+        mimeType=content_type
+    )
+    return types.EmbeddedResource(
+        type="resource",
+        resource=resource,
+        annotations={"audience": ["user"]}
+    )
+
+################################################################################
+# Prompts
+################################################################################
+
 @mcp.prompt(name="peak-begin")
-def peak_begin_prompt(context_filename: str) -> str:
+def peak_begin_prompt() -> str:
     prompt = f"""
         In this chat session, we are going to collaboratively plan a threat hunt using the PEAK Assistant
         MCP server. Although the user may steer this workflow in any direction at any time, the expected
@@ -62,42 +85,95 @@ def peak_begin_prompt(context_filename: str) -> str:
         Here are a number of rules to guide you:
         
         - During this process, many of the tools will require a "local context". I have uploaded 
-        a file called {context_filename}. When you need to know the "local context" for something, 
+        a file containing local context information. When you need to know the "local context" for something, 
         use the exact contents of this file (do not summarize it).
 
-        - Whenever you run a tool, you must display the output of the tool. You may also display
-          summaries or additional information, but you must always display the tool output. When 
-          feasible, display the output as an artifact.
+        - Whenever you run an MCP tool from the PEAK Assistant, you must display the output of the tool as an artifact. 
     """
     return prompt
 
 @mcp.prompt(name="peak-research")
 def research_prompt(technique: str) -> str:
-    prompt = f"""
-        You are a cybersecurity threat hunter acting as a research assistant for other threat hunters. 
-        Using the PEAK Assistant MCP server's researcher tool, help me compile a research report giving 
-        everything a hunter should know when planning a hunt on their given topic. You should return the 
-        research report as-is without modification or your own additions. 
-
-        I have uploaded a file you can use as the local context. It is called "context.txt"
-        
-        ALWAYS display this report as an artifact. Display only the exact report returned from this 
-        tool. Do not attempt your own analysis or summary.
-
-        Please research the following: {technique}
+    prompt = f"""       
+        Please research the following threat hunting topic and display the resulting markdown report as an artifact: {technique}
     """
 
     return prompt 
+
+@mcp.prompt(name="peak-hypothesize")
+def hypothesizer_prompt() -> str:
+    prompt = f"""
+        You are a cybersecurity threat hunter acting as a threat hunting assistant.
+        Your job is to carefully read the provided research report and the 
+        information about the local computing environment (the "local context") and 
+        generate a list of threat hunting hypotheses based on those sources. Use the 
+        PEAK Assistant MCP server's hypothesizer tool to generate the hypotheses. Display
+        the result as an artifact.
+    """
+
+    return prompt
+
+@mcp.prompt(name="peak-refine-hypothesis", description="Given a threat hunting hypothesis provided by the user, provide suggest improvements to the user.")
+async def refine_hypothesis_prompt() -> str:
+    prompt = f"""
+        You are a cybersecurity threat hunter acting as a threat hunting assistant.
+        Your job is to carefully read the threat hunting hypothesis and 
+        generate a list of improvements or suggestions to make the hypothesis 
+        more accurate, complete, or effective. Use the PEAK Assistant MCP server's 
+        hypothesis refiner tool to generate the improvements. Display the result as 
+        an artifact.
+    """
+
+    return prompt
+
+@mcp.prompt(name="peak-able-table", description="Create the PEAK ABLE table.")
+async def able_table_prompt() -> str:
+    prompt = f"""
+        You are a cybersecurity threat hunter acting as a threat hunting assistant.
+        Your job is to carefully read the provided threat hunting research, hypothesis 
+        and local context to create the "Actor, Behavior, Location, and Evidence" (ABLE)
+        table. Display the result as an artifact.
+    """
+
+    return prompt
+
+@mcp.prompt(name="peak-data-discovery", description="Identify the data sources needed to test the hypothesis.")
+async def data_discovery_prompt() -> str:
+    prompt = f"""
+        You are a cybersecurity threat hunter acting as a threat hunting assistant.
+        Your job is to carefully read the provided threat hunting research, hypothesis, 
+        ABLE table, and local context and then use the PEAK assistant's data discovery tool 
+        to identify the indices, sourcetypes, and key fields needed to test the hypothesis. 
+        Display the result as an artifact.
+    """
+
+    return prompt
+
+@mcp.prompt(name="peak-plan-hunt", description="Produce a comprehensive hunting plan.")
+async def plan_hunt_prompt() -> str:
+    prompt = f"""
+        You are a cybersecurity threat hunter acting as a threat hunting assistant.
+        Your job is to carefully read the provided threat hunting research, hypothesis, 
+        ABLE table, data discovery results, and local context and then use the PEAK 
+        assistant's plan hunt tool to produce a comprehensive hunting plan. Display 
+        the result as an artifact.
+    """
+
+    return prompt
+
+################################################################################
+# Tools
+################################################################################
 
 @mcp.tool(name="peak-researcher", description="Generate a comprehensive cybersecurity threat hunting report for a specified technique or behavior.")
 async def researcher(
     technique: str = None, 
     local_context: str = None
-) -> str:
+) -> types.EmbeddedResource:
     """
     Orchestrates a multi-agent, multi-stage research workflow to generate a 
     comprehensive cybersecurity threat hunting report for a specified 
-    technique or behavior.
+    technique or behavior. Always display this report as an artifact.
 
     Args:
         technique (str): The name or description of the threat actor
@@ -107,8 +183,8 @@ async def researcher(
             contents of the local context file, not a summary.
 
     Returns:
-        str: A Markdown document containing the research report, or an error 
-            message if the process fails.
+        types.EmbeddedResource: An embeddable resource containing the research report, or an error 
+             message if the process fails. 
     """
     result = await async_researcher(technique, local_context)
 
@@ -117,29 +193,13 @@ async def researcher(
         None
     )
 
-    return report
-
-@mcp.prompt(name="peak-hypothesize")
-def hypothesizer_prompt(research_document: str = None, local_context: str = None) -> str:
-    prompt = f"""
-        You are a cybersecurity threat hunter acting as a threat hunting assistant.
-        Your job is to carefully read the provided research report and the 
-        information about the local computing environment (the "local context") and 
-        generate a list of threat hunting hypotheses based on those sources. Use the 
-        PEAK Assistant MCP server's hypothesizer tool to generate the hypotheses.
-
-        The research document: {research_document}
-
-        The local context: {local_context}
-    """
-
-    return prompt
+    return embeddable_object(data=report)
 
 @mcp.tool(name="peak-hypothesizer", description="Generate a list of threat hunting hypotheses based on the provided research document and local computing environment context.")
 async def hypothesizer(research_document: str = None, local_context: str = None) -> str:
     """
     Return a list of threat hunting hypotheses based on the provided research document
-    and local computing environment context.
+    and local computing environment context. Always display this as an artifact.
 
     Args:
         research_document (str): The exact contents of the research report.
@@ -153,26 +213,13 @@ async def hypothesizer(research_document: str = None, local_context: str = None)
 
     result = await async_hypothesizer(research_document, local_context)
 
-    return result
-
-@mcp.prompt(name="peak-refine-hypothesis", description="Given a threat hunting hypothesis provided by the user, provide suggest improvements to the user.")
-async def refine_hypothesis_prompt(hypothesis: str = None) -> str:
-    prompt = f"""
-        You are a cybersecurity threat hunter acting as a threat hunting assistant.
-        Your job is to carefully read the provided threat hunting hypothesis and 
-        generate a list of improvements or suggestions to make the hypothesis 
-        more accurate, complete, or effective. Use the PEAK Assistant MCP server's 
-        hypothesis refiner tool to generate the improvements.
-
-        The hypothesis: {hypothesis}
-    """
-
-    return prompt
+    return embeddable_object(data=result)
 
 @mcp.tool(name="peak-hypothesis-refiner", description="Given a threat hunting hypothesis provided by the user, provide suggest improvements to the user.")
 async def hypothesis_refiner(hypothesis: str = None, research_document: str = None, local_context: str = None) -> str:
     """
     Given a threat hunting hypothesis provided by the user, provide suggest improvements to the user.
+    Always display this as an artifact
 
     Args:
         hypothesis (str): A threat hunting hypothesis provided by the user.
@@ -196,27 +243,13 @@ async def hypothesis_refiner(hypothesis: str = None, research_document: str = No
 
     refined_hypothesis = refined_hypothesis_message.replace("YYY-HYPOTHESIS-ACCEPTED-YYY", "").strip()
 
-    return refined_hypothesis
-
-@mcp.prompt(name="peak-able-table", description="Create the PEAK ABLE table.")
-async def able_table_prompt() -> str:
-    prompt = f"""
-        You are a cybersecurity threat hunter acting as a threat hunting assistant.
-        Your job is to carefully read the provided threat hunting research, hypothesis 
-        and local context to create the "Actor, Behavior, Location, and Evidence" (ABLE)
-        table.
-
-        The research: {research_document}
-        The hypothesis: {hypothesis}
-        The local context: {local_context}
-    """
-
-    return prompt
+    return embeddable_object(data=refined_hypothesis)
 
 @mcp.tool(name="peak-able-table", description="Create the PEAK ABLE table.")
 async def able_table(hypothesis: str = None, research_document: str = None, local_context: str = None) -> str:
     """
     Create the PEAK ABLE table based on the provided hypothesis, research document, and local context.
+    Always display this as an artifact.
 
     Args:
         hypothesis (str): A threat hunting hypothesis provided by the user.
@@ -235,7 +268,7 @@ async def able_table(hypothesis: str = None, research_document: str = None, loca
         local_context=local_context
     )
 
-    return result
+    return embeddable_object(data=result)
 
 @mcp.tool(name="peak-data-discovery", description="Query the Splunk server to identify indices, sourctypes and key fields relevant to the hunt.")
 async def data_discovery(
@@ -252,7 +285,7 @@ async def data_discovery(
     """
     Given the provided threat hunting hypothesis, research report, ABLE table and 
     local context, query the Splunk server to try to identify indices, sourctypes 
-    and key fields relevant to the hunt.
+    and key fields relevant to the hunt. Always display this as an artifact.
 
     Args:
         hypothesis (str): A threat hunting hypothesis provided by the user.
@@ -289,8 +322,7 @@ async def data_discovery(
         result.messages[-1].content
     )
 
-    return data_source_report
-
+    return embeddable_object(data=data_source_report)
 
 @mcp.tool(name="peak-hunt-planner", description="Produce a comprehensive hunting plan")
 async def plan_hunt(
@@ -302,7 +334,7 @@ async def plan_hunt(
 ) -> str:
     """
     Produce a comprehensive hunting plan based on the provided hypothesis, research document, ABLE table, 
-    data discovery report, and local context.
+    data discovery report, and local context. Always display this as an artifact.
 
     Args:
         hypothesis (str): A threat hunting hypothesis provided by the user.
@@ -330,11 +362,11 @@ async def plan_hunt(
         None
     )
 
-    return hunt_plan
+    return embeddable_object(data=hunt_plan)
 
 #### MAIN ####
 
 if __name__ == "__main__":
     load_dotenv(find_dotenv_file())
     mcp.run(transport="stdio")
-
+#    mcp.run(transport="streamable-http")
