@@ -2,9 +2,9 @@
 
 {% block title %}Hypothesis Refinement - PEAK Assistant{% endblock %}
 
-{% set prev_phase_url = url_for('hypothesis_page') %}
-{% set prev_phase_name = "Hypothesis Generation" %}
-{% set next_phase_url = url_for('able_table_page') %}
+{% set prev_phase_url = url_for('pages.hypothesis_page') %}
+{% set prev_phase_name = 'Hypothesis Generation' %}
+{% set next_phase_url = url_for('pages.able_table_page') %}
 {% set next_phase_name = "ABLE Table Generation" %}
 
 {% block nav %}{{ super() }}{% endblock %}
@@ -40,7 +40,7 @@
     <!-- Warning for Missing Hypothesis -->
     <div id="no-hypothesis-warning" class="prerequisite-warning p-4 rounded-3 m-3" style="display: none;">
         <h5 class="mb-1"><i class="bi bi-exclamation-triangle-fill me-2"></i>Missing Hypothesis</h5>
-        <p class="mb-0">No hypothesis found. Please <a href="{{ url_for('hypothesis_page') }}" class="alert-link">create a hypothesis</a> first.</p>
+        <p class="mb-0">No hypothesis found. Please <a href="{{ url_for('pages.hypothesis_page') }}" class="alert-link">create a hypothesis</a> first.</p>
     </div>
 
     <!-- Feedback Input Area: Stays at the bottom (always visible) -->
