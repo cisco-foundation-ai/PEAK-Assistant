@@ -4,11 +4,18 @@ API routes for PEAK Assistant - AI-powered threat hunting operations
 import os
 import re
 import logging
-from flask import Blueprint, request, jsonify, session
+from flask import Blueprint, request, jsonify
 from autogen_agentchat.messages import TextMessage, UserMessage
 
 from ..utils.decorators import async_action, handle_async_api_errors
-from ..utils.helpers import retry_api_call, extract_report_md, extract_accepted_hypothesis
+from ..utils.helpers import (
+    retry_api_call, 
+    extract_report_md, 
+    extract_accepted_hypothesis,
+    get_session_value,
+    set_session_value,
+    clear_session_key
+)
 
 # Create API blueprint
 api_bp = Blueprint('api', __name__, url_prefix='/api')
@@ -29,7 +36,7 @@ async def research():
     verbose_mode = data.get('verbose', False)
     
     # Get local context from session
-    local_context = session.get('local_context', INITIAL_LOCAL_CONTEXT)
+    local_context = get_session_value('local_context', INITIAL_LOCAL_CONTEXT)
     
     # Import the researcher function and TextMessage
     from research_assistant.research_assistant_cli import researcher as async_researcher
@@ -56,7 +63,7 @@ async def research():
     report_md = extract_report_md(result)
     
     # Store in session
-    session['report_md'] = report_md
+    set_session_value('report_md', report_md)
     return jsonify({'success': True, 'report': report_md})
 
 
@@ -66,14 +73,14 @@ async def research():
 async def hypothesize():
     """Generate threat hunting hypotheses"""
     data = request.json
-    report_md = data.get('report_md') or session.get('report_md', '')
+    report_md = data.get('report_md') or get_session_value('report_md', '')
     retry_count = int(data.get('retry_count', 3))
     # verbose_mode is ignored for hypothesizer, as it is not supported
     
     if not report_md:
         return jsonify({'success': False, 'error': 'No research report available'}), 400
 
-    local_context = session.get('local-context', '')  # Get local context from session
+    local_context = get_session_value('local-context', '')  # Get local context from session
     
     # Import hypothesizer
     from hypothesis_assistant.hypothesis_assistant_cli import hypothesizer as async_hypothesizer
@@ -98,7 +105,7 @@ async def hypothesize():
         hypos = cleaned_hypos
     
     # Store in session
-    session['hypotheses'] = hypos
+    set_session_value('hypotheses', hypos)
     
     return jsonify({'success': True, 'hypotheses': hypos})
 
@@ -110,12 +117,12 @@ def save_hypothesis():
     hypothesis = data.get('hypothesis')
     if not hypothesis:
         return jsonify({'success': False, 'error': 'No hypothesis provided'}), 400
-    prev_hypo = session.get('hypothesis')
+    prev_hypo = get_session_value('hypothesis')
     # Store in session
-    session['hypothesis'] = hypothesis
+    set_session_value('hypothesis', hypothesis)
     # Only clear refined_hypothesis if the hypothesis actually changed
     if prev_hypo != hypothesis:
-        session.pop('refined_hypothesis', None)
+        clear_session_key('refined_hypothesis')
     return jsonify({'success': True})
 
 
@@ -130,12 +137,12 @@ async def refine():
     verbose_mode = data.get('verbose', False)
     
     # Get research report from session
-    research_report = session.get('report_md', '')
+    research_report = get_session_value('report_md', '')
     if not research_report:
         return jsonify({'success': False, 'error': 'No research report found in session. Please complete the research phase first.'}), 400
     
     # Get local context from session
-    local_context = session.get('local_context', INITIAL_LOCAL_CONTEXT)
+    local_context = get_session_value('local_context', INITIAL_LOCAL_CONTEXT)
     
     from autogen_agentchat.messages import TextMessage
     from hypothesis_assistant.hypothesis_refiner_cli import refiner as async_refiner
@@ -165,7 +172,7 @@ async def refine():
     refined_hypothesis = extract_accepted_hypothesis(result)
     
     # Store in session under the correct key
-    session['refined_hypothesis'] = refined_hypothesis
+    set_session_value('refined_hypothesis', refined_hypothesis)
     return jsonify({'success': True, 'refined_hypothesis': refined_hypothesis})
 
 
@@ -177,15 +184,15 @@ async def able_table():
     data = request.json
 
     # Get hypothesis, falling back through the session states
-    hypothesis = data.get('hypothesis') or session.get('refined_hypothesis') or session.get('hypothesis')
+    hypothesis = data.get('hypothesis') or get_session_value('refined_hypothesis') or get_session_value('hypothesis')
     if not hypothesis:
         return jsonify({'success': False, 'error': 'No hypothesis found in request or session.'}), 400
 
     # Get other data from request and session
     feedback = data.get('feedback')
     current_able_table = data.get('current_able_table')
-    report_md = session.get('report_md', '')
-    local_context = session.get('local_context', INITIAL_LOCAL_CONTEXT)
+    report_md = get_session_value('report_md', '')
+    local_context = get_session_value('local_context', INITIAL_LOCAL_CONTEXT)
     
     # Import necessary modules
     from able_assistant.able_assistant_cli import able_table
@@ -208,7 +215,7 @@ async def able_table():
         previous_run=previous_run
     )
     # Store result in session
-    session['able_table_md'] = able_md
+    set_session_value('able_table_md', able_md)
     return jsonify({'success': True, 'able_table': able_md})
 
 
@@ -220,20 +227,20 @@ async def data_discovery():
     if request.method == 'GET':
         # Return existing data sources from session
         return jsonify({
-            'data_sources_md': session.get('data_sources_md', ''),
+            'data_sources_md': get_session_value('data_sources_md', ''),
             'success': True
         })
     
     data = request.json
     # Use refined hypothesis if available, else fallback to original
-    hypothesis = data.get('hypothesis') or session.get('refined_hypothesis') or session.get('hypothesis', '')
-    report_md = data.get('report_md') or session.get('report_md', '')
-    able_table_md = data.get('able_table_md') or session.get('able_table_md', '')
+    hypothesis = data.get('hypothesis') or get_session_value('refined_hypothesis') or get_session_value('hypothesis', '')
+    report_md = data.get('report_md') or get_session_value('report_md', '')
+    able_table_md = data.get('able_table_md') or get_session_value('able_table_md', '')
     feedback = data.get('feedback')
     current_data_sources = data.get('current_data_sources')
     retry_count = int(data.get('retry_count', 3))
     verbose_mode = data.get('verbose_mode', False)
-    local_context = session.get('local-context', '')  # Get local context from session
+    local_context = get_session_value('local-context', '')  # Get local context from session
 
     if not hypothesis:
         return jsonify({'success': False, 'error': 'No hypothesis provided'}), 400
@@ -286,7 +293,7 @@ async def data_discovery():
             data_sources_md = str(result)
     
     # Store in session
-    session['data_sources_md'] = data_sources_md
+    set_session_value('data_sources_md', data_sources_md)
     return jsonify({'success': True, 'data_sources': data_sources_md})
 
 
@@ -298,19 +305,19 @@ async def hunt_plan():
     data = request.json
     
     # Get hypothesis, falling back through the session states
-    hypothesis = data.get('hypothesis') or session.get('refined_hypothesis') or session.get('hypothesis')
+    hypothesis = data.get('hypothesis') or get_session_value('refined_hypothesis') or get_session_value('hypothesis')
     if not hypothesis:
         return jsonify({'success': False, 'error': 'No hypothesis found in request or session.'}), 400
     
     # Get other required data
-    report_md = data.get('report_md') or session.get('report_md', '')
-    able_table_md = data.get('able_table_md') or session.get('able_table_md', '')
-    data_sources_md = data.get('data_sources_md') or session.get('data_sources_md', '')
+    report_md = data.get('report_md') or get_session_value('report_md', '')
+    able_table_md = data.get('able_table_md') or get_session_value('able_table_md', '')
+    data_sources_md = data.get('data_sources_md') or get_session_value('data_sources_md', '')
     feedback = data.get('feedback')
     current_hunt_plan = data.get('current_hunt_plan')
     retry_count = int(data.get('retry_count', 3))
     verbose_mode = data.get('verbose_mode', False)
-    local_context = session.get('local_context', INITIAL_LOCAL_CONTEXT)
+    local_context = get_session_value('local_context', INITIAL_LOCAL_CONTEXT)
     
     if not report_md:
         return jsonify({'success': False, 'error': 'No research report available'}), 400
@@ -356,5 +363,5 @@ async def hunt_plan():
             hunt_plan_md = str(result)
     
     # Store in session
-    session['hunt_plan_md'] = hunt_plan_md
+    set_session_value('hunt_plan_md', hunt_plan_md)
     return jsonify({'success': True, 'hunt_plan': hunt_plan_md})

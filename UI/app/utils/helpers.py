@@ -96,3 +96,31 @@ def extract_accepted_hypothesis(task_result):
         return task_result.messages[-1].content if task_result.messages[-1].content else str(task_result)
     else:
         return str(task_result)
+
+# ==============================================================================
+# Session Management Utilities
+# ==============================================================================
+
+from flask import session
+
+def get_session_value(key, default=None):
+    """Safely get a value from the session."""
+    return session.get(key, default)
+
+def set_session_value(key, value):
+    """Set a value in the session."""
+    session[key] = value
+
+def clear_session_key(key):
+    """Remove a specific key from the session."""
+    session.pop(key, None)
+
+def get_all_session_data():
+    """Get a dictionary of all session data, excluding internal keys."""
+    if not session:
+        return {}
+    return {k: v for k, v in session.items() if not k.startswith('_')}
+
+def clear_all_session_data():
+    """Clear all data from the session."""
+    session.clear()

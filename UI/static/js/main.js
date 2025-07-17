@@ -25,4 +25,41 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    // Function to check prerequisites for Hunt Planning button and style it
+    async function checkHuntPlanningPrerequisites() {
+        const huntPlanningBtn = document.getElementById('hunt-planning-btn');
+        if (!huntPlanningBtn) return;
+
+        try {
+            const response = await fetch('/api/prerequisite-check');
+            const data = await response.json();
+
+            if (data.all_met) {
+                huntPlanningBtn.classList.remove('disabled', 'btn-secondary');
+                huntPlanningBtn.classList.add('btn-success');
+                huntPlanningBtn.removeAttribute('aria-disabled');
+                huntPlanningBtn.title = 'Proceed to Hunt Planning';
+            } else {
+                huntPlanningBtn.classList.add('disabled', 'btn-secondary');
+                huntPlanningBtn.classList.remove('btn-success');
+                huntPlanningBtn.setAttribute('aria-disabled', 'true');
+                huntPlanningBtn.title = `Complete these phases first: ${data.missing.join(', ')}`;
+            }
+        } catch (error) {
+            console.error('Error checking hunt planning prerequisites:', error);
+            huntPlanningBtn.classList.add('disabled', 'btn-secondary');
+            huntPlanningBtn.classList.remove('btn-success');
+            huntPlanningBtn.title = 'Error checking prerequisites.';
+        }
+    }
+
+    // Initial check when the DOM is loaded
+    checkHuntPlanningPrerequisites();
+
+    // Listen for session state changes and re-run the check
+    document.addEventListener('sessionStateChanged', function() {
+        console.log('Session state changed, re-checking hunt plan prerequisites...');
+        checkHuntPlanningPrerequisites();
+    });
 });

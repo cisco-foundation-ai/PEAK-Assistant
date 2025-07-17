@@ -3,7 +3,9 @@ Page rendering routes for PEAK Assistant UI
 """
 import os
 import sys
-from flask import Blueprint, render_template, jsonify, session, request
+import logging
+from flask import Blueprint, render_template, jsonify, request
+from ..utils.helpers import get_session_value, clear_all_session_data, get_all_session_data
 
 # Create page blueprint
 page_bp = Blueprint('pages', __name__)
@@ -25,7 +27,7 @@ def research_page():
 def hypothesis_page():
     """Hypothesis generation interface"""
     # Only use the current (editable) hypothesis, never the refined one
-    hypo = session.get('hypothesis', '')
+    hypo = get_session_value('hypothesis', '')
     return render_template('hypothesis.html', current_hypothesis=hypo)
 
 
@@ -70,7 +72,7 @@ def debug_info():
     """Debug information and session management endpoint"""
     if request.method == 'POST':
         # Clear session (used in debug page)
-        session.clear()
+        clear_all_session_data()
         return jsonify({'success': True})
     
     # Get environment variables (with redaction for sensitive ones)
@@ -89,5 +91,38 @@ def debug_info():
     return jsonify({
         'environment': env_vars,
         'system_info': sys_info,
-        'session_data': {k: session[k] for k in session if k not in ['_permanent', 'csrf_token']} if session else {}
+        'session_data': get_all_session_data()
+    })
+
+
+@page_bp.route('/api/prerequisite-check', methods=['GET'])
+def prerequisite_check():
+    """Check all prerequisites for the hunt plan phase."""
+    logging.info("--- Running Prerequisite Check ---")
+    prerequisites = {
+        'report_md': 'Research Report',
+        'hypothesis': 'Hypothesis',
+        'able_table_md': 'ABLE Table',
+        'data_sources_md': 'Data Sources'
+    }
+    
+    missing_items = []
+    for key, name in prerequisites.items():
+        if key == 'hypothesis':
+            content = get_session_value('refined_hypothesis') or get_session_value('hypothesis')
+            logging.info(f"Checking for {name}: Found content = {'True' if content else 'False'}")
+        else:
+            content = get_session_value(key)
+            logging.info(f"Checking for {name} ('{key}'): Found content = {'True' if content else 'False'}")
+        
+        if not content or not str(content).strip():
+            missing_items.append(name)
+            
+    all_met = len(missing_items) == 0
+    logging.info(f"Prerequisite check complete. All met: {all_met}. Missing: {missing_items}")
+    logging.info("-------------------------------------")
+            
+    return jsonify({
+        'all_met': all_met,
+        'missing': missing_items
     })

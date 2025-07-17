@@ -3,7 +3,8 @@ File upload and download routes for PEAK Assistant
 """
 import os
 import io
-from flask import Blueprint, request, jsonify, session, Response, send_file, current_app
+from flask import Blueprint, request, jsonify, Response, send_file, current_app
+from ..utils.helpers import get_session_value, set_session_value, clear_session_key, clear_all_session_data
 from werkzeug.utils import secure_filename
 from markdown_pdf import MarkdownPdf, Section
 
@@ -30,8 +31,8 @@ def upload_report():
     file.save(filepath)
     with open(filepath, 'r', encoding='utf-8') as f:
         content = f.read()
-    session['report_md'] = content
-    session['last_topic'] = '[Uploaded]'
+    set_session_value('report_md', content)
+    set_session_value('last_topic', '[Uploaded]')
     return jsonify({'success': True, 'content': content})
 
 
@@ -45,7 +46,7 @@ def upload_able_table():
         return jsonify({'success': False, 'error': 'No selected file'}), 400
     try:
         content = file.read().decode('utf-8')
-        session['able_table_md'] = content
+        set_session_value('able_table_md', content)
         return jsonify({'success': True, 'able_table': content})
     except Exception as e:
         return jsonify({'success': False, 'error': f'Error reading file: {e}'}), 500
@@ -61,7 +62,7 @@ def upload_data_sources():
         return jsonify({'success': False, 'error': 'No selected file'}), 400
     try:
         content = file.read().decode('utf-8')
-        session['data_sources_md'] = content
+        set_session_value('data_sources_md', content)
         return jsonify({'success': True, 'data_sources': content})
     except Exception as e:
         return jsonify({'success': False, 'error': f'Error reading file: {e}'}), 500
@@ -79,9 +80,9 @@ def upload_hypothesis():
         try:
             content = file.read().decode('utf-8')
             # Save to session
-            session['hypothesis'] = content
+            set_session_value('hypothesis', content)
             # Clear any old refined hypothesis
-            session.pop('refined_hypothesis', None)
+            clear_session_key('refined_hypothesis')
             return jsonify({'success': True, 'hypothesis': content})
         except Exception as e:
             return jsonify({'success': False, 'error': f'Error reading file: {e}'}), 500
@@ -97,7 +98,7 @@ def download_markdown():
         filename = data.get('filename', 'download.md')
     else:
         # GET method - use session data
-        content = session.get('report_md', '')
+        content = get_session_value('report_md', '')
         filename = 'research_report.md'
     
     if not content:
@@ -124,7 +125,7 @@ def download_pdf():
         filename = data.get('filename', 'download.pdf')
     else:
         # GET method - use session data
-        content = session.get('report_md', '')
+        content = get_session_value('report_md', '')
         filename = 'research_report.pdf'
     
     if not content:
@@ -173,9 +174,9 @@ def save_selected_hypothesis():
         return jsonify({'success': False, 'error': 'No hypothesis provided in request data.'}), 400
         
     hypothesis = data['hypothesis']
-    session['hypothesis'] = hypothesis
+    set_session_value('hypothesis', hypothesis)
     # When a new base hypothesis is selected, any previous refinement is invalid.
-    session.pop('refined_hypothesis', None)
+    clear_session_key('refined_hypothesis')
     print(f"Saved selected hypothesis to session: {hypothesis[:50]}...")
     
     return jsonify({'success': True})
@@ -184,6 +185,6 @@ def save_selected_hypothesis():
 @upload_bp.route('/clear-session', methods=['POST'])
 def clear_session():
     """Clear the session data from the server's storage."""
-    session.clear()
+    clear_all_session_data()
     # The client-side code will handle the redirect after this is successful.
     return jsonify({'success': True})

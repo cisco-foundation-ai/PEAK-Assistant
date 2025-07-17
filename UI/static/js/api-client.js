@@ -49,7 +49,9 @@ class APIClient {
                     throw new Error(errorData.error || `HTTP ${response.status}`);
                 }
                 
-                return await response.json();
+                const result = await response.json();
+                document.dispatchEvent(new CustomEvent('sessionStateChanged'));
+                return result;
             } catch (error) {
                 if (attempt === retryCount) {
                     throw error;
@@ -71,7 +73,9 @@ class APIClient {
                 throw new Error(errorData.error || `HTTP ${response.status}`);
             }
 
-            return await response.json();
+            const result = await response.json();
+            document.dispatchEvent(new CustomEvent('sessionStateChanged'));
+            return result;
         } catch (error) {
             console.error('Upload failed:', error);
             throw error;
