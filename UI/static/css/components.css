@@ -1,0 +1,105 @@
+/* ==========================================================================
+   COMPACT CONTENT CARDS
+   ========================================================================== */
+.content-card {
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-lg);
+    margin-bottom: var(--spacing-md);
+    background: #ffffff;
+    box-shadow: var(--shadow-sm);
+    transition: var(--transition);
+    min-height: 300px;
+}
+
+.content-card:hover {
+    box-shadow: var(--shadow);
+}
+
+.content-card.empty {
+    background: var(--light-color);
+    border-style: dashed;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--secondary-color);
+    font-style: italic;
+    min-height: 200px;
+}
+
+/* Content Preview Cards - for displaying hypothesis on other pages */
+.content-preview-card {
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background: #ffffff;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: var(--spacing-md);
+}
+
+.content-preview-header {
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-bottom: 1px solid var(--border-color);
+    background: var(--light-color);
+    border-radius: var(--border-radius) var(--border-radius) 0 0;
+}
+
+.content-preview-header h5 {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--dark-color);
+}
+
+.content-preview-body {
+    padding: var(--spacing-md);
+    max-height: 150px;
+    overflow-y: auto;
+    font-size: var(--font-size-sm);
+    line-height: 1.4;
+}
+
+/* ==========================================================================
+   COMPACT ACTION SECTIONS
+   ========================================================================== */
+.action-buttons {
+    display: flex;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+    flex-wrap: wrap;
+}
+
+.action-section {
+    background: var(--light-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+}
+
+.action-section-title {
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    margin-bottom: var(--spacing-sm);
+    color: var(--dark-color);
+}
+
+/* ==========================================================================
+   COMPACT FORM COMPONENTS
+   ========================================================================== */
+.form-section {
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+}
+
+.input-group-enhanced {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: end;
+}
+
+.input-group-enhanced .form-control {
+    flex: 1;
+}
