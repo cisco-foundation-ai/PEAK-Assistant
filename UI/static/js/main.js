@@ -26,40 +26,25 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Function to check prerequisites for Hunt Planning button and style it
-    async function checkHuntPlanningPrerequisites() {
+    // Function to ensure Hunt Planning button is always active
+    function ensureHuntPlanningButtonActive() {
         const huntPlanningBtn = document.getElementById('hunt-planning-btn');
-        if (!huntPlanningBtn) return;
-
-        try {
-            const response = await fetch('/api/prerequisite-check');
-            const data = await response.json();
-
-            if (data.all_met) {
-                huntPlanningBtn.classList.remove('disabled', 'btn-secondary');
-                huntPlanningBtn.classList.add('btn-success');
-                huntPlanningBtn.removeAttribute('aria-disabled');
-                huntPlanningBtn.title = 'Proceed to Hunt Planning';
-            } else {
-                huntPlanningBtn.classList.add('disabled', 'btn-secondary');
-                huntPlanningBtn.classList.remove('btn-success');
-                huntPlanningBtn.setAttribute('aria-disabled', 'true');
-                huntPlanningBtn.title = `Complete these phases first: ${data.missing.join(', ')}`;
-            }
-        } catch (error) {
-            console.error('Error checking hunt planning prerequisites:', error);
-            huntPlanningBtn.classList.add('disabled', 'btn-secondary');
-            huntPlanningBtn.classList.remove('btn-success');
-            huntPlanningBtn.title = 'Error checking prerequisites.';
+        
+        if (huntPlanningBtn) {
+            // Always enable and style the button as active
+            huntPlanningBtn.classList.remove('disabled', 'btn-secondary');
+            huntPlanningBtn.classList.add('btn-success');
+            huntPlanningBtn.removeAttribute('aria-disabled');
+            huntPlanningBtn.title = 'Generate Hunt Plan';
         }
     }
 
-    // Initial check when the DOM is loaded
-    checkHuntPlanningPrerequisites();
+    // Initial setup when the DOM is loaded
+    ensureHuntPlanningButtonActive();
 
-    // Listen for session state changes and re-run the check
+    // Listen for session state changes and ensure button stays active
     document.addEventListener('sessionStateChanged', function() {
-        console.log('Session state changed, re-checking hunt plan prerequisites...');
-        checkHuntPlanningPrerequisites();
+        console.log('Session state changed, ensuring hunt plan button stays active...');
+        ensureHuntPlanningButtonActive();
     });
 });
