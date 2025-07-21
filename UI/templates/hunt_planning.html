@@ -3,7 +3,7 @@
 {% block title %}Hunt Plan - PEAK Assistant{% endblock %}
 
 {% block nav %}
-    {% set prev_phase_url = url_for('data_discovery_page') %}
+    {% set prev_phase_url = url_for('pages.data_discovery_page') %}
     {% set prev_phase_name = "Data Discovery" %}
     {% set next_phase_url = None %}
     {% set next_phase_name = None %}
@@ -73,22 +73,7 @@
             Use AI agents to combine your research, hypothesis, ABLE table, and data sources into a comprehensive hunt plan.
         </p>
 
-    <!-- Prerequisite Warning -->
-    <div id="missing-prerequisites-warning" class="prerequisite-warning" style="display: none;">
-        <h5><i class="bi bi-exclamation-triangle-fill me-2"></i>Missing Prerequisites</h5>
-        <p class="mb-1">Complete the following phases first:</p>
-        <ul id="missing-items-list" class="prerequisite-list"></ul>
-    </div>
 
-    <!-- Current Hypothesis Display - More Compact Version -->
-    <div id="current-hypo-container" style="display: none;" class="mb-3">
-        <div class="content-preview-card">
-            <div class="content-preview-header d-flex justify-content-between align-items-center">
-                <h5 class="m-0"><i class="bi bi-lightbulb me-2"></i>Current Hypothesis</h5>
-            </div>
-            <div id="current-hypo-content" class="content-preview-body" data-raw-markdown=""></div>
-        </div>
-    </div>
 
     </div><!-- End of hunt-top-section -->
     
@@ -126,19 +111,13 @@ class HuntPlanManager {
         this.apiEndpoint = '/api/hunt-plan';
         this.contentContainer = document.getElementById('plan-content');
         this.downloadContainer = document.getElementById('plan-actions-container');
-        this.sessionStorageKey = 'hunt_plan';
-
-        this.setupEventListeners();
-        this.initializePage();
-    }
-
-    setupEventListeners() {
+        this.sessionStorageKey = 'hunt_plan_md';
+        
+        // Set up event listeners
         document.getElementById('generate-btn').addEventListener('click', () => this.handleGenerate());
         document.getElementById('send-feedback-btn').addEventListener('click', () => this.handleFeedback());
-    }
-
-    async initializePage() {
-        await this.checkPrerequisites();
+        
+        // Initialize the existing data if it exists
         const existingData = sessionStorage.getItem(this.sessionStorageKey);
         if (existingData) {
             this.updateContent(existingData);
@@ -146,59 +125,9 @@ class HuntPlanManager {
         }
     }
 
-    async checkPrerequisites() {
-        const prerequisites = [
-            { key: 'report_md', name: 'Research Document', url: '/research' },
-            { key: 'hypothesis', name: 'Hypothesis', url: '/hypothesis' },
-            { key: 'able_table_md', name: 'ABLE Table', url: '/able-table' },
-            { key: 'data_sources_md', name: 'Data Discovery', url: '/data-discovery' }
-        ];
 
-        const missing = [];
-        const sessionDataForUI = {};
 
-        for (const prereq of prerequisites) {
-            let hasContent = sessionStorage.getItem(prereq.key)?.trim();
-            sessionDataForUI[prereq.key] = hasContent;
 
-            if (prereq.key === 'hypothesis') {
-                const refinedHypo = sessionStorage.getItem('refined_hypothesis')?.trim();
-                if (refinedHypo) {
-                    hasContent = true;
-                    sessionDataForUI['refined_hypothesis'] = refinedHypo;
-                }
-            }
-
-            if (!hasContent) {
-                missing.push(prereq);
-            }
-        }
-
-        this.updatePrerequisiteUI(missing, sessionDataForUI);
-        return missing.length === 0;
-    }
-
-    updatePrerequisiteUI(missingPrereqs, sessionData) {
-        const warningElement = document.getElementById('missing-prerequisites-warning');
-        const generateBtn = document.getElementById('generate-btn');
-        const currentHypoContainer = document.getElementById('current-hypo-container');
-        const currentHypoContent = document.getElementById('current-hypo-content');
-
-        if (missingPrereqs.length > 0) {
-            warningElement.style.display = 'block';
-            document.getElementById('missing-items-list').innerHTML = missingPrereqs.map(p => `<li><a href="${p.url}">${p.name}</a></li>`).join('');
-            generateBtn.disabled = true;
-            currentHypoContainer.style.display = 'none';
-        } else {
-            warningElement.style.display = 'none';
-            generateBtn.disabled = false;
-            const hypothesisToUse = sessionData.refined_hypothesis || sessionData.hypothesis;
-            if (hypothesisToUse) {
-                ContentRenderer.renderMarkdown(hypothesisToUse, currentHypoContent);
-                currentHypoContainer.style.display = 'block';
-            }
-        }
-    }
 
     updateContent(markdown) {
         ContentRenderer.renderMarkdown(markdown, this.contentContainer);
@@ -262,12 +191,6 @@ class HuntPlanManager {
     }
 
     async handleGenerate() {
-        const canProceed = await this.checkPrerequisites();
-        if (!canProceed) {
-            UIFeedback.show('error', 'Please complete all prerequisite phases first.');
-            return;
-        }
-
         const requestBody = {
             report_md: sessionStorage.getItem('report_md'),
             hypothesis: sessionStorage.getItem('refined_hypothesis') || sessionStorage.getItem('hypothesis'),

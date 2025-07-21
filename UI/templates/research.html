@@ -4,7 +4,7 @@
 
 {% set prev_phase_url = None %}
 {% set prev_phase_name = None %}
-{% set next_phase_url = url_for('hypothesis_page') %}
+{% set next_phase_url = url_for('pages.hypothesis_page') %}
 {% set next_phase_name = "Hypothesis Generation" %}
 
 {% block nav %}{{ super() }}{% endblock %}
@@ -84,7 +84,7 @@ class ResearchManager extends PhaseManager {
         reportContainer.style.display = isReportPresent ? 'block' : 'none';
         initialContainer.style.display = isReportPresent ? 'none' : 'block';
         feedbackContainer.style.display = isReportPresent ? 'block' : 'none';
-        downloadPlaceholder.style.display = isReportPresent ? 'block' : 'none';
+        downloadPlaceholder.style.display = isReportPresent ? 'flex' : 'none';
         
         if (isReportPresent) {
             document.getElementById('feedback-input').value = '';
@@ -175,15 +175,26 @@ class ResearchManager extends PhaseManager {
     }
 
     onContentGenerated(response) {
+        // After new content is generated, always set up the download button
         DownloadManager.setupDownloadButton(
             this.config.contentContainer,
-            'research_report',
+            this.phaseId,
             this.config.downloadContainer
         );
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    window.researchManager = new ResearchManager();
+document.addEventListener('DOMContentLoaded', async () => {
+    const researchManager = new ResearchManager();
+    const hasContent = await researchManager.loadInitialData();
+
+    // Only set up the download button on initial load if content already exists
+    if (hasContent) {
+        DownloadManager.setupDownloadButton(
+            researchManager.config.contentContainer,
+            researchManager.phaseId,
+            researchManager.config.downloadContainer
+        );
+    }
 });
 {% endblock %}

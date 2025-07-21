@@ -295,6 +295,9 @@ class DataDiscoveryManager {
             if (uploadFilename) {
                 uploadFilename.textContent = '';
             }
+            // Dispatch sessionStateChanged event for cross-page communication
+            document.dispatchEvent(new CustomEvent('sessionStateChanged'));
+            console.log('=== DEBUG: Upload triggered sessionStateChanged event ===');
         };
         reader.readAsText(file);
         event.target.value = '';
