@@ -359,9 +359,10 @@ async def researcher(
 
     auth_mgr = PEAKAssistantAuthManager()
     az_model_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr)
+    az_model_reasoning_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr, model_type="reasoning")
 
     search_agent = AssistantAgent(
-        "search",
+        "search_agent",
         description="Performs web searches and analyzes information.",
         model_client=az_model_client,
         tools=[tavily_search],
@@ -371,12 +372,12 @@ async def researcher(
     research_critic_agent = AssistantAgent(
         "research_critic",
         description="Evaluates progress, ensures completeness, and suggests new research avenues.",
-        model_client=az_model_client,
+        model_client=az_model_reasoning_client,
         system_message=research_critic_system_prompt
     )
 
     summarizer_agent = AssistantAgent(
-        "summarizer",
+        "summarizer_agent",
         description="Provides a detailed markdown summary of the research as a report to the user.",
         model_client=az_model_client,
         system_message=summarizer_system_prompt
@@ -385,7 +386,7 @@ async def researcher(
     summary_critic_agent = AssistantAgent(
         "summary_critic",
         description="Evaluates the summary and ensures it meets the user's needs.",
-        model_client=az_model_client,
+        model_client=az_model_reasoning_client,
         system_message=summary_critic_system_prompt
     )
 
@@ -423,8 +424,7 @@ async def researcher(
         else:
             result = await team.run(task=messages)
 
-        # Access the content from the CreateResult object
-        return result  # Use the correct attribute to access the generated content
+        return result  
     except Exception as e:
         print(f"Error while preparing report: {e}\n{traceback.format_exc()}")
         return "An error occurred while preparing the report."
@@ -481,10 +481,10 @@ if __name__ == "__main__":
             )
         )
 
-        # Find the final message from the "summarizer" agent using next() and a generator expression
+        # Find the final message from the "summarizer_agent" using next() and a generator expression
         report = next(
-            (message.content for message in reversed(task_result.messages) if message.source == "summarizer"),
-            None  # Default value if no "critic" message is found
+            (message.content for message in reversed(task_result.messages) if message.source == "summarizer_agent"),
+            None  # Default value if no "summarizer_agent" message is found
         )
 
         # Display the report and ask for user feedback

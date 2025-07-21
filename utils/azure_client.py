@@ -11,12 +11,18 @@ class PEAKAssistantAzureOpenAIClient:
     Create an Azure OpenAI client with authentication.
     """
 
-    async def get_client(self, auth_mgr: PEAKAssistantAuthManager = None, **extra_params):
+    async def get_client(
+        self, 
+        auth_mgr: PEAKAssistantAuthManager = None, 
+        model_type: str = "chat",
+        **extra_params
+    ):
         """
         Create an AzureOpenAIChatCompletionClient with optional authentication.
 
         Args:
             auth_mgr (PEAKAssistantAuthManager): Authentication manager instance. Required.
+            model_type: Type of model to use ("chat", "reasoning"). Default is "chat"
             **extra_params: Additional parameters to pass to the client constructor.
 
         Returns:
@@ -28,13 +34,25 @@ class PEAKAssistantAzureOpenAIClient:
         if auth_mgr is None:
             raise ValueError("auth_mgr must be provided to create_azure_openai_client.")
         
-        # Base parameters from environment
-        params = {
-            "azure_deployment": os.getenv("AZURE_OPENAI_DEPLOYMENT"),
-            "model": os.getenv("AZURE_OPENAI_MODEL"),
+        # Determine the model parameters based on model_type
+        if model_type == "chat" or model_type is None:
+            params = {
+                "azure_deployment": os.getenv("AZURE_OPENAI_DEPLOYMENT"),
+                "model": os.getenv("AZURE_OPENAI_MODEL"),
+            }
+        elif model_type == "reasoning":
+            params = {
+                "azure_deployment": os.getenv("AZURE_OPENAI_REASONING_DEPLOYMENT"),
+                "model": os.getenv("AZURE_OPENAI_REASONING_MODEL"),
+            }
+        else:
+            raise ValueError("Invalid model type. Must be 'chat', 'reasoning', or None.")
+
+        # These parameters don't care which type of model you use.
+        params.update({
             "api_version": os.getenv("AZURE_OPENAI_API_VERSION"),
             "azure_endpoint": os.getenv("AZURE_OPENAI_ENDPOINT"),
-        }
+        })
         
         # Merge any extra parameters provided
         params.update(extra_params)
