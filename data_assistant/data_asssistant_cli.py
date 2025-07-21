@@ -137,6 +137,7 @@ async def identify_data_sources(
     # Initialize the model client
     auth_mgr = PEAKAssistantAuthManager()
     az_model_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr)
+    az_model_reasoning_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr, model_type="reasoning")
 
     # Split the args string into a list, handling multiple arguments
     mcp_args_list = mcp_args.split()
@@ -158,7 +159,7 @@ async def identify_data_sources(
 
         discovery_critic_agent = AssistantAgent(
             "Discovery_Critic_Agent",
-            model_client=az_model_client,
+            model_client=az_model_reasoning_client,
             system_message=discovery_critic_prompt
         )
 

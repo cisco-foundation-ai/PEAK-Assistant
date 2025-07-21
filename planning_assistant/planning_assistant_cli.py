@@ -198,6 +198,7 @@ async def plan_hunt(
 
     auth_mgr = PEAKAssistantAuthManager()
     az_model_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr)
+    az_model_reasoning_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr, model_type="reasoning")
 
     planning_agent = AssistantAgent(
         "hunt_planner",
@@ -207,7 +208,7 @@ async def plan_hunt(
 
     plan_critic_agent = AssistantAgent(
         "hunt_plan_critic",
-        model_client=az_model_client,
+        model_client=az_model_reasoning_client,
         system_message=plan_critic_prompt
     )
 
