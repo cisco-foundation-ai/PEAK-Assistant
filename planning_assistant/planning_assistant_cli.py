@@ -93,7 +93,7 @@ async def plan_hunt(
           or "Year-to-date", but these are not the only possible values. If no specific 
           window is recommended, just write "No specific time window recommended". Call this 
           section "Recommended Time Frame".
-        - A concise of the ABLE information in table form. Remember to take into account
+        - A concise restatement of the ABLE information in table form. Remember to take into account
           the results of the data discovery when specifying the Evidence. 
           Call this section "ABLE Table".
         - A concise list of the relevant Splunk indices, sourcetypes, key fields, and their
@@ -197,12 +197,12 @@ async def plan_hunt(
         messages = messages + previous_run 
 
     auth_mgr = PEAKAssistantAuthManager()
-    az_model_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr)
+#    az_model_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr)
     az_model_reasoning_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr, model_type="reasoning")
 
     planning_agent = AssistantAgent(
         "hunt_planner",
-        model_client=az_model_client,
+        model_client=az_model_reasoning_client,
         system_message=planner_prompt
     )
 
