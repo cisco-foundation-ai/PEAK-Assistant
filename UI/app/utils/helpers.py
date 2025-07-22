@@ -57,7 +57,7 @@ def extract_report_md(messages):
     """Try to extract the research report markdown from agent output"""
     report_md = None
     if hasattr(messages, 'messages'):
-        report_md = next((m.content for m in reversed(messages.messages) if getattr(m, 'source', None) == "summarizer"), None)
+        report_md = next((m.content for m in reversed(messages.messages) if getattr(m, 'source', None) == "summarizer_agent"), None)
     if not report_md:
         if isinstance(messages, str):
             report_md = messages
