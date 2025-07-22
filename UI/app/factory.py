@@ -81,10 +81,12 @@ def create_app(config_name='default'):
     from .routes.api_routes import api_bp
     from .routes.upload_routes import upload_bp
     from .routes.page_routes import page_bp
+    from .routes.oauth_routes import oauth_bp
     
     app.register_blueprint(api_bp)
     app.register_blueprint(upload_bp)
     app.register_blueprint(page_bp)
+    app.register_blueprint(oauth_bp)
     
     # Create database tables
     with app.app_context():

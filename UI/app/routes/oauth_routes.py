@@ -1,0 +1,312 @@
+#!/usr/bin/env python3
+"""
+OAuth authentication routes for PEAK Assistant
+Handles user authentication flows for MCP servers requiring authorization code flow
+"""
+
+import os
+import sys
+import secrets
+import hashlib
+import base64
+from urllib.parse import urlencode
+import asyncio
+import logging
+from flask import Blueprint, request, redirect, url_for, session, jsonify, render_template, flash
+from functools import wraps
+
+# Add parent directory to path for importing utils
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
+from utils.mcp_config import get_config_manager, get_client_manager, AuthType
+
+logger = logging.getLogger(__name__)
+
+oauth_bp = Blueprint('oauth', __name__, url_prefix='/oauth')
+
+def require_session(f):
+    """Decorator to ensure user has a session"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            # Generate a session user ID if not exists
+            session['user_id'] = f"user_{secrets.token_hex(8)}"
+        return f(*args, **kwargs)
+    return decorated_function
+
+def generate_pkce_pair():
+    """Generate PKCE code verifier and challenge"""
+    code_verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode('utf-8').rstrip('=')
+    code_challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(code_verifier.encode('utf-8')).digest()
+    ).decode('utf-8').rstrip('=')
+    return code_verifier, code_challenge
+
+@oauth_bp.route('/status')
+@require_session
+def oauth_status():
+    """Get OAuth status for all MCP servers for current user"""
+    try:
+        user_id = session['user_id']
+        config_manager = get_config_manager()
+        client_manager = get_client_manager()
+        
+        servers_status = {}
+        for server_name in config_manager.list_servers():
+            config = config_manager.get_server_config(server_name)
+            
+            if config.auth:
+                if config.auth.type == AuthType.OAUTH2_CLIENT_CREDENTIALS:
+                    # System-level authentication
+                    token_manager = config_manager.oauth_managers.get(server_name)
+                    servers_status[server_name] = {
+                        "auth_type": "system_oauth",
+                        "status": "authenticated" if token_manager and token_manager.access_token else "needs_config",
+                        "requires_user_auth": False,
+                        "description": config.description
+                    }
+                elif config.auth.type == AuthType.OAUTH2_AUTHORIZATION_CODE:
+                    # User-specific authentication
+                    user_sessions = config_manager.user_session_manager.user_sessions.get(user_id, {})
+                    token_manager = user_sessions.get(server_name)
+                    
+                    servers_status[server_name] = {
+                        "auth_type": "user_oauth",
+                        "status": "authenticated" if token_manager and token_manager.access_token else "needs_auth",
+                        "requires_user_auth": True,
+                        "description": config.description,
+                        "token_expiry": token_manager.token_expiry if token_manager else None
+                    }
+                else:
+                    servers_status[server_name] = {
+                        "auth_type": config.auth.type.value,
+                        "status": "configured",
+                        "requires_user_auth": False,
+                        "description": config.description
+                    }
+            else:
+                servers_status[server_name] = {
+                    "auth_type": "none",
+                    "status": "available",
+                    "requires_user_auth": False,
+                    "description": config.description
+                }
+        
+        return jsonify({
+            "user_id": user_id,
+            "servers": servers_status
+        })
+    except Exception as e:
+        logger.error(f"Error getting OAuth status: {e}")
+        return jsonify({"error": "Failed to get OAuth status"}), 500
+
+@oauth_bp.route('/authenticate/<server_name>')
+@require_session
+def initiate_oauth(server_name):
+    """Initiate OAuth flow for a specific MCP server"""
+    try:
+        user_id = session['user_id']
+        config_manager = get_config_manager()
+        
+        config = config_manager.get_server_config(server_name)
+        if not config or not config.auth:
+            return jsonify({"error": "Server not found or no authentication configured"}), 404
+        
+        if config.auth.type != AuthType.OAUTH2_AUTHORIZATION_CODE:
+            return jsonify({"error": "Server does not require user authentication"}), 400
+        
+        # Generate PKCE parameters
+        code_verifier, code_challenge = generate_pkce_pair()
+        state = secrets.token_urlsafe(32)
+        
+        # Store state and PKCE verifier in session
+        session[f'oauth_state_{state}'] = {
+            'server_name': server_name,
+            'code_verifier': code_verifier,
+            'user_id': user_id
+        }
+        
+        # Create token manager to get authorization URL
+        token_manager = config_manager.user_session_manager.get_or_create_token_manager(
+            user_id, server_name, config.auth
+        )
+        
+        auth_url = token_manager.get_authorization_url(state, code_challenge)
+        
+        logger.info(f"Initiating OAuth flow for user {user_id} on server {server_name}")
+        return redirect(auth_url)
+        
+    except Exception as e:
+        logger.error(f"Error initiating OAuth for {server_name}: {e}")
+        flash(f'Failed to initiate authentication for {server_name}: {str(e)}', 'error')
+        return redirect(url_for('page.index'))
+
+@oauth_bp.route('/callback')
+def oauth_callback():
+    """Handle OAuth callback from authorization server"""
+    try:
+        # Get authorization code and state from callback
+        code = request.args.get('code')
+        state = request.args.get('state')
+        error = request.args.get('error')
+        
+        if error:
+            flash(f'OAuth authorization failed: {error}', 'error')
+            return redirect(url_for('page.index'))
+        
+        if not code or not state:
+            flash('Invalid OAuth callback parameters', 'error')
+            return redirect(url_for('page.index'))
+        
+        # Retrieve state information from session
+        state_key = f'oauth_state_{state}'
+        if state_key not in session:
+            flash('Invalid OAuth state - possible CSRF attack', 'error')
+            return redirect(url_for('page.index'))
+        
+        state_info = session[state_key]
+        server_name = state_info['server_name']
+        code_verifier = state_info['code_verifier']
+        user_id = state_info['user_id']
+        
+        # Clean up state from session
+        del session[state_key]
+        
+        # Get server configuration
+        config_manager = get_config_manager()
+        config = config_manager.get_server_config(server_name)
+        
+        if not config or not config.auth:
+            flash('Server configuration not found', 'error')
+            return redirect(url_for('page.index'))
+        
+        # Exchange authorization code for access token
+        token_manager = config_manager.user_session_manager.get_or_create_token_manager(
+            user_id, server_name, config.auth
+        )
+        
+        # Perform token exchange asynchronously
+        async def exchange_token():
+            return await token_manager.exchange_authorization_code(code, code_verifier)
+        
+        # Run token exchange
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            access_token = loop.run_until_complete(exchange_token())
+            flash(f'Successfully authenticated with {server_name}!', 'success')
+            logger.info(f"OAuth flow completed for user {user_id} on server {server_name}")
+        finally:
+            loop.close()
+        
+        # Redirect back to main page
+        return redirect(url_for('page.index'))
+        
+    except Exception as e:
+        logger.error(f"Error in OAuth callback: {e}")
+        flash(f'OAuth authentication failed: {str(e)}', 'error')
+        return redirect(url_for('page.index'))
+
+@oauth_bp.route('/disconnect/<server_name>')
+@require_session
+def disconnect_oauth(server_name):
+    """Disconnect user from a specific MCP server"""
+    try:
+        user_id = session['user_id']
+        config_manager = get_config_manager()
+        
+        # Clear user token for this server
+        user_sessions = config_manager.user_session_manager.user_sessions.get(user_id, {})
+        if server_name in user_sessions:
+            del user_sessions[server_name]
+            flash(f'Disconnected from {server_name}', 'success')
+        else:
+            flash(f'Not connected to {server_name}', 'info')
+        
+        return redirect(url_for('page.index'))
+        
+    except Exception as e:
+        logger.error(f"Error disconnecting from {server_name}: {e}")
+        flash(f'Failed to disconnect from {server_name}: {str(e)}', 'error')
+        return redirect(url_for('page.index'))
+
+@oauth_bp.route('/logout')
+@require_session
+def logout_all():
+    """Logout user from all MCP servers"""
+    try:
+        user_id = session['user_id']
+        config_manager = get_config_manager()
+        
+        # Clear all user sessions
+        config_manager.user_session_manager.clear_user_session(user_id)
+        
+        # Clear Flask session
+        session.clear()
+        
+        flash('Logged out from all services', 'success')
+        return redirect(url_for('page.index'))
+        
+    except Exception as e:
+        logger.error(f"Error during logout: {e}")
+        flash(f'Logout failed: {str(e)}', 'error')
+        return redirect(url_for('page.index'))
+
+@oauth_bp.route('/servers/needing-auth')
+@require_session
+def servers_needing_auth():
+    """Get list of servers that need user authentication"""
+    try:
+        user_id = session['user_id']
+        config_manager = get_config_manager()
+        
+        needing_auth = config_manager.user_session_manager.get_user_servers_needing_auth(
+            user_id, config_manager.servers
+        )
+        
+        # Get detailed info about servers needing auth
+        server_details = []
+        for server_name in needing_auth:
+            config = config_manager.get_server_config(server_name)
+            server_details.append({
+                "name": server_name,
+                "description": config.description,
+                "auth_url": url_for('oauth.initiate_oauth', server_name=server_name)
+            })
+        
+        return jsonify({
+            "servers_needing_auth": server_details,
+            "count": len(server_details)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting servers needing auth: {e}")
+        return jsonify({"error": "Failed to get authentication status"}), 500
+
+@oauth_bp.route('/test-connection/<server_name>')
+@require_session
+async def test_mcp_connection(server_name):
+    """Test connection to an MCP server"""
+    try:
+        user_id = session['user_id']
+        client_manager = get_client_manager()
+        
+        # Attempt to connect to the server
+        connected = await client_manager.connect_server(server_name, user_id)
+        
+        if connected:
+            return jsonify({
+                "status": "success",
+                "message": f"Successfully connected to {server_name}"
+            })
+        else:
+            return jsonify({
+                "status": "error", 
+                "message": f"Failed to connect to {server_name}"
+            }), 400
+            
+    except Exception as e:
+        logger.error(f"Error testing connection to {server_name}: {e}")
+        return jsonify({
+            "status": "error",
+            "message": f"Connection test failed: {str(e)}"
+        }), 500
