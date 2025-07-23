@@ -42,6 +42,7 @@ class AuthConfig:
     token_url: Optional[str] = None
     authorization_url: Optional[str] = None  # For authorization code flow
     redirect_uri: Optional[str] = None       # For authorization code flow
+    client_registration_url: Optional[str] = None # For dynamic client registration
     api_key: Optional[str] = None
     header_name: Optional[str] = "Authorization"
     requires_user_auth: bool = False         # True for authorization code flow
@@ -67,6 +68,7 @@ class OAuth2TokenManager:
         self.access_token = None
         self.refresh_token = None
         self.token_expiry = None
+        self.token_user_id = None  # User ID from token response
         
     async def get_token(self) -> str:
         """Get a valid access token, refreshing if necessary"""
@@ -115,6 +117,15 @@ class OAuth2TokenManager:
             
             token_data = response.json()
             self.access_token = token_data["access_token"]
+            
+            # Extract user ID from token response if present
+            self.token_user_id = (
+                token_data.get('user_id') or 
+                token_data.get('userId') or
+                token_data.get('sub') or
+                token_data.get('id') or
+                token_data.get('username')
+            )
             
             # Calculate expiry time
             import time
@@ -180,6 +191,15 @@ class OAuth2TokenManager:
             self.access_token = token_data["access_token"]
             self.refresh_token = token_data.get("refresh_token")
             
+            # Extract user ID from token response if present
+            self.token_user_id = (
+                token_data.get('user_id') or 
+                token_data.get('userId') or
+                token_data.get('sub') or
+                token_data.get('id') or
+                token_data.get('username')
+            )
+            
             # Calculate expiry time
             import time
             expires_in = token_data.get("expires_in", 3600)
@@ -224,7 +244,11 @@ class UserSessionManager:
             self.user_sessions[user_id] = {}
         
         if server_name not in self.user_sessions[user_id]:
+            # Pass the full auth_config to the constructor
             self.user_sessions[user_id][server_name] = OAuth2TokenManager(auth_config, user_id)
+        else:
+            # Ensure existing token managers have the full config
+            self.user_sessions[user_id][server_name].auth_config = auth_config
         
         return self.user_sessions[user_id][server_name]
     
@@ -267,17 +291,27 @@ class MCPConfigManager:
     """Manages MCP server configurations and client connections"""
     
     def __init__(self, config_file: Optional[str] = None):
+        logger.info(f"[INIT DEBUG] MCPConfigManager.__init__ called with config_file: {config_file}")
         self.config_file = config_file or self._find_config_file()
+        logger.info(f"[INIT DEBUG] Using config file path: {self.config_file}")
+        logger.info(f"[INIT DEBUG] Config file exists: {os.path.exists(self.config_file)}")
+        
         self.servers: Dict[str, MCPServerConfig] = {}
         self.server_groups: Dict[str, List[str]] = {}
         self.oauth_managers: Dict[str, OAuth2TokenManager] = {}  # For client credentials
         self.user_session_manager = UserSessionManager()
+        
+        logger.info(f"[INIT DEBUG] About to call _load_config()")
         self._load_config()
+        logger.info(f"[INIT DEBUG] _load_config() completed. Loaded {len(self.servers)} servers and {len(self.server_groups)} server groups")
+
+
     
     def _find_config_file(self) -> str:
         """Find the MCP configuration file"""
         possible_paths = [
-            "mcp_servers.json",
+            "mcp_servers.json",  # Current directory
+            "../mcp_servers.json",  # Parent directory (when Flask runs from UI subdirectory)
             ".mcp_servers.json",
             os.path.expanduser("~/.config/peak-assistant/mcp_servers.json"),
             "/etc/peak-assistant/mcp_servers.json"
@@ -297,13 +331,20 @@ class MCPConfigManager:
     
     def _load_config(self):
         """Load MCP server configurations from file"""
+        logger.info(f"[LOAD CONFIG DEBUG] Starting _load_config for file: {self.config_file}")
+        
         if not os.path.exists(self.config_file):
-            logger.warning(f"MCP config file not found: {self.config_file}")
+            logger.error(f"[LOAD CONFIG DEBUG] MCP config file not found: {self.config_file}")
+            logger.error(f"[LOAD CONFIG DEBUG] Current working directory: {os.getcwd()}")
+            logger.error(f"[LOAD CONFIG DEBUG] File existence check failed - configuration loading aborted")
             return
-            
+        
+        logger.info(f"[LOAD CONFIG DEBUG] Config file exists, attempting to read and parse JSON")
         try:
             with open(self.config_file, 'r') as f:
                 config_data = json.load(f)
+            logger.info(f"[LOAD CONFIG DEBUG] JSON parsing successful, config_data type: {type(config_data)}")
+            logger.info(f"[LOAD CONFIG DEBUG] Top-level keys in config: {list(config_data.keys()) if isinstance(config_data, dict) else 'Not a dict'}")
             
             # Load server configurations
             for name, server_config in config_data.get("mcpServers", {}).items():
@@ -320,6 +361,10 @@ class MCPConfigManager:
                         client_secret=auth_data.get("client_secret"),
                         scope=auth_data.get("scope"),
                         token_url=auth_data.get("token_url"),
+                        authorization_url=auth_data.get("authorization_url"),
+                        redirect_uri=auth_data.get("redirect_uri"),
+                        client_registration_url=auth_data.get("client_registration_url"),
+                        requires_user_auth=auth_data.get("requires_user_auth", False),
                         api_key=auth_data.get("api_key"),
                         header_name=auth_data.get("header_name", "Authorization")
                     )
@@ -344,9 +389,13 @@ class MCPConfigManager:
                     pass
             
             # Load server groups
+            logger.info(f"[CONFIG DEBUG] Loading server groups from config...")
             self.server_groups = config_data.get("serverGroups", {})
+            logger.info(f"[CONFIG DEBUG] Loaded server groups: {list(self.server_groups.keys())}")
+            logger.info(f"[CONFIG DEBUG] Research group contents: {self.server_groups.get('research', 'NOT FOUND')}")
             
             logger.info(f"Loaded {len(self.servers)} MCP server configurations")
+            logger.info(f"[CONFIG DEBUG] Loaded servers: {list(self.servers.keys())}")
             
         except Exception as e:
             logger.error(f"Error loading MCP config: {e}")
@@ -358,7 +407,12 @@ class MCPConfigManager:
     
     def get_server_group(self, group_name: str) -> List[str]:
         """Get list of server names in a group"""
-        return self.server_groups.get(group_name, [])
+        logger.info(f"[RUNTIME DEBUG] get_server_group called for '{group_name}'")
+        logger.info(f"[RUNTIME DEBUG] Available server groups: {list(self.server_groups.keys())}")
+        logger.info(f"[RUNTIME DEBUG] All server groups content: {self.server_groups}")
+        result = self.server_groups.get(group_name, [])
+        logger.info(f"[RUNTIME DEBUG] Returning for '{group_name}': {result}")
+        return result
     
     def list_servers(self) -> List[str]:
         """List all configured server names"""
@@ -368,14 +422,95 @@ class MCPConfigManager:
         """List all configured server groups"""
         return list(self.server_groups.keys())
 
+    def _save_config(self):
+        """Save the current server configurations back to the file."""
+        config_data = {
+            "mcpServers": {},
+            "serverGroups": self.server_groups
+        }
+
+        for name, server_config in self.servers.items():
+            config_dict = {
+                "transport": server_config.transport.value,
+                "description": server_config.description,
+                "timeout": server_config.timeout
+            }
+            if server_config.command:
+                config_dict["command"] = server_config.command
+            if server_config.args:
+                config_dict["args"] = server_config.args
+            if server_config.env:
+                config_dict["env"] = server_config.env
+            if server_config.url:
+                config_dict["url"] = server_config.url
+            
+            if server_config.auth:
+                auth_dict = {
+                    "type": server_config.auth.type.value,
+                    "requires_user_auth": server_config.auth.requires_user_auth
+                }
+                for field in ["token", "client_id", "client_secret", "scope", "token_url", "authorization_url", "redirect_uri", "client_registration_url", "api_key", "header_name"]:
+                    if hasattr(server_config.auth, field) and getattr(server_config.auth, field) is not None:
+                        auth_dict[field] = getattr(server_config.auth, field)
+                config_dict["auth"] = auth_dict
+
+            config_data["mcpServers"][name] = config_dict
+
+        try:
+            with open(self.config_file, 'w') as f:
+                json.dump(config_data, f, indent=2)
+            logger.info(f"Successfully saved updated configuration to {self.config_file}")
+        except Exception as e:
+            logger.error(f"Failed to save configuration file: {e}")
+
+    async def _register_dynamic_client(self, server_name: str) -> bool:
+        """Dynamically register the client with the OAuth server."""
+        config = self.get_server_config(server_name)
+        if not config or not config.auth or not config.auth.client_registration_url:
+            logger.error(f"Dynamic registration not configured for {server_name}")
+            return False
+
+        registration_payload = {
+            "client_name": "PEAK Assistant",
+            "redirect_uris": [config.auth.redirect_uri],
+            "grant_types": ["authorization_code", "refresh_token"],
+            "token_endpoint_auth_method": "client_secret_post",
+            "scope": config.auth.scope
+        }
+
+        logger.info(f"Attempting dynamic registration for {server_name} at {config.auth.client_registration_url}")
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.post(config.auth.client_registration_url, json=registration_payload)
+                response.raise_for_status()
+                registration_data = response.json()
+
+                # Update the in-memory config with the new credentials
+                config.auth.client_id = registration_data['client_id']
+                config.auth.client_secret = registration_data['client_secret']
+                
+                logger.info(f"Successfully registered client for {server_name}. Client ID: {config.auth.client_id}")
+                
+                # Persist the new client_id and client_secret
+                self._save_config()
+                
+                return True
+            except httpx.HTTPStatusError as e:
+                logger.error(f"Failed to dynamically register client for {server_name}: {e.response.status_code} - {e.response.text}")
+                return False
+            except Exception as e:
+                logger.error(f"An unexpected error occurred during dynamic registration for {server_name}: {e}")
+                return False
+
 class MCPClientManager:
-    """Manages MCP client connections and tool execution"""
-    
-    def __init__(self, config_manager: MCPConfigManager):
+    """Manages connections to multiple MCP servers"""
+    def __init__(self, config_manager: 'MCPConfigManager'):
         self.config_manager = config_manager
+        # Share the same UserSessionManager instance to ensure token persistence
+        self.user_session_manager = config_manager.user_session_manager
+        self.workbenches: Dict[str, McpWorkbench] = {}  # System-level workbenches
+        self.user_workbenches: Dict[str, Dict[str, McpWorkbench]] = {}  # User-specific workbenches
         self.active_clients: Dict[str, Any] = {}
-        self.workbenches: Dict[str, McpWorkbench] = {}
-        self.user_workbenches: Dict[str, Dict[str, McpWorkbench]] = {}  # user_id -> {server_name -> workbench}
         self._cleanup_registered = False
         self._register_cleanup()
     
@@ -502,46 +637,12 @@ class MCPClientManager:
             return False
         
         # Create HTTP client with authentication
-        headers = {}
-        if config.auth:
-            if config.auth.type == AuthType.BEARER:
-                headers["Authorization"] = f"Bearer {config.auth.token}"
-            elif config.auth.type == AuthType.API_KEY:
-                headers[config.auth.header_name] = config.auth.api_key
-            elif config.auth.type == AuthType.OAUTH2_CLIENT_CREDENTIALS:
-                # System-level authentication
-                token_manager = self.config_manager.oauth_managers.get(server_name)
-                if token_manager:
-                    try:
-                        token = await token_manager.get_token()
-                        headers["Authorization"] = f"Bearer {token}"
-                    except Exception as e:
-                        logger.error(f"Failed to get OAuth token for {server_name}: {e}")
-                        return False
-            elif config.auth.type == AuthType.OAUTH2_AUTHORIZATION_CODE:
-                # User-specific authentication
-                if not user_id:
-                    logger.error(f"User ID required for authorization code flow server: {server_name}")
-                    return False
-                
-                token_manager = self.config_manager.user_session_manager.get_or_create_token_manager(
-                    user_id, server_name, config.auth
-                )
-                
-                if not token_manager.access_token:
-                    logger.warning(f"No access token available for user {user_id} on server {server_name}. User must authenticate.")
-                    return False
-                
-                try:
-                    token = await token_manager.get_token()
-                    headers["Authorization"] = f"Bearer {token}"
-                except Exception as e:
-                    logger.error(f"Failed to get user OAuth token for {server_name}: {e}")
-                    return False
+        headers = await self._get_auth_headers(config, user_id)
+        if headers is False:
+            return False
         
         # Store the connection (user-specific or system-level)
-        connection_key = f"{server_name}_{user_id}" if user_id else server_name
-        self.active_clients[connection_key] = {
+        self.active_clients[server_name] = {
             "type": "http",
             "url": config.url,
             "headers": headers,
@@ -551,43 +652,139 @@ class MCPClientManager:
         
         logger.info(f"Connected to HTTP server: {server_name}" + (f" for user {user_id}" if user_id else ""))
         return True
+
+    async def _get_auth_headers(self, config: MCPServerConfig, user_id: Optional[str] = None) -> Dict[str, str]:
+        """Get authentication headers for a server"""
+        headers = {}
+        if config.auth:
+            if config.auth.type == AuthType.BEARER:
+                if not config.auth.token:
+                    logger.error(f"No token specified for bearer auth on {config.name}")
+                    return False
+                headers["Authorization"] = f"Bearer {config.auth.token}"
+            elif config.auth.type == AuthType.API_KEY:
+                if not config.auth.api_key or not config.auth.header_name:
+                    logger.error(f"API key or header name not specified for {config.name}")
+                    return False
+                headers[config.auth.header_name] = config.auth.api_key
+            elif config.auth.type in [AuthType.OAUTH2_CLIENT_CREDENTIALS, AuthType.OAUTH2_AUTHORIZATION_CODE]:
+                if not user_id and config.auth.requires_user_auth:
+                    logger.error(f"User ID is required for user-based OAuth on {config.name}")
+                    return False
+                
+                token_manager = self.user_session_manager.get_or_create_token_manager(user_id, config.name, config.auth)
+                try:
+                    token = await token_manager.get_token()
+                    headers["Authorization"] = f"Bearer {token}"
+                except Exception as e:
+                    logger.error(f"Failed to get user OAuth token for {config.name}: {e}")
+                    return False
+        
+        return headers
     
-    async def _connect_sse_server(self, server_name: str, config: MCPServerConfig) -> bool:
+    async def _connect_sse_server(self, server_name: str, config: MCPServerConfig, user_id: Optional[str] = None) -> bool:
         """Connect to an SSE-based MCP server"""
+        logger.info(f"[SSE DEBUG] Starting connection to {server_name} for user_id: {user_id}")
+        
         if not config.url:
-            logger.error(f"No URL specified for SSE server: {server_name}")
+            logger.error(f"[SSE DEBUG] No URL specified for SSE server: {server_name}")
+            return False
+
+        logger.info(f"[SSE DEBUG] Getting auth headers for {server_name}")
+        headers = await self._get_auth_headers(config, user_id)
+        if headers is False:
+            logger.error(f"[SSE DEBUG] Failed to get auth headers for {server_name}")
             return False
         
-        # SSE connection logic would go here
-        # For now, store the config
-        self.active_clients[server_name] = {
-            "type": "sse",
-            "url": config.url,
-            "config": config
-        }
-        
-        logger.info(f"Connected to SSE server: {server_name}")
+        logger.info(f"[SSE DEBUG] Auth headers obtained for {server_name}: {list(headers.keys()) if headers else 'None'}")
+
+        try:
+            # Use SseServerParams approach for proper AutoGen compatibility
+            from autogen_ext.tools.mcp import SseServerParams
+            
+            logger.info(f"[SSE DEBUG] Creating SseServerParams for {server_name}")
+            # Create proper SseServerParams object with extended timeouts for stability
+            server_params = SseServerParams(
+                url=config.url,
+                headers=headers,
+                timeout=config.timeout or 60.0,
+                sse_read_timeout=300.0  # 5 minutes read timeout
+            )
+            logger.info(f"[SSE DEBUG] SseServerParams created successfully for {server_name}")
+            
+            # Create workbench with SseServerParams - let McpWorkbench handle connection lifecycle
+            logger.info(f"[SSE DEBUG] Creating McpWorkbench for {server_name}")
+            workbench = McpWorkbench(server_params)
+            logger.info(f"[SSE DEBUG] Entering workbench context for {server_name}")
+            await workbench.__aenter__()
+            logger.info(f"[SSE DEBUG] Workbench context entered successfully for {server_name}")
+            
+            # Test connection health by listing tools
+            try:
+                logger.info(f"[SSE DEBUG] Testing connection by listing tools for {server_name}")
+                tools = await workbench.list_tools()
+                logger.info(f"[SSE DEBUG] SSE workbench for {server_name} connected successfully with {len(tools)} tools available")
+            except Exception as e:
+                logger.warning(f"[SSE DEBUG] SSE workbench for {server_name} connection test failed: {e}")
+                # Try to continue anyway
+            
+            # Store workbench (user-specific or system-level)
+            logger.info(f"[SSE DEBUG] Storing workbench for {server_name}, user_id: {user_id}")
+            if user_id:
+                if user_id not in self.user_workbenches:
+                    self.user_workbenches[user_id] = {}
+                    logger.info(f"[SSE DEBUG] Created new user_workbenches entry for user {user_id}")
+                self.user_workbenches[user_id][server_name] = workbench
+                logger.info(f"[SSE DEBUG] Stored user-specific workbench for {server_name} under user {user_id}")
+                logger.info(f"[SSE DEBUG] Current user_workbenches keys: {list(self.user_workbenches.keys())}")
+                logger.info(f"[SSE DEBUG] Workbenches for user {user_id}: {list(self.user_workbenches[user_id].keys())}")
+            else:
+                self.workbenches[server_name] = workbench
+                logger.info(f"[SSE DEBUG] Stored system-level workbench for {server_name}")
+                logger.info(f"[SSE DEBUG] Current system workbenches: {list(self.workbenches.keys())}")
+
+            # Store connection info for proper cleanup (simplified for SseServerParams)
+            self.active_clients[server_name] = {
+                "type": "sse",
+                "url": config.url,
+                "config": config,
+                "headers": headers,
+                "workbench": workbench,
+                "user_id": user_id
+            }
+            logger.info(f"[SSE DEBUG] Active client info stored for {server_name}")
+            logger.info(f"Connected to SSE server and created workbench: {server_name}")
+        except Exception as e:
+            logger.error(f"Failed to connect to SSE server {server_name}: {e}")
+            return False
         return True
     
-    async def connect_servers(self, server_names: List[str]) -> List[str]:
-        """Connect to multiple servers, return list of successfully connected servers"""
+    async def connect_servers(self, server_names: List[str], user_id: Optional[str] = None) -> List[str]:
+        """Connect to multiple servers with optional user context, return list of successfully connected servers"""
         connected = []
         for server_name in server_names:
-            if await self.connect_server(server_name):
+            if await self.connect_server(server_name, user_id=user_id):
                 connected.append(server_name)
         return connected
     
-    async def connect_server_group(self, group_name: str) -> List[str]:
-        """Connect to all servers in a group"""
+    async def connect_server_group(self, group_name: str, user_id: Optional[str] = None) -> List[str]:
+        """Connect to all servers in a group with optional user context for OAuth authentication"""
         server_names = self.config_manager.get_server_group(group_name)
         if not server_names:
             logger.warning(f"No servers found in group: {group_name}")
             return []
         
-        return await self.connect_servers(server_names)
+        return await self.connect_servers(server_names, user_id=user_id)
     
-    def get_workbench(self, server_name: str) -> Optional[McpWorkbench]:
-        """Get the workbench for a stdio server"""
+    def get_workbench(self, server_name: str, user_id: Optional[str] = None) -> Optional[McpWorkbench]:
+        """Get the workbench for a server, checking both user-specific and system-level storage"""
+        # First check user-specific workbenches if user_id is provided
+        if user_id and user_id in self.user_workbenches:
+            workbench = self.user_workbenches[user_id].get(server_name)
+            if workbench:
+                return workbench
+        
+        # Fall back to system-level workbenches
         return self.workbenches.get(server_name)
     
     def get_all_workbenches(self) -> List[McpWorkbench]:
@@ -596,17 +793,26 @@ class MCPClientManager:
     
     async def disconnect_server(self, server_name: str):
         """Disconnect from a server with proper error handling"""
+        # Handle connection-specific shutdown first (e.g., for SSE)
+        if server_name in self.active_clients:
+            client_info = self.active_clients.get(server_name, {})
+            if client_info.get("type") == "sse":
+                context_manager = client_info.get("context_manager")
+                if context_manager and hasattr(context_manager, "__aexit__"):
+                    try:
+                        await context_manager.__aexit__(None, None, None)
+                        logger.info(f"Closed SSE context manager for {server_name}")
+                    except Exception as e:
+                        logger.warning(f"Error closing SSE context manager for {server_name}: {e}")
+
+        # Handle workbench shutdown (for stdio)
         if server_name in self.workbenches:
             workbench = self.workbenches[server_name]
             try:
-                # Try graceful shutdown first
                 if hasattr(workbench, 'stop'):
                     await workbench.stop()
-                else:
-                    await workbench.__aexit__(None, None, None)
             except Exception as e:
                 logger.warning(f"Error during graceful shutdown of {server_name}: {e}")
-                # Force cleanup even if graceful shutdown fails
             finally:
                 del self.workbenches[server_name]
         
@@ -666,10 +872,10 @@ def get_client_manager(config_file: Optional[str] = None) -> MCPClientManager:
         _client_manager = MCPClientManager(config_manager)
     return _client_manager
 
-async def setup_mcp_servers(server_group: str = "all") -> List[str]:
-    """Set up MCP servers for a specific group"""
+async def setup_mcp_servers(server_group: str = "all", user_id: Optional[str] = None) -> List[str]:
+    """Set up MCP servers for a specific group with optional user context for OAuth authentication"""
     client_manager = get_client_manager()
-    return await client_manager.connect_server_group(server_group)
+    return await client_manager.connect_server_group(server_group, user_id=user_id)
 
 def find_dotenv_file():
     """Search for a .env file in current directory and parent directories"""

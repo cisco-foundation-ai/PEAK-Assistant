@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}User ID Required - PEAK Assistant{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">
+                        <i class="bi bi-person-badge me-2"></i>
+                        User ID Required
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <p class="mb-3">
+                        To authenticate with <strong>{{ server_name }}</strong>, you need to provide your user identifier.
+                    </p>
+                    
+                    {% if description %}
+                    <div class="alert alert-info">
+                        <strong>About {{ server_name }}:</strong> {{ description }}
+                    </div>
+                    {% endif %}
+                    
+                    <form method="POST" action="{{ url_for('oauth.initiate_oauth', server_name=server_name) }}">
+                        <div class="mb-3">
+                            <label for="user_id" class="form-label">{{ prompt_text }}</label>
+                            <input type="text" 
+                                   class="form-control" 
+                                   id="user_id" 
+                                   name="user_id" 
+                                   required 
+                                   placeholder="Enter your user ID"
+                                   autocomplete="username">
+                            <div class="form-text">
+                                This should be your username or identifier for {{ server_name }}.
+                            </div>
+                        </div>
+                        
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{{ url_for('pages.index') }}" class="btn btn-secondary me-md-2">
+                                <i class="bi bi-arrow-left me-1"></i>
+                                Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-box-arrow-in-right me-1"></i>
+                                Continue to Authentication
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="mt-3">
+                <small class="text-muted">
+                    <i class="bi bi-shield-check me-1"></i>
+                    Your user ID will be used only for authentication with {{ server_name }} and will not be stored permanently.
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Focus on the user ID input field
+    const userIdInput = document.getElementById('user_id');
+    if (userIdInput) {
+        userIdInput.focus();
+    }
+    
+    // Handle Enter key submission
+    userIdInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            document.querySelector('form').submit();
+        }
+    });
+});
+</script>
+{% endblock %}

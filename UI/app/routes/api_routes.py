@@ -4,7 +4,7 @@ API routes for PEAK Assistant - AI-powered threat hunting operations
 import os
 import re
 import logging
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, session
 from autogen_agentchat.messages import TextMessage, UserMessage
 
 from ..utils.decorators import async_action, handle_async_api_errors
@@ -50,13 +50,17 @@ async def research():
             TextMessage(content=f"User feedback: {feedback}\n", source="user")
         ]
 
-    # Run the researcher
+    # Get authenticated user context for OAuth-enabled MCP servers
+    user_id = session.get('user_id')
+    
+    # Run the researcher with user context
     result = await retry_api_call(
         async_researcher, 
         technique=topic, 
         local_context=local_context, 
         verbose=verbose_mode,
-        previous_run=previous_run
+        previous_run=previous_run,
+        user_id=user_id
     )
     
     # Extract the report markdown

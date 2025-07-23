@@ -7,6 +7,7 @@ import re
 import sys
 from pathlib import Path
 import warnings
+from typing import Optional
 from dotenv import load_dotenv
 import traceback
 from markdown_pdf import MarkdownPdf, Section
@@ -59,7 +60,8 @@ async def researcher(
     local_context: str = None,
     verbose: bool = False,
     previous_run: list = None,
-    mcp_server_group: str = "research"
+    mcp_server_group: str = "research",
+    user_id: Optional[str] = None
 ) -> str:
     """
     Orchestrates a multi-agent, multi-stage research workflow to generate a 
@@ -338,12 +340,12 @@ async def researcher(
     
     # Set up MCP servers for research
     mcp_client_manager = get_client_manager()
-    connected_servers = await setup_mcp_servers(mcp_server_group)
+    connected_servers = await setup_mcp_servers(mcp_server_group, user_id=user_id)
     
     # Get workbenches only from the research server group
     group_workbenches = []
     for server_name in connected_servers:
-        workbench = mcp_client_manager.get_workbench(server_name)
+        workbench = mcp_client_manager.get_workbench(server_name, user_id=user_id)
         if workbench:
             group_workbenches.append(workbench)
     

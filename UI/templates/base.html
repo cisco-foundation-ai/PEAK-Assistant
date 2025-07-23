@@ -84,6 +84,11 @@
 
             <!-- Main content -->
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 content">
+                <!-- Authentication Banner -->
+                <div id="auth-banner" class="alert alert-warning" style="display: none; margin-top: 1rem;">
+                    <strong>Authentication Required</strong>
+                    <div id="auth-server-list" class="mt-2"></div>
+                </div>
                 {% block nav %}
                 <div class="top-navigation">
                     <div>
@@ -161,12 +166,13 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     
     <!-- External JavaScript Files -->
-    <script src="{{ url_for('static', filename='js/api-client.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/ui-feedback.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/content-renderer.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/download-manager.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/phase-manager.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/auth.js') }}" type="module"></script>
+    <script src="{{ url_for('static', filename='js/api-client.js') }}" type="module"></script>
+    <script src="{{ url_for('static', filename='js/ui-feedback.js') }}" type="module"></script>
+    <script src="{{ url_for('static', filename='js/content-renderer.js') }}" type="module"></script>
+    <script src="{{ url_for('static', filename='js/download-manager.js') }}" type="module"></script>
+    <script src="{{ url_for('static', filename='js/phase-manager.js') }}" type="module"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}" type="module"></script>
     
     <script>
         // All inline JavaScript has been moved to external files.
