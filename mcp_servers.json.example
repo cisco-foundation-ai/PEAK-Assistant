@@ -43,9 +43,11 @@
         "client_id": "peak-assistant-service",
         "client_secret": "${THREAT_INTEL_CLIENT_SECRET}",
         "scope": "intel:read threats:read indicators:read",
+        "discovery_url": "https://threat-intel.corp.com",
+        "enable_discovery": true,
         "token_url": "https://threat-intel.corp.com/oauth/token"
       },
-      "description": "Corporate threat intelligence MCP server (system-level access)"
+      "description": "Corporate threat intelligence with OAuth discovery + manual fallback"
     },
     "user_security_toolbox": {
       "transport": "http",
@@ -55,12 +57,15 @@
         "client_id": "peak-assistant-web",
         "client_secret": "${TOOLBOX_CLIENT_SECRET}",
         "scope": "tools:execute reports:read reports:write",
+        "discovery_url": "https://security-toolbox.corp.com",
+        "enable_discovery": true,
+        "discovery_timeout": 10,
         "authorization_url": "https://security-toolbox.corp.com/oauth/authorize",
         "token_url": "https://security-toolbox.corp.com/oauth/token",
         "redirect_uri": "https://peak-assistant.corp.com/oauth/callback",
         "requires_user_auth": true
       },
-      "description": "Personal security toolbox requiring user authentication"
+      "description": "Personal security toolbox with OAuth discovery (fallback to manual URLs)"
     },
     "mitre_attack": {
       "transport": "http",
@@ -78,12 +83,13 @@
         "type": "oauth2_authorization_code",
         "client_id": "peak-assistant-cloud",
         "scope": "resources:read logs:read compute:read",
-        "authorization_url": "https://cloud-api.corp.com/oauth/authorize",
-        "token_url": "https://cloud-api.corp.com/oauth/token",
+        "discovery_url": "https://cloud-api.corp.com",
+        "enable_discovery": true,
+        "discovery_timeout": 15,
         "redirect_uri": "https://peak-assistant.corp.com/oauth/callback",
         "requires_user_auth": true
       },
-      "description": "User's personal cloud resources (requires user consent)"
+      "description": "User's cloud resources with OAuth discovery only (no manual URLs)"
     }
   },
   "serverGroups": {

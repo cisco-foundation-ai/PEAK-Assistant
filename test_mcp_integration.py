@@ -415,7 +415,7 @@ async def test_oauth_token_manager():
     token_manager = OAuth2TokenManager(auth_config, "test_user")
     
     # Test authorization URL generation
-    auth_url = token_manager.get_authorization_url("test_state", "test_challenge")
+    auth_url = await token_manager.get_authorization_url("test_state", "test_challenge")
     
     assert "response_type=code" in auth_url
     assert "client_id=test-client" in auth_url

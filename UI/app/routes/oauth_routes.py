@@ -118,12 +118,30 @@ async def initiate_oauth(server_name):
             flash(f'Authentication not configured for server: {server_name}', 'error')
             return redirect(url_for('pages.index'))
         
+        # Debug: Log auth config values
+        logger.info(f"[DEBUG] OAuth initiation for {server_name}:")
+        logger.info(f"[DEBUG]   client_id: {config.auth.client_id}")
+        logger.info(f"[DEBUG]   client_secret: {'***' if config.auth.client_secret else None}")
+        logger.info(f"[DEBUG]   client_registration_url: {config.auth.client_registration_url}")
+        logger.info(f"[DEBUG]   Dynamic registration condition: client_registration_url={bool(config.auth.client_registration_url)}, not client_id={not config.auth.client_id}")
+        
         # Perform dynamic client registration if needed
         if config.auth.client_registration_url and not config.auth.client_id:
             logger.info(f"Client ID not found for {server_name}, attempting dynamic registration.")
             registered = await config_manager._register_dynamic_client(server_name)
             if not registered:
                 flash(f'Failed to dynamically register client for {server_name}. Please check server logs.', 'error')
+                return redirect(url_for('pages.index'))
+            # Reload config to ensure we have the new client_id for the next steps
+            config = config_manager.get_server_config(server_name)
+        elif config.auth.client_registration_url and config.auth.client_id:
+            # Check if redirect URI has changed and force re-registration if needed
+            logger.info(f"Client ID exists for {server_name}, clearing credentials to force fresh registration with correct redirect URI.")
+            config.auth.client_id = None
+            config.auth.client_secret = None
+            registered = await config_manager._register_dynamic_client(server_name)
+            if not registered:
+                flash(f'Failed to re-register client for {server_name}. Please check server logs.', 'error')
                 return redirect(url_for('pages.index'))
             # Reload config to ensure we have the new client_id for the next steps
             config = config_manager.get_server_config(server_name)
@@ -142,10 +160,10 @@ async def initiate_oauth(server_name):
         # Use session user ID for initial OAuth flow
         # Real user ID will be obtained from userinfo endpoint after authentication
         token_manager = config_manager.user_session_manager.get_or_create_token_manager(
-            session_user_id, server_name, config.auth
+            session_user_id, server_name, config.auth, config.url
         )
         
-        auth_url = token_manager.get_authorization_url(state, code_challenge)
+        auth_url = await token_manager.get_authorization_url(state, code_challenge)
         logger.info(f"Redirecting to OAuth authorization URL for server {server_name}")
         return redirect(auth_url)
 
@@ -197,7 +215,7 @@ def oauth_callback():
 
         # Start with session user ID for token exchange
         token_manager = config_manager.user_session_manager.get_or_create_token_manager(
-            user_id, server_name, config.auth
+            user_id, server_name, config.auth, config.url
         )
 
         # Run the async token exchange in a dedicated event loop
@@ -211,7 +229,7 @@ def oauth_callback():
                 
                 # Create a new token manager with the token-discovered user ID
                 real_token_manager = config_manager.user_session_manager.get_or_create_token_manager(
-                    token_manager.token_user_id, server_name, config.auth
+                    token_manager.token_user_id, server_name, config.auth, config.url
                 )
                 # Copy the tokens to the new token manager
                 real_token_manager.access_token = token_manager.access_token

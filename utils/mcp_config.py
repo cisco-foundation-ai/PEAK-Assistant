@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Union, Any
 from dataclasses import dataclass
 from enum import Enum
 import logging
+from urllib.parse import urljoin
 from dotenv import load_dotenv
 
 from autogen_ext.tools.mcp import McpWorkbench, StdioServerParams
@@ -46,6 +47,10 @@ class AuthConfig:
     api_key: Optional[str] = None
     header_name: Optional[str] = "Authorization"
     requires_user_auth: bool = False         # True for authorization code flow
+    # OAuth discovery settings
+    discovery_url: Optional[str] = None      # Base URL for OAuth discovery (will append /.well-known/oauth-authorization-server)
+    enable_discovery: bool = True            # Whether to attempt OAuth discovery
+    discovery_timeout: int = 10              # Timeout for discovery requests
 
 @dataclass
 class MCPServerConfig:
@@ -62,13 +67,109 @@ class MCPServerConfig:
 class OAuth2TokenManager:
     """Manages OAuth2 token acquisition and refresh"""
     
-    def __init__(self, auth_config: AuthConfig, user_id: Optional[str] = None):
+    def __init__(self, auth_config: AuthConfig, user_id: Optional[str] = None, server_url: Optional[str] = None):
         self.auth_config = auth_config
         self.user_id = user_id  # For user-specific tokens
+        self.server_url = server_url  # Server URL for auto-deriving discovery URL
         self.access_token = None
         self.refresh_token = None
         self.token_expiry = None
         self.token_user_id = None  # User ID from token response
+        self._discovered_config = None  # Cache for discovered OAuth config
+        
+    def get_effective_discovery_url(self) -> Optional[str]:
+        """Get the effective discovery URL, using explicit config or auto-deriving from server URL"""
+        if self.auth_config.discovery_url:
+            return self.auth_config.discovery_url
+            
+        if self.server_url:
+            # Auto-derive discovery URL from server URL
+            from urllib.parse import urlparse
+            parsed = urlparse(self.server_url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            logger.info(f"Auto-derived discovery URL from server URL: {base_url}")
+            return base_url
+            
+        return None
+        
+    def get_effective_redirect_uri(self) -> str:
+        """Get the effective redirect URI, using explicit config or auto-generating from Flask app"""
+        if self.auth_config.redirect_uri:
+            return self.auth_config.redirect_uri
+            
+        # Auto-generate redirect URI from Flask app configuration
+        try:
+            from flask import has_app_context, current_app, url_for
+            if has_app_context():
+                # Generate the full URL including domain and port
+                redirect_uri = url_for('oauth.oauth_callback', _external=True)
+                logger.info(f"Auto-generated redirect URI: {redirect_uri}")
+                return redirect_uri
+        except Exception as e:
+            logger.warning(f"Failed to auto-generate redirect URI: {e}")
+            
+        # Fallback to default localhost pattern if Flask context not available
+        default_redirect = "https://localhost:8000/oauth/callback"
+        logger.warning(f"Using fallback redirect URI: {default_redirect}")
+        return default_redirect
+        
+    async def discover_oauth_endpoints(self) -> Optional[Dict[str, Any]]:
+        """Discover OAuth endpoints using RFC 8414 OAuth Authorization Server Metadata"""
+        discovery_url = self.get_effective_discovery_url()
+        if not self.auth_config.enable_discovery or not discovery_url:
+            return None
+            
+        if self._discovered_config is not None:
+            return self._discovered_config
+            
+        try:
+            # Construct the well-known endpoint URL
+            well_known_url = urljoin(discovery_url.rstrip('/'), '/.well-known/oauth-authorization-server')
+            
+            logger.info(f"Attempting OAuth discovery from: {well_known_url}")
+            
+            async with httpx.AsyncClient(timeout=self.auth_config.discovery_timeout) as client:
+                response = await client.get(well_known_url)
+                response.raise_for_status()
+                
+                discovery_data = response.json()
+                
+                # Validate required endpoints exist
+                if 'token_endpoint' not in discovery_data:
+                    logger.warning(f"OAuth discovery from {well_known_url} missing required token_endpoint")
+                    return None
+                    
+                self._discovered_config = discovery_data
+                logger.info(f"Successfully discovered OAuth endpoints from {well_known_url}")
+                return discovery_data
+                
+        except Exception as e:
+            logger.warning(f"OAuth discovery failed for {discovery_url}: {e}")
+            return None
+            
+    async def get_effective_token_url(self) -> str:
+        """Get the effective token URL, using discovery if available, fallback to manual config"""
+        if self.auth_config.token_url:
+            # Manual configuration takes precedence
+            return self.auth_config.token_url
+            
+        discovered = await self.discover_oauth_endpoints()
+        if discovered and 'token_endpoint' in discovered:
+            return discovered['token_endpoint']
+            
+        raise ValueError("No token URL available from manual config or discovery")
+        
+    async def get_effective_authorization_url(self) -> str:
+        """Get the effective authorization URL, using discovery if available, fallback to manual config"""
+        if self.auth_config.authorization_url:
+            # Manual configuration takes precedence
+            return self.auth_config.authorization_url
+            
+        discovered = await self.discover_oauth_endpoints()
+        if discovered and 'authorization_endpoint' in discovered:
+            return discovered['authorization_endpoint']
+            
+        raise ValueError("No authorization URL available from manual config or discovery")
         
     async def get_token(self) -> str:
         """Get a valid access token, refreshing if necessary"""
@@ -107,9 +208,11 @@ class OAuth2TokenManager:
         if self.auth_config.scope:
             data["scope"] = self.auth_config.scope
             
+        token_url = await self.get_effective_token_url()
+            
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                self.auth_config.token_url,
+                token_url,
                 data=data,
                 headers={"Content-Type": "application/x-www-form-urlencoded"}
             )
@@ -143,9 +246,11 @@ class OAuth2TokenManager:
             "client_secret": self.auth_config.client_secret,
         }
         
+        token_url = await self.get_effective_token_url()
+        
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                self.auth_config.token_url,
+                token_url,
                 data=data,
                 headers={"Content-Type": "application/x-www-form-urlencoded"}
             )
@@ -170,7 +275,7 @@ class OAuth2TokenManager:
         data = {
             "grant_type": "authorization_code",
             "code": authorization_code,
-            "redirect_uri": self.auth_config.redirect_uri,
+            "redirect_uri": self.get_effective_redirect_uri(),
             "client_id": self.auth_config.client_id,
             "client_secret": self.auth_config.client_secret,
         }
@@ -179,9 +284,11 @@ class OAuth2TokenManager:
         if code_verifier:
             data["code_verifier"] = code_verifier
         
+        token_url = await self.get_effective_token_url()
+        
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                self.auth_config.token_url,
+                token_url,
                 data=data,
                 headers={"Content-Type": "application/x-www-form-urlencoded"}
             )
@@ -207,15 +314,14 @@ class OAuth2TokenManager:
             
             return self.access_token
     
-    def get_authorization_url(self, state: str, code_challenge: Optional[str] = None) -> str:
+    async def get_authorization_url(self, state: str, code_challenge: Optional[str] = None) -> str:
         """Generate OAuth2 authorization URL for authorization code flow"""
-        if not self.auth_config.authorization_url:
-            raise ValueError("Authorization URL not configured")
+        authorization_url = await self.get_effective_authorization_url()
         
         params = {
             "response_type": "code",
             "client_id": self.auth_config.client_id,
-            "redirect_uri": self.auth_config.redirect_uri,
+            "redirect_uri": self.get_effective_redirect_uri(),
             "state": state,
         }
         
@@ -228,7 +334,7 @@ class OAuth2TokenManager:
             params["code_challenge_method"] = "S256"
         
         from urllib.parse import urlencode
-        return f"{self.auth_config.authorization_url}?{urlencode(params)}"
+        return f"{authorization_url}?{urlencode(params)}"
 
 class UserSessionManager:
     """Manages user-specific OAuth tokens and sessions"""
@@ -238,18 +344,15 @@ class UserSessionManager:
         self.user_sessions: Dict[str, Dict[str, OAuth2TokenManager]] = {}
         self.user_states: Dict[str, Dict[str, str]] = {}  # For OAuth state tracking
     
-    def get_or_create_token_manager(self, user_id: str, server_name: str, auth_config: AuthConfig) -> OAuth2TokenManager:
+    def get_or_create_token_manager(self, user_id: str, server_name: str, auth_config: AuthConfig, server_url: Optional[str] = None) -> OAuth2TokenManager:
         """Get or create a token manager for a specific user and server"""
         if user_id not in self.user_sessions:
             self.user_sessions[user_id] = {}
-        
+            
         if server_name not in self.user_sessions[user_id]:
-            # Pass the full auth_config to the constructor
-            self.user_sessions[user_id][server_name] = OAuth2TokenManager(auth_config, user_id)
-        else:
-            # Ensure existing token managers have the full config
-            self.user_sessions[user_id][server_name].auth_config = auth_config
-        
+            logger.info(f"Creating new OAuth token manager for user {user_id} and server {server_name}")
+            self.user_sessions[user_id][server_name] = OAuth2TokenManager(auth_config, user_id, server_url)
+            
         return self.user_sessions[user_id][server_name]
     
     def store_oauth_state(self, user_id: str, state: str, server_name: str):
@@ -308,7 +411,89 @@ class UserSessionManager:
             del self.user_states[user_id]
 
 class MCPConfigManager:
-    """Manages MCP server configurations and client connections"""
+    """Manages MCP server configurations and OAuth settings"""
+    
+    async def _discover_oauth_config(self, server_url: str, server_name: str) -> Optional[AuthConfig]:
+        """Attempt to discover OAuth configuration from server URL"""
+        try:
+            # Extract base URL from server URL
+            from urllib.parse import urlparse
+            parsed = urlparse(server_url)
+            base_url = f"{parsed.scheme}://{parsed.netloc}"
+            
+            # Construct well-known OAuth discovery URL
+            discovery_url = urljoin(base_url.rstrip('/'), '/.well-known/oauth-authorization-server')
+            
+            logger.info(f"Attempting automatic OAuth discovery for {server_name} from: {discovery_url}")
+            
+            async with httpx.AsyncClient(timeout=10) as client:
+                response = await client.get(discovery_url)
+                response.raise_for_status()
+                
+                oauth_metadata = response.json()
+                
+                # Validate required OAuth endpoints exist
+                if 'token_endpoint' not in oauth_metadata or 'authorization_endpoint' not in oauth_metadata:
+                    logger.warning(f"OAuth discovery from {discovery_url} missing required endpoints")
+                    return None
+                
+                logger.info(f"OAuth discovery successful for {server_name}:")
+                logger.info(f"  Token endpoint: {oauth_metadata.get('token_endpoint')}")
+                logger.info(f"  Authorization endpoint: {oauth_metadata.get('authorization_endpoint')}")
+                logger.info(f"  Registration endpoint: {oauth_metadata.get('registration_endpoint', 'None')}")
+                
+                # Create AuthConfig from discovered metadata
+                # Use authorization_code flow as default for discovered OAuth
+                auth_config = AuthConfig(
+                    type=AuthType.OAUTH2_AUTHORIZATION_CODE,
+                    requires_user_auth=True,  # Discovered OAuth typically requires user auth
+                    token_url=oauth_metadata['token_endpoint'],
+                    authorization_url=oauth_metadata['authorization_endpoint'],
+                    client_registration_url=oauth_metadata.get('registration_endpoint'),
+                    discovery_url=base_url,
+                    enable_discovery=True,
+                    discovery_timeout=10,
+                    # Client credentials will need to be provided via dynamic registration or manual config
+                    client_id=None,  # Will be set via dynamic registration
+                    client_secret=None,  # Will be set via dynamic registration
+                    scope=None,  # Default scope, can be overridden
+                    redirect_uri=None  # Will be auto-generated
+                )
+                
+                return auth_config
+                
+        except Exception as e:
+            logger.info(f"OAuth discovery failed for {server_name} at {server_url}: {e}")
+            return None
+    
+    async def _perform_oauth_discovery(self):
+        """Perform OAuth discovery for servers that need it"""
+        for server_name, server_url in self._servers_needing_oauth_discovery.items():
+            try:
+                logger.info(f"Performing OAuth discovery for {server_name}")
+                auth_config = await self._discover_oauth_config(server_url, server_name)
+                
+                if auth_config:
+                    # Update the server configuration with discovered OAuth
+                    server = self.servers[server_name]
+                    server.auth = auth_config
+                    logger.info(f"Updated {server_name} with discovered OAuth configuration")
+                    
+                    # Create OAuth manager if needed
+                    if auth_config.type == AuthType.OAUTH2_CLIENT_CREDENTIALS:
+                        self.oauth_managers[server_name] = OAuth2TokenManager(auth_config, server_url=server_url)
+                else:
+                    logger.info(f"No OAuth discovered for {server_name}, server will be accessible without authentication")
+                    
+            except Exception as e:
+                logger.warning(f"OAuth discovery failed for {server_name}: {e}")
+        
+        # Clear the discovery queue
+        self._servers_needing_oauth_discovery.clear()
+    
+    def get_all_servers(self) -> Dict[str, MCPServerConfig]:
+        """Get all loaded server configurations"""
+        return self.servers.copy()
     
     def __init__(self, config_file: Optional[str] = None):
         logger.info(f"[INIT DEBUG] MCPConfigManager.__init__ called with config_file: {config_file}")
@@ -320,10 +505,56 @@ class MCPConfigManager:
         self.server_groups: Dict[str, List[str]] = {}
         self.oauth_managers: Dict[str, OAuth2TokenManager] = {}  # For client credentials
         self.user_session_manager = UserSessionManager()
+        self._servers_needing_oauth_discovery: Dict[str, str] = {}  # server_name -> server_url
         
         logger.info(f"[INIT DEBUG] About to call _load_config()")
         self._load_config()
         logger.info(f"[INIT DEBUG] _load_config() completed. Loaded {len(self.servers)} servers and {len(self.server_groups)} server groups")
+        
+        # Perform OAuth discovery for servers that need it
+        if self._servers_needing_oauth_discovery:
+            logger.info(f"[INIT DEBUG] Performing OAuth discovery for {len(self._servers_needing_oauth_discovery)} servers")
+            
+            # Check if we can use asyncio.run or need alternative approach
+            try:
+                # Test if we can create a new event loop (this will fail if one is already running)
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # We're in an existing event loop, use separate thread approach
+                    import concurrent.futures
+                    import threading
+                    
+                    def run_discovery():
+                        # Create a new event loop in a separate thread
+                        new_loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(new_loop)
+                        try:
+                            return new_loop.run_until_complete(self._perform_oauth_discovery())
+                        finally:
+                            new_loop.close()
+                    
+                    # Run discovery in a separate thread with its own event loop
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(run_discovery)
+                        future.result(timeout=30)  # Wait up to 30 seconds
+                    
+                    logger.info(f"[INIT DEBUG] OAuth discovery completed using separate thread for {len(self._servers_needing_oauth_discovery)} servers")
+                else:
+                    # Event loop exists but not running, can use run_until_complete
+                    loop.run_until_complete(self._perform_oauth_discovery())
+                    logger.info(f"[INIT DEBUG] OAuth discovery completed using run_until_complete for {len(self._servers_needing_oauth_discovery)} servers")
+            except RuntimeError as e:
+                if "no running event loop" in str(e) or "no current event loop" in str(e):
+                    # No event loop exists, we can use asyncio.run
+                    try:
+                        asyncio.run(self._perform_oauth_discovery())
+                        logger.info(f"[INIT DEBUG] OAuth discovery completed using asyncio.run for {len(self._servers_needing_oauth_discovery)} servers")
+                    except Exception as ex:
+                        logger.warning(f"[INIT DEBUG] Failed to run OAuth discovery with asyncio.run: {ex}. Discovery will happen on first access.")
+                else:
+                    logger.warning(f"[INIT DEBUG] Failed to run OAuth discovery synchronously: {e}. Discovery will happen on first access.")
+            except Exception as ex:
+                logger.warning(f"[INIT DEBUG] Failed to run OAuth discovery synchronously: {ex}. Discovery will happen on first access.")
 
 
     
@@ -366,13 +597,32 @@ class MCPConfigManager:
             logger.info(f"[LOAD CONFIG DEBUG] JSON parsing successful, config_data type: {type(config_data)}")
             logger.info(f"[LOAD CONFIG DEBUG] Top-level keys in config: {list(config_data.keys()) if isinstance(config_data, dict) else 'Not a dict'}")
             
-            # Load server configurations
-            for name, server_config in config_data.get("mcpServers", {}).items():
+            # Load server configurations - support both formats
+            servers_to_load = []
+            
+            # Handle "mcpServers" object format (existing format)
+            if "mcpServers" in config_data:
+                for name, server_config in config_data["mcpServers"].items():
+                    server_config["name"] = name  # Ensure name is set
+                    servers_to_load.append(server_config)
+            
+            # Handle "servers" array format (new format)
+            if "servers" in config_data:
+                servers_to_load.extend(config_data["servers"])
+            
+            for server_config in servers_to_load:
+                name = server_config.get("name")
+                if not name:
+                    logger.warning("Skipping server configuration without name")
+                    continue
                 transport_str = server_config.get("transport", "stdio")
                 transport = TransportType(transport_str)
                 
                 auth_config = None
+                server_url = server_config.get("url")
+                
                 if "auth" in server_config:
+                    # Explicit auth configuration provided
                     auth_data = server_config["auth"]
                     auth_config = AuthConfig(
                         type=AuthType(auth_data["type"]),
@@ -386,8 +636,23 @@ class MCPConfigManager:
                         client_registration_url=auth_data.get("client_registration_url"),
                         requires_user_auth=auth_data.get("requires_user_auth", False),
                         api_key=auth_data.get("api_key"),
-                        header_name=auth_data.get("header_name", "Authorization")
+                        header_name=auth_data.get("header_name", "Authorization"),
+                        # OAuth discovery settings
+                        discovery_url=auth_data.get("discovery_url"),
+                        enable_discovery=auth_data.get("enable_discovery", True),
+                        discovery_timeout=auth_data.get("discovery_timeout", 10)
                     )
+                elif server_url and transport in [TransportType.HTTP, TransportType.SSE]:
+                    # No explicit auth config - attempt automatic OAuth discovery
+                    logger.info(f"No auth config for {name}, attempting automatic OAuth discovery from {server_url}")
+                    try:
+                        # Schedule OAuth discovery to run after config loading
+                        self._servers_needing_oauth_discovery[name] = server_url
+                        auth_config = None  # Will be set later via discovery
+                        logger.info(f"Scheduled automatic OAuth discovery for {name}")
+                    except Exception as e:
+                        logger.warning(f"Failed to schedule OAuth discovery for {name}: {e}")
+                        auth_config = None
                 
                 self.servers[name] = MCPServerConfig(
                     name=name,
@@ -403,7 +668,7 @@ class MCPConfigManager:
                 
                 # Initialize OAuth2 manager for client credentials flow
                 if auth_config and auth_config.type == AuthType.OAUTH2_CLIENT_CREDENTIALS:
-                    self.oauth_managers[name] = OAuth2TokenManager(auth_config)
+                    self.oauth_managers[name] = OAuth2TokenManager(auth_config, server_url=server_config.get("url"))
                 elif auth_config and auth_config.type == AuthType.OAUTH2_AUTHORIZATION_CODE:
                     # User-specific token managers will be created on-demand
                     pass
@@ -490,13 +755,29 @@ class MCPConfigManager:
             logger.error(f"Dynamic registration not configured for {server_name}")
             return False
 
+        # Auto-generate redirect_uri if not set
+        redirect_uri = config.auth.redirect_uri
+        if not redirect_uri:
+            try:
+                from flask import url_for
+                redirect_uri = url_for('oauth.oauth_callback', _external=True)
+                logger.info(f"Auto-generated redirect URI for {server_name}: {redirect_uri}")
+            except Exception:
+                # Fallback if Flask context not available
+                redirect_uri = f"http://localhost:5000/oauth/callback"
+                logger.info(f"Using fallback redirect URI for {server_name}: {redirect_uri}")
+        
+        # Build registration payload with proper handling of None values
         registration_payload = {
             "client_name": "PEAK Assistant",
-            "redirect_uris": [config.auth.redirect_uri],
+            "redirect_uris": [redirect_uri],  # Ensure we have a valid string
             "grant_types": ["authorization_code", "refresh_token"],
-            "token_endpoint_auth_method": "client_secret_post",
-            "scope": config.auth.scope
+            "token_endpoint_auth_method": "client_secret_post"
         }
+        
+        # Only include scope if it's not None
+        if config.auth.scope:
+            registration_payload["scope"] = config.auth.scope
 
         logger.info(f"Attempting dynamic registration for {server_name} at {config.auth.client_registration_url}")
         async with httpx.AsyncClient() as client:
@@ -510,9 +791,10 @@ class MCPConfigManager:
                 config.auth.client_secret = registration_data['client_secret']
                 
                 logger.info(f"Successfully registered client for {server_name}. Client ID: {config.auth.client_id}")
+                logger.info(f"Dynamic credentials stored in memory only - configuration file remains unchanged")
                 
-                # Persist the new client_id and client_secret
-                self._save_config()
+                # NOTE: We deliberately do NOT save to config file to keep it read-only
+                # Dynamic credentials are stored in memory only for this session
                 
                 return True
             except httpx.HTTPStatusError as e:
@@ -692,7 +974,7 @@ class MCPClientManager:
                     logger.error(f"User ID is required for user-based OAuth on {config.name}")
                     return False
                 
-                token_manager = self.user_session_manager.get_or_create_token_manager(user_id, config.name, config.auth)
+                token_manager = self.user_session_manager.get_or_create_token_manager(user_id, config.name, config.auth, config.url)
                 try:
                     token = await token_manager.get_token()
                     headers["Authorization"] = f"Bearer {token}"
