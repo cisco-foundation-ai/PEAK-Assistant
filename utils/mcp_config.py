@@ -267,6 +267,26 @@ class UserSessionManager:
         if user_id in self.user_states and state in self.user_states[user_id]:
             del self.user_states[user_id][state]
     
+    def has_valid_tokens(self, user_id: str, server_name: str) -> bool:
+        """Check if a user has valid tokens for a specific server"""
+        user_session = self.user_sessions.get(user_id, {})
+        
+        if server_name not in user_session:
+            return False
+            
+        token_manager = user_session[server_name]
+        return token_manager.access_token is not None
+    
+    def clear_tokens(self, user_id: str, server_name: str):
+        """Clear tokens for a specific user and server (disconnect)"""
+        user_session = self.user_sessions.get(user_id, {})
+        if server_name in user_session:
+            # Clear the tokens but keep the token manager for potential re-authentication
+            token_manager = user_session[server_name]
+            token_manager.access_token = None
+            token_manager.refresh_token = None
+            token_manager.token_expiry = None
+    
     def get_user_servers_needing_auth(self, user_id: str, servers: Dict[str, MCPServerConfig]) -> List[str]:
         """Get list of servers that need user authentication for this user"""
         needing_auth = []

@@ -1,71 +1,179 @@
 /**
  * auth.js
  * 
- * Manages OAuth authentication state for MCP servers.
- * Checks which servers require user login and updates the UI accordingly.
+ * Manages MCP server authentication and connection status.
+ * Provides a comprehensive interface for managing server connections.
  */
 
 /**
- * Checks the authentication status of all configured MCP servers.
- * If any servers require user authentication, it displays a banner.
+ * Loads and displays all MCP servers with their authentication status.
+ * Creates a clean list interface with Connect/Disconnect buttons.
  */
-export async function checkAuthStatus() {
+export async function loadServerStatus() {
     try {
-        const response = await fetch('/oauth/servers/needing-auth');
+        const response = await fetch('/oauth/servers/status');
         if (!response.ok) {
-            console.error('Failed to fetch auth status:', response.statusText);
+            console.error('Failed to fetch server status:', response.statusText);
+            showError('Failed to load server status');
             return;
         }
 
         const data = await response.json();
-        const serversNeedingAuth = data.servers_needing_auth || [];
-
-        const authBanner = document.getElementById('auth-banner');
-        const authServerList = document.getElementById('auth-server-list');
-
-        if (!authBanner || !authServerList) {
-            console.error('Required auth banner elements not found in the DOM.');
-            return;
-        }
-
-        if (serversNeedingAuth.length > 0) {
-            authServerList.innerHTML = ''; // Clear previous list
-            serversNeedingAuth.forEach(server => {
-                const serverItem = document.createElement('div');
-                serverItem.className = 'auth-server-item';
-
-                const serverInfo = document.createElement('span');
-                serverInfo.textContent = `Login required for ${server.name} (${server.description || 'No description'}).`;
-                
-                const loginButton = document.createElement('a');
-                loginButton.href = server.auth_url;
-                loginButton.className = 'btn btn-primary btn-sm ms-2';
-                loginButton.textContent = 'Login';
-
-                serverItem.appendChild(serverInfo);
-                serverItem.appendChild(loginButton);
-                authServerList.appendChild(serverItem);
-            });
-            authBanner.style.display = 'block';
-        } else {
-            authBanner.style.display = 'none';
-        }
+        displayServerList(data);
+        updateStatusSummary(data);
     } catch (error) {
-        console.error('Error checking auth status:', error);
+        console.error('Error loading server status:', error);
+        showError('Error loading server status');
     }
 }
 
 /**
- * Shows the authentication banner with a generic message.
- * This can be called when an API call fails due to auth issues.
+ * Displays the list of MCP servers with their authentication status.
+ */
+function displayServerList(data) {
+    const serverList = document.getElementById('mcp-server-list');
+    if (!serverList) {
+        console.error('MCP server list element not found in the DOM.');
+        return;
+    }
+
+    if (!data.servers || data.servers.length === 0) {
+        serverList.innerHTML = `
+            <div class="text-center text-muted py-2">
+                <small>No MCP servers configured</small>
+            </div>
+        `;
+        return;
+    }
+
+    serverList.innerHTML = ''; // Clear previous content
+    
+    data.servers.forEach(server => {
+        const serverButton = document.createElement('button');
+        serverButton.className = 'btn text-start w-100 mb-1 p-2';
+        serverButton.style.fontSize = '0.85rem';
+        serverButton.title = server.description; // Tooltip with description
+        
+        // Determine button styling based on server state
+        if (!server.requires_auth) {
+            // No authentication required - muted green styling (ready but inactive)
+            serverButton.className += ' btn-outline-success';
+            serverButton.style.opacity = '0.6'; // Make it more subtle
+            serverButton.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-check-circle text-success me-2"></i>
+                    <span class="flex-grow-1">${server.name}</span>
+                    <small class="text-success">Ready</small>
+                </div>
+            `;
+            serverButton.disabled = true; // No action needed
+        } else if (server.is_authenticated) {
+            // Connected - show as success with disconnect action
+            serverButton.className += ' btn-outline-success';
+            serverButton.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-check-circle-fill text-success me-2"></i>
+                    <span class="flex-grow-1">${server.name}</span>
+                    <small class="text-muted">Connected</small>
+                </div>
+            `;
+            serverButton.onclick = () => {
+                if (confirm(`Disconnect from ${server.name}?`)) {
+                    disconnectServer(server.name);
+                }
+            };
+        } else {
+            // Not connected - show as warning (yellow) to match status summary
+            serverButton.className += ' btn-outline-warning';
+            serverButton.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-exclamation-circle text-warning me-2"></i>
+                    <span class="flex-grow-1">${server.name}</span>
+                    <small class="text-warning">Click to connect</small>
+                </div>
+            `;
+            serverButton.onclick = () => window.location.href = server.auth_url;
+        }
+        
+        serverList.appendChild(serverButton);
+    });
+}
+
+/**
+ * Updates the status summary display.
+ */
+function updateStatusSummary(data) {
+    const summary = document.getElementById('server-status-summary');
+    if (!summary) return;
+    
+    const connected = data.authenticated_count || 0;
+    const needingAuth = data.needing_auth_count || 0;
+    const totalRequiringAuth = connected + needingAuth; // Only count servers that require auth
+    
+    if (totalRequiringAuth > 0) {
+        summary.textContent = `${connected}/${totalRequiringAuth} connected`;
+        summary.className = needingAuth > 0 ? 'text-warning' : 'text-success';
+    } else {
+        // No servers require authentication
+        summary.textContent = '';
+    }
+}
+
+/**
+ * Disconnects from a specific MCP server.
+ */
+async function disconnectServer(serverName) {
+    try {
+        const response = await fetch(`/oauth/disconnect/${serverName}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok && result.success) {
+            // Show success message briefly
+            showSuccess(`Disconnected from ${serverName}`);
+            // Refresh the server list
+            await loadServerStatus();
+        } else {
+            showError(result.error || 'Failed to disconnect from server');
+        }
+    } catch (error) {
+        console.error('Error disconnecting server:', error);
+        showError('Error disconnecting from server');
+    }
+}
+
+/**
+ * Shows an error message to the user.
+ */
+function showError(message) {
+    // You can integrate with existing error display system
+    console.error('Server management error:', message);
+}
+
+/**
+ * Shows a success message to the user.
+ */
+function showSuccess(message) {
+    // You can integrate with existing success display system
+    console.log('Server management success:', message);
+}
+
+/**
+ * Legacy function for backward compatibility.
+ * Redirects to the new server status loading.
+ */
+export async function checkAuthStatus() {
+    await loadServerStatus();
+}
+
+/**
+ * Legacy function for backward compatibility.
  */
 export function showAuthBanner() {
-    const authBanner = document.getElementById('auth-banner');
-    if (authBanner) {
-        authBanner.style.display = 'block';
-        // Optionally, you could update the text to be more generic
-        // document.getElementById('auth-server-list').innerHTML = 'An action failed due to missing authentication. Please log in.';
-    }
-    // Re-run the check to get specific server login links
-    checkAuthStatus();
+    loadServerStatus();
 }

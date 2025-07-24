@@ -313,6 +313,81 @@ def servers_needing_auth():
         logger.error(f"Error getting servers needing auth: {e}")
         return jsonify({"error": "Failed to get authentication status"}), 500
 
+
+@oauth_bp.route('/servers/status')
+@require_session
+def servers_status():
+    """Get comprehensive status of all MCP servers with authentication information"""
+    logger.info(f"[Server Status Check] Getting status for all servers for user_id: {session.get('user_id')}")
+    try:
+        user_id = session['user_id']
+        config_manager = get_config_manager()
+        
+        # Get all configured servers
+        all_servers = []
+        # Sort servers alphabetically by name
+        for server_name, config in sorted(config_manager.servers.items(), key=lambda x: x[0].lower()):
+            # Check if server requires authentication
+            requires_auth = hasattr(config, 'auth') and config.auth is not None
+            
+            # Check current authentication status
+            is_authenticated = False
+            if requires_auth:
+                is_authenticated = config_manager.user_session_manager.has_valid_tokens(
+                    user_id, server_name
+                )
+            
+            server_info = {
+                "name": server_name,
+                "description": config.description or "No description available",
+                "requires_auth": requires_auth,
+                "is_authenticated": is_authenticated,
+                "auth_url": url_for('oauth.initiate_oauth', server_name=server_name) if requires_auth else None,
+                "disconnect_url": url_for('oauth.disconnect_server', server_name=server_name) if requires_auth else None,
+                "transport": getattr(config, 'transport', 'unknown').value if hasattr(getattr(config, 'transport', 'unknown'), 'value') else str(getattr(config, 'transport', 'unknown'))
+            }
+            all_servers.append(server_info)
+        
+        return jsonify({
+            "servers": all_servers,
+            "total_count": len(all_servers),
+            "authenticated_count": sum(1 for s in all_servers if s['is_authenticated']),
+            "needing_auth_count": sum(1 for s in all_servers if s['requires_auth'] and not s['is_authenticated'])
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting server status: {e}")
+        return jsonify({"error": "Failed to get server status"}), 500
+
+
+@oauth_bp.route('/disconnect/<server_name>', methods=['POST'])
+@require_session
+def disconnect_server(server_name):
+    """Disconnect from an MCP server and remove stored authentication credentials"""
+    logger.info(f"[Disconnect Server] Disconnecting server {server_name} for user_id: {session.get('user_id')}")
+    try:
+        user_id = session['user_id']
+        config_manager = get_config_manager()
+        
+        # Check if server exists
+        if server_name not in config_manager.servers:
+            return jsonify({"error": f"Server '{server_name}' not found"}), 404
+        
+        # Remove stored tokens for this user and server
+        config_manager.user_session_manager.clear_tokens(user_id, server_name)
+        
+        logger.info(f"Successfully disconnected server {server_name} for user {user_id}")
+        return jsonify({
+            "success": True,
+            "message": f"Successfully disconnected from {server_name}",
+            "server_name": server_name
+        })
+        
+    except Exception as e:
+        logger.error(f"Error disconnecting server {server_name}: {e}")
+        return jsonify({"error": f"Failed to disconnect from {server_name}"}), 500
+
+
 @oauth_bp.route('/test-connection/<server_name>')
 @require_session
 async def test_mcp_connection(server_name):

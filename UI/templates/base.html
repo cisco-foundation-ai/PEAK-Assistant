@@ -27,6 +27,14 @@
                                 <img src="{{ url_for('static', filename='images/peak-logo.png') }}" alt="PEAK Assistant Logo" class="sidebar-logo">
                             </a>
                         </li>
+                    </ul>
+                    
+                    <!-- Prepare Section Header -->
+                    <h6 class="sidebar-heading px-3 mt-2 mb-3 text-uppercase fw-bold" style="color: #6c757d; font-size: 0.75rem; letter-spacing: 0.05rem; border-bottom: 1px solid #dee2e6; padding-bottom: 0.5rem;">
+                        <span>Prepare</span>
+                    </h6>
+                    
+                    <ul class="nav flex-column">
                         <li class="nav-item">
                             <a class="nav-link" href="/research">
                                 Topic Research
@@ -63,7 +71,7 @@
                     </ul>
 
                     <div class="debug-section pt-3 mt-auto">
-                        <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                        <h6 class="sidebar-heading px-3 mt-4 mb-1 text-uppercase fw-bold" style="color: #6c757d; font-size: 0.75rem; letter-spacing: 0.05rem; border-bottom: 1px solid #dee2e6; padding-bottom: 0.5rem;">
                             <span>Tools</span>
                         </h6>
                         <ul class="nav flex-column mb-2">
@@ -78,17 +86,33 @@
                                 </a>
                             </li>
                         </ul>
+                        
+                        <!-- Current Phase Display -->
+                        <div id="current-phase-display" class="alert alert-info mb-3 d-none">
+                            <strong>Current Phase:</strong> <span id="current-phase-name">Research</span>
+                        </div>
+
+                        <!-- MCP Servers Section -->
+                        <div id="mcp-servers-section" class="mt-4">
+                            <h6 class="sidebar-heading px-3 mt-2 mb-1 text-uppercase fw-bold" style="color: #6c757d; font-size: 0.75rem; letter-spacing: 0.05rem; border-bottom: 1px solid #dee2e6; padding-bottom: 0.5rem;">
+                                <span>MCP Servers</span>
+                            </h6>
+                            <div class="px-3 mb-2">
+                                <small id="server-status-summary" class="text-muted"></small>
+                            </div>
+                            <div id="mcp-server-list" class="px-2">
+                                <div class="text-center text-muted py-2">
+                                    <small>Loading servers...</small>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </nav>
 
             <!-- Main content -->
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 content">
-                <!-- Authentication Banner -->
-                <div id="auth-banner" class="alert alert-warning" style="display: none; margin-top: 1rem;">
-                    <strong>Authentication Required</strong>
-                    <div id="auth-server-list" class="mt-2"></div>
-                </div>
+
                 {% block nav %}
                 <div class="top-navigation">
                     <div>
