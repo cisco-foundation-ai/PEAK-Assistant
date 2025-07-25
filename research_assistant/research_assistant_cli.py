@@ -99,6 +99,9 @@ async def researcher(
         technical depth, and originality. Prioritize peer-reviewed papers, 
         official documentation, and reputable industry publications.
 
+        Be sure to include local information sources (wiki pages, documents, tickets, etc)
+        when appropriate.
+
         Synthesize findings from multiple independent sources, cross-verifying 
         facts and highlighting consensus or discrepancies. Since you are researching
         threat actor behaviors, be sure to include relevant samples of log entries, code,
@@ -215,6 +218,9 @@ async def researcher(
         - A brief list of published threat hunt methodologies for this technique. For each, 
           include a short description of exactly what their looking for and how they 
           look for it. Call this section "Published Hunts".
+        - A summary of any local information about previous times you have hunted this
+          technique, or previous times the technique has been found in incidents. 
+          Call this section "Previous Hunting Information".
         - A brief list of tools threat actors commonly use to perform this technique. 
           Call this section "Commonly-Used Tools".
         - A numbered list of references to all the sourcesq you consulted, including a 
@@ -269,9 +275,11 @@ async def researcher(
            for this activity?
         7. Are there any published threat hunting methodologies for this technique 
            or behavior?
-        8. What tools are commonly used by threat actors to perform this technique 
+        8. Has this technique or behavior been found in previous incidents or threat
+           hunts?
+        9. What tools are commonly used by threat actors to perform this technique 
            or behavior?
-        9. Are there specific threat actors known to use this technique or is 
+        10. Are there specific threat actors known to use this technique or is 
            it widely used by many threat actors?        
 
         Remember that we are providing a report to an audence of threat hunters
