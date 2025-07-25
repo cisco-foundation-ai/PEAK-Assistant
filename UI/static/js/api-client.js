@@ -93,3 +93,6 @@ class APIClient {
 
 // Create and export a single API client instance for the application
 export const apiClient = new APIClient();
+
+// Also make it available globally for inline scripts
+window.apiClient = apiClient;

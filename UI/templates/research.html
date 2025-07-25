@@ -154,6 +154,33 @@ class ResearchManager extends window.PhaseManager {
         const uploadFile = document.getElementById('upload-report-file');
         uploadBtn.addEventListener('click', () => uploadFile.click());
         uploadFile.addEventListener('change', () => this.handleUpload());
+
+        // Add event listener for send feedback button
+        const sendFeedbackBtn = document.getElementById('send-feedback-btn');
+        if (sendFeedbackBtn) {
+            sendFeedbackBtn.addEventListener('click', () => {
+                console.log('ResearchManager: Send feedback button clicked!');
+                this.handleSendFeedback();
+            });
+            console.log('ResearchManager: Send feedback button event listener added');
+        } else {
+            console.error('ResearchManager: Send feedback button not found!');
+        }
+
+        // Add Enter key event listener for feedback textarea
+        const feedbackInput = document.getElementById('feedback-input');
+        if (feedbackInput) {
+            feedbackInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    console.log('ResearchManager: Enter key pressed in feedback input');
+                    this.handleSendFeedback();
+                }
+            });
+            console.log('ResearchManager: Feedback input Enter key event listener added');
+        } else {
+            console.error('ResearchManager: Feedback input not found!');
+        }
     }
 
     async handleGenerate() {
