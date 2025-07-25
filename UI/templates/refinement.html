@@ -70,12 +70,7 @@ class RefinementManager {
     setupEventListeners() {
         document.getElementById('refine-btn').addEventListener('click', () => this.handleRefine());
         document.getElementById('send-feedback-btn').addEventListener('click', () => this.handleSendFeedback());
-        this.feedbackInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                this.handleSendFeedback();
-            }
-        });
+
     }
 
     loadInitialData() {
