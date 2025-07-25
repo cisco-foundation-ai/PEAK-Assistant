@@ -1,3 +1,5 @@
+import { checkAuthStatus } from './auth.js';
+
 document.addEventListener('DOMContentLoaded', function() {
     const clearSessionSidebarBtn = document.getElementById('clear-session-sidebar-btn');
     if (clearSessionSidebarBtn) {
@@ -41,6 +43,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initial setup when the DOM is loaded
     ensureHuntPlanningButtonActive();
+
+    // Check for a post-auth redirect and refresh status if needed
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('auth_status') === 'success') {
+        // Immediately refresh the auth status to hide the banner
+        checkAuthStatus();
+        // Remove the query parameter from the URL for a cleaner look
+        const newUrl = window.location.pathname;
+        history.replaceState({}, document.title, newUrl);
+    } else {
+        // For normal page loads, check the status as usual
+        checkAuthStatus();
+    }
 
     // Listen for session state changes and ensure button stays active
     document.addEventListener('sessionStateChanged', function() {

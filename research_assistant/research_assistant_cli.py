@@ -7,11 +7,10 @@ import re
 import sys
 from pathlib import Path
 import warnings
+from typing import Optional
 from dotenv import load_dotenv
 import traceback
 from markdown_pdf import MarkdownPdf, Section
-
-from tavily import TavilyClient
 
 from autogen_agentchat.messages import TextMessage
 from autogen_ext.models.openai import AzureOpenAIChatCompletionClient
@@ -23,6 +22,7 @@ from autogen_agentchat.ui import Console
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from utils.assistant_auth import PEAKAssistantAuthManager
 from utils.azure_client import PEAKAssistantAzureOpenAIClient
+from utils.mcp_config import get_client_manager, setup_mcp_servers
 
 def find_dotenv_file():
     """Search for a .env file in current directory and parent directories"""
@@ -46,24 +46,6 @@ def generate_unique_filename(title, extension):
 
     return base_filename
 
-async def tavily_search(
-    query: str,
-    max_results: int = 15,
-    raw_content: bool = False
-):
-    tavily_client = TavilyClient(
-        api_key=os.getenv("TAVILY_API_KEY")
-    )
-
-    search_results = tavily_client.search(
-        query=query,
-        max_results=max_results,
-        search_depth="advanced",
-        include_raw_content=raw_content
-    )
-
-    return search_results
-
 async def websocket_input():
     return
 
@@ -77,7 +59,9 @@ async def researcher(
     technique: str = None, 
     local_context: str = None,
     verbose: bool = False,
-    previous_run: list = None
+    previous_run: list = None,
+    mcp_server_group: str = "research",
+    user_id: Optional[str] = None
 ) -> str:
     """
     Orchestrates a multi-agent, multi-stage research workflow to generate a 
@@ -114,6 +98,9 @@ async def researcher(
         maximize result relevance. Critically evaluate sources for credibility, 
         technical depth, and originality. Prioritize peer-reviewed papers, 
         official documentation, and reputable industry publications.
+
+        Be sure to include local information sources (wiki pages, documents, tickets, etc)
+        when appropriate.
 
         Synthesize findings from multiple independent sources, cross-verifying 
         facts and highlighting consensus or discrepancies. Since you are researching
@@ -231,6 +218,9 @@ async def researcher(
         - A brief list of published threat hunt methodologies for this technique. For each, 
           include a short description of exactly what their looking for and how they 
           look for it. Call this section "Published Hunts".
+        - A summary of any local information about previous times you have hunted this
+          technique, or previous times the technique has been found in incidents. 
+          Call this section "Previous Hunting Information".
         - A brief list of tools threat actors commonly use to perform this technique. 
           Call this section "Commonly-Used Tools".
         - A numbered list of references to all the sourcesq you consulted, including a 
@@ -285,9 +275,11 @@ async def researcher(
            for this activity?
         7. Are there any published threat hunting methodologies for this technique 
            or behavior?
-        8. What tools are commonly used by threat actors to perform this technique 
+        8. Has this technique or behavior been found in previous incidents or threat
+           hunts?
+        9. What tools are commonly used by threat actors to perform this technique 
            or behavior?
-        9. Are there specific threat actors known to use this technique or is 
+        10. Are there specific threat actors known to use this technique or is 
            it widely used by many threat actors?        
 
         Remember that we are providing a report to an audence of threat hunters
@@ -353,12 +345,34 @@ async def researcher(
     auth_mgr = PEAKAssistantAuthManager()
     az_model_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr)
     az_model_reasoning_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr, model_type="reasoning")
+    
+    # Set up MCP servers for research
+    mcp_client_manager = get_client_manager()
+    connected_servers = await setup_mcp_servers(mcp_server_group, user_id=user_id)
+    
+    # Get workbenches only from the research server group
+    group_workbenches = []
+    for server_name in connected_servers:
+        workbench = mcp_client_manager.get_workbench(server_name, user_id=user_id)
+        if workbench:
+            group_workbenches.append(workbench)
+    
+    if not group_workbenches:
+        error_msg = f"No MCP workbenches available for research group '{mcp_server_group}'. Check your MCP configuration."
+        if verbose:
+            print(error_msg)
+        raise RuntimeError(error_msg)
+    
+    mcp_workbench = group_workbenches[0]  # Use the first workbench from the research group
+    if verbose:
+        print(f"Search agent using workbench from {len(connected_servers)} research group servers: {', '.join(connected_servers)}")
 
+    # Create search agent with MCP workbench (MCP-only)
     search_agent = AssistantAgent(
         "search_agent",
-        description="Performs web searches and analyzes information.",
+        description="Performs web searches and analyzes information using multiple research tools including web search, security intelligence databases, and threat intelligence sources.",
         model_client=az_model_client,
-        tools=[tavily_search],
+        workbench=mcp_workbench,  # AutoGen handles MCP tools automatically
         system_message=search_system_prompt
     )
 

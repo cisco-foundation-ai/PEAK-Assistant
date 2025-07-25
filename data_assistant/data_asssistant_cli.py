@@ -18,6 +18,7 @@ from autogen_agentchat.conditions import TextMentionTermination
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from utils.assistant_auth import PEAKAssistantAuthManager
 from utils.azure_client import PEAKAssistantAzureOpenAIClient
+from utils.mcp_config import get_client_manager, setup_mcp_servers
 
 def find_dotenv_file():
     """Search for a .env file in current directory and parent directories"""
@@ -34,10 +35,9 @@ async def identify_data_sources(
     research_document: str = None,
     able_info: str = None,
     local_context: str = None,
-    mcp_command: str = None,
-    mcp_args: list = None,
     verbose: bool = False,
-    previous_run: list = None
+    previous_run: list = None,
+    mcp_server_group: str = "data_discovery"
 ) -> str:
     """
     Data agent that consumes a hunting research report and a hypothesis, then
@@ -115,19 +115,11 @@ async def identify_data_sources(
         respond with "YYY-TERMINATE-YYY" to indicate that the data discovery agent can stop iterating.
     """
 
-    required_env_vars = ["SPLUNK_SERVER_URL", "SPLUNK_MCP_USER", "SPLUNK_MCP_PASSWD"]
-    missing_vars = [var for var in required_env_vars if not os.getenv(var)]
-    if missing_vars:
-        raise EnvironmentError(f"Missing required environment variables: {', '.join(missing_vars)}")
-
     messages = [
         TextMessage(content=f"Here is the research document:\n{research_document}\n", source="user"),
         TextMessage(content=f"Here is the hypothesis: {hypothesis}\n", source="user"),
         TextMessage(content=f"The Actor, Behavior, Location and Evidence (ABLE) information is as follows: {able_info}", source="user"),
-        TextMessage(content=f"Additional local context: {local_context}\n", source="user"),
-        TextMessage(content=f"Splunk server URL: {os.getenv('SPLUNK_SERVER_URL')}\n", source="system"),
-        TextMessage(content=f"Splunk MCP user: {os.getenv('SPLUNK_MCP_USER')}\n", source="system"),
-        TextMessage(content=f"Splunk MCP password: {os.getenv('SPLUNK_MCP_PASSWD')}\n", source="system")
+        TextMessage(content=f"Additional local context: {local_context}\n", source="user")
     ]
 
     # If we have messages from a previous run, add them so we can continue the research
@@ -139,48 +131,85 @@ async def identify_data_sources(
     az_model_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr)
     az_model_reasoning_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr, model_type="reasoning")
 
-    # Split the args string into a list, handling multiple arguments
-    mcp_args_list = mcp_args.split()
-
-    mcp_params = StdioServerParams(
-        command=mcp_command,
-        args=mcp_args_list
+    # Set up MCP servers for data discovery
+    mcp_client_manager = get_client_manager()
+    connected_servers = await setup_mcp_servers(mcp_server_group)
+    
+    if not connected_servers:
+        error_msg = f"No MCP servers could be connected from group '{mcp_server_group}'. Check your MCP configuration."
+        if verbose:
+            print(error_msg)
+        raise RuntimeError(error_msg)
+    
+    if verbose:
+        print(f"Connected to {len(connected_servers)} MCP servers for data discovery: {', '.join(connected_servers)}")
+    
+    # Get workbenches only from the data discovery server group
+    group_workbenches = []
+    for server_name in connected_servers:
+        workbench = mcp_client_manager.get_workbench(server_name)
+        if workbench:
+            group_workbenches.append(workbench)
+    
+    if not group_workbenches:
+        error_msg = f"No MCP workbenches available for data discovery group '{mcp_server_group}'. Check your MCP configuration."
+        if verbose:
+            print(error_msg)
+        raise RuntimeError(error_msg)
+    
+    # Use the first workbench from the data discovery group
+    mcp_workbench = group_workbenches[0]
+    return await _run_data_discovery_with_workbench(
+        mcp_workbench, messages, data_discovery_prompt, discovery_critic_prompt,
+        az_model_client, az_model_reasoning_client, verbose, previous_run
     )
 
-    async with McpWorkbench(mcp_params) as mcp:
-        data_discovery_agent = AssistantAgent(
-            "Data_Discovery_Agent",
-            model_client=az_model_client,
-            workbench=mcp,
-            reflect_on_tool_use=True,
-            model_client_stream=True,
-            system_message=data_discovery_prompt
-        )
 
-        discovery_critic_agent = AssistantAgent(
-            "Discovery_Critic_Agent",
-            model_client=az_model_reasoning_client,
-            system_message=discovery_critic_prompt
-        )
+async def _run_data_discovery_with_workbench(
+    mcp_workbench,
+    messages,
+    data_discovery_prompt,
+    discovery_critic_prompt,
+    az_model_client,
+    az_model_reasoning_client,
+    verbose,
+    previous_run
+):
+    """Helper function to run data discovery with a given MCP workbench"""
+    
+    data_discovery_agent = AssistantAgent(
+        "Data_Discovery_Agent",
+        model_client=az_model_client,
+        workbench=mcp_workbench,
+        reflect_on_tool_use=True,
+        model_client_stream=True,
+        system_message=data_discovery_prompt
+    )
 
-        # Define a termination condition that stops the task once the summarizer
-        # agent has completed its task
-        text_termination = TextMentionTermination("YYY-TERMINATE-YYY")
+    discovery_critic_agent = AssistantAgent(
+        "Discovery_Critic_Agent",
+        model_client=az_model_reasoning_client,
+        system_message=discovery_critic_prompt
+    )
 
-        team = RoundRobinGroupChat(
-            participants=[data_discovery_agent, discovery_critic_agent],
-            termination_condition=text_termination,
-        )
+    # Define a termination condition that stops the task once the summarizer
+    # agent has completed its task
+    text_termination = TextMentionTermination("YYY-TERMINATE-YYY")
 
-        try:
-            if verbose:
-                result = await Console(team.run_stream(task=messages))
-            else:
-                result = await team.run(task=messages)
-            return result
-        except Exception as e:
-            print(f"Error during data source identification: {e}")
-            return "An error occurred while identifying data sources."
+    team = RoundRobinGroupChat(
+        participants=[data_discovery_agent, discovery_critic_agent],
+        termination_condition=text_termination,
+    )
+
+    try:
+        if verbose:
+            result = await Console(team.run_stream(task=messages))
+        else:
+            result = await team.run(task=messages)
+        return result
+    except Exception as e:
+        print(f"Error during data source identification: {e}")
+        return f"An error occurred during data source identification: {e}"
 
 # Example usage
 if __name__ == "__main__":
@@ -210,14 +239,6 @@ if __name__ == "__main__":
             load_dotenv(dotenv_path)
         else:
             print("Warning: No .env file found in current or parent directories")
-
-    # Get the MCP command and arguments from environment variables
-    if not "SPLUNK_MCP_COMMAND" in os.environ or not "SPLUNK_MCP_ARGS" in os.environ:
-        print("Error: SPLUNK_MCP_COMMAND and SPLUNK_MCP_ARGS environment variables must be set")
-        exit(1)
-
-    mcp_command = os.getenv("SPLUNK_MCP_COMMAND")
-    mcp_args_str = os.getenv("SPLUNK_MCP_ARGS")
 
     # Read the contents of the research document
     try:
@@ -265,8 +286,6 @@ if __name__ == "__main__":
                 research_document=research_data, 
                 able_info=able_info,
                 local_context=local_context,
-                mcp_command=mcp_command,
-                mcp_args=mcp_args_str,
                 verbose=args.verbose,
                 previous_run=messages
             )

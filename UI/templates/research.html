@@ -60,12 +60,39 @@
 {% endblock %}
 
 {% block script %}
-class ResearchManager extends PhaseManager {
+console.log('RESEARCH SCRIPT: Script block executing');
+console.log('RESEARCH SCRIPT: window object:', window);
+console.log('RESEARCH SCRIPT: window.PhaseManager available?', typeof window.PhaseManager);
+
+// Wait for modules to load before defining ResearchManager
+let retryCount = 0;
+function initializeResearch() {
+    retryCount++;
+    console.log('RESEARCH SCRIPT: initializeResearch attempt #' + retryCount);
+    console.log('RESEARCH SCRIPT: window.PhaseManager type:', typeof window.PhaseManager);
+    
+    if (typeof window.PhaseManager === 'undefined') {
+        if (retryCount > 100) { // Stop after 5 seconds (100 * 50ms)
+            console.error('RESEARCH SCRIPT: Timeout - PhaseManager never loaded after 5 seconds');
+            return;
+        }
+        // PhaseManager not loaded yet, wait and try again
+        console.log('RESEARCH SCRIPT: PhaseManager not ready, retrying in 50ms...');
+        setTimeout(initializeResearch, 50);
+        return;
+    }
+    
+    console.log('RESEARCH SCRIPT: PhaseManager found! Proceeding with initialization');
+    
+    try {
+        console.log('RESEARCH SCRIPT: About to define ResearchManager class');
+        
+class ResearchManager extends window.PhaseManager {
     constructor() {
         super('research', {
             apiEndpoint: '/api/research',
             contentContainer: 'report-content',
-            downloadContainer: 'download-button-placeholder', // New container in the header
+            downloadContainer: 'download-button-placeholder',
             sessionStorageKey: 'report_md',
             globalContentVar: 'currentReportMarkdown',
             responseContentKey: 'report',
@@ -94,35 +121,92 @@ class ResearchManager extends PhaseManager {
     }
 
     setupEventListeners() {
-        document.getElementById('generate-btn').addEventListener('click', () => this.handleGenerate());
-        document.getElementById('topic-input').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') this.handleGenerate();
-        });
-
-        document.getElementById('send-feedback-btn').addEventListener('click', () => this.handleSendFeedback());
-        document.getElementById('feedback-input').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                this.handleSendFeedback();
-            }
-        });
+        console.log('ResearchManager: Setting up event listeners');
+        const generateBtn = document.getElementById('generate-btn');
+        const topicInput = document.getElementById('topic-input');
+        
+        console.log('ResearchManager: Generate button found:', generateBtn);
+        console.log('ResearchManager: Topic input found:', topicInput);
+        if (generateBtn) {
+            generateBtn.addEventListener('click', () => {
+                console.log('ResearchManager: Generate button clicked!');
+                this.handleGenerate();
+            });
+            console.log('ResearchManager: Generate button event listener added');
+        } else {
+            console.error('ResearchManager: Generate button not found!');
+        }
+        
+        if (topicInput) {
+            topicInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    console.log('ResearchManager: Enter key pressed in topic input');
+                    this.handleGenerate();
+                }
+            });
+            console.log('ResearchManager: Topic input event listener added');
+        } else {
+            console.error('ResearchManager: Topic input not found!');
+        }
 
         const uploadBtn = document.getElementById('upload-report-btn');
         const uploadFile = document.getElementById('upload-report-file');
         uploadBtn.addEventListener('click', () => uploadFile.click());
         uploadFile.addEventListener('change', () => this.handleUpload());
+
+        // Add event listener for send feedback button
+        const sendFeedbackBtn = document.getElementById('send-feedback-btn');
+        if (sendFeedbackBtn) {
+            sendFeedbackBtn.addEventListener('click', () => {
+                console.log('ResearchManager: Send feedback button clicked!');
+                this.handleSendFeedback();
+            });
+            console.log('ResearchManager: Send feedback button event listener added');
+        } else {
+            console.error('ResearchManager: Send feedback button not found!');
+        }
+
+        // Add Enter key event listener for feedback textarea
+        const feedbackInput = document.getElementById('feedback-input');
+        if (feedbackInput) {
+            feedbackInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    console.log('ResearchManager: Enter key pressed in feedback input');
+                    this.handleSendFeedback();
+                }
+            });
+            console.log('ResearchManager: Feedback input Enter key event listener added');
+        } else {
+            console.error('ResearchManager: Feedback input not found!');
+        }
     }
 
     async handleGenerate() {
+        console.log('ResearchManager: handleGenerate called');
         const topicInput = document.getElementById('topic-input');
-        const topic = topicInput.value.trim();
-        if (!topic) {
-            UIFeedback.show('error', 'Please enter a research topic.');
+        console.log('ResearchManager: Topic input element:', topicInput);
+        
+        if (!topicInput) {
+            console.error('ResearchManager: Topic input element not found!');
             return;
         }
+        
+        const topic = topicInput.value.trim();
+        console.log('ResearchManager: Topic value:', topic);
+        
+        if (!topic) {
+            console.log('ResearchManager: No topic entered, showing error');
+            window.UIFeedback.show('error', 'Please enter a research topic.');
+            return;
+        }
+        
+        console.log('ResearchManager: About to generate content for topic:', topic);
         this.config.loadingMessage = 'Generating initial research report...';
         await this.generateContent({ topic });
         sessionStorage.setItem('last_topic', topic);
+        console.log('ResearchManager: Generate content completed');
     }
 
     async handleSendFeedback() {
@@ -131,11 +215,11 @@ class ResearchManager extends PhaseManager {
         const previousReport = document.getElementById('report-content').dataset.rawMarkdown;
 
         if (!feedback) {
-            UIFeedback.show('error', 'Please enter feedback to refine the report.');
+            window.UIFeedback.show('error', 'Please enter feedback to refine the report.');
             return;
         }
         if (!previousReport) {
-            UIFeedback.show('error', 'Cannot send feedback without a report. Please generate a report first.');
+            window.UIFeedback.show('error', 'Cannot send feedback without a report. Please generate a report first.');
             return;
         }
 
@@ -152,31 +236,30 @@ class ResearchManager extends PhaseManager {
         const file = fileInput.files[0];
         if (!file) return;
 
-        UIFeedback.show('loading', 'Uploading report...');
+        window.UIFeedback.show('loading', 'Uploading report...');
         try {
             const formData = new FormData();
             formData.append('file', file);
-            const response = await this.apiClient.uploadFile('/api/upload-report', formData);
+            const response = await window.apiClient.uploadFile('/api/upload-report', formData);
             if (response.success) {
                 this.displayContent(response.content);
                 sessionStorage.setItem(this.config.sessionStorageKey, response.content);
                 sessionStorage.removeItem('last_topic'); // Clear previous topic on new upload
                 this.onContentGenerated(response);
-                // Success feedback removed as it's obvious when content loads
             } else {
                 throw new Error(response.error || 'Upload failed');
             }
         } catch (error) {
-            UIFeedback.show('error', 'Upload error: ' + error.message, error.detail);
+            window.UIFeedback.show('error', 'Upload error: ' + error.message, error.detail);
         } finally {
-            UIFeedback.hideLoading();
+            window.UIFeedback.hideLoading();
             fileInput.value = ''; // Reset file input
         }
     }
 
     onContentGenerated(response) {
         // After new content is generated, always set up the download button
-        DownloadManager.setupDownloadButton(
+        window.DownloadManager.setupDownloadButton(
             this.config.contentContainer,
             this.phaseId,
             this.config.downloadContainer
@@ -184,17 +267,45 @@ class ResearchManager extends PhaseManager {
     }
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
-    const researchManager = new ResearchManager();
-    const hasContent = await researchManager.loadInitialData();
+        console.log('RESEARCH SCRIPT: ResearchManager class defined successfully');
+        
+        // Function to initialize ResearchManager
+        async function initResearchManager() {
+            console.log('ResearchManager: Initializing ResearchManager');
+            try {
+                const researchManager = new ResearchManager();
+                console.log('ResearchManager: ResearchManager created successfully');
+                const hasContent = await researchManager.loadInitialData();
 
-    // Only set up the download button on initial load if content already exists
-    if (hasContent) {
-        DownloadManager.setupDownloadButton(
-            researchManager.config.contentContainer,
-            researchManager.phaseId,
-            researchManager.config.downloadContainer
-        );
+                // Only set up the download button on initial load if content already exists
+                if (hasContent) {
+                    window.DownloadManager.setupDownloadButton(
+                        researchManager.config.contentContainer,
+                        researchManager.phaseId,
+                        researchManager.config.downloadContainer
+                    );
+                }
+            } catch (error) {
+                console.error('RESEARCH SCRIPT: Error creating ResearchManager:', error);
+            }
+        }
+        
+        // Check if DOM is already loaded or wait for it
+        if (document.readyState === 'loading') {
+            console.log('RESEARCH SCRIPT: DOM still loading, waiting for DOMContentLoaded');
+            document.addEventListener('DOMContentLoaded', initResearchManager);
+        } else {
+            console.log('RESEARCH SCRIPT: DOM already loaded, initializing immediately');
+            initResearchManager();
+        }
+        
+    } catch (error) {
+        console.error('RESEARCH SCRIPT: Error defining ResearchManager class:', error);
     }
-});
+}
+
+// Start the initialization process
+console.log('RESEARCH SCRIPT: About to call initializeResearch()');
+initializeResearch();
+console.log('RESEARCH SCRIPT: Script execution completed');
 {% endblock %}

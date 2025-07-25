@@ -29,9 +29,7 @@ class Config:
     # AI service configuration
     OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
     
-    # MCP configuration for Splunk integration
-    SPLUNK_MCP_COMMAND = os.environ.get('SPLUNK_MCP_COMMAND')
-    SPLUNK_MCP_ARGS = os.environ.get('SPLUNK_MCP_ARGS')
+    # MCP configuration now handled by mcp_servers.json configuration file
     
     @staticmethod
     def init_app(app):

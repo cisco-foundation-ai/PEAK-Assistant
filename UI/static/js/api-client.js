@@ -1,3 +1,5 @@
+import { showAuthBanner } from './auth.js';
+
 /* ==========================================================================
    MODERN UI ARCHITECTURE - Core Components and API Client
    ========================================================================== */
@@ -45,6 +47,9 @@ class APIClient {
                 });
                 
                 if (!response.ok) {
+                    if (response.status === 401) {
+                        showAuthBanner();
+                    }
                     const errorData = await response.json().catch(() => ({}));
                     throw new Error(errorData.error || `HTTP ${response.status}`);
                 }
@@ -69,6 +74,9 @@ class APIClient {
             });
 
             if (!response.ok) {
+                if (response.status === 401) {
+                    showAuthBanner();
+                }
                 const errorData = await response.json().catch(() => ({}));
                 throw new Error(errorData.error || `HTTP ${response.status}`);
             }
@@ -83,5 +91,8 @@ class APIClient {
     }
 }
 
-// Create global API client instance
-window.apiClient = new APIClient();
+// Create and export a single API client instance for the application
+export const apiClient = new APIClient();
+
+// Also make it available globally for inline scripts
+window.apiClient = apiClient;
