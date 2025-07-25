@@ -51,7 +51,9 @@ class APIClient {
                         showAuthBanner();
                     }
                     const errorData = await response.json().catch(() => ({}));
-                    throw new Error(errorData.error || `HTTP ${response.status}`);
+                    const error = new Error(errorData.error || `HTTP ${response.status}`);
+                    error.response = errorData;
+                    throw error;
                 }
                 
                 const result = await response.json();
@@ -78,7 +80,9 @@ class APIClient {
                     showAuthBanner();
                 }
                 const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error || `HTTP ${response.status}`);
+                const error = new Error(errorData.error || `HTTP ${response.status}`);
+                error.response = errorData;
+                throw error;
             }
 
             const result = await response.json();

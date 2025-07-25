@@ -9,7 +9,6 @@ from autogen_agentchat.messages import TextMessage, UserMessage
 
 from ..utils.decorators import async_action, handle_async_api_errors
 from ..utils.helpers import (
-    retry_api_call, 
     extract_report_md, 
     extract_accepted_hypothesis,
     get_session_value,
@@ -54,8 +53,7 @@ async def research():
     user_id = session.get('user_id')
     
     # Run the researcher with user context
-    result = await retry_api_call(
-        async_researcher, 
+    result = await async_researcher(
         technique=topic, 
         local_context=local_context, 
         verbose=verbose_mode,
@@ -89,8 +87,7 @@ async def hypothesize():
     # Import hypothesizer
     from hypothesis_assistant.hypothesis_assistant_cli import hypothesizer as async_hypothesizer
     
-    hypos = await retry_api_call(
-        async_hypothesizer, 
+    hypos = await async_hypothesizer(
         report_md, 
         report_md,  # This seems to be duplicated, raw_text is the second param
         local_context=local_context,  # Pass local context
@@ -163,12 +160,10 @@ async def refine():
     logging.warning(f"Calling async_refiner with hypothesis: {hypothesis[:100]}...")
 
     # Explicitly pass keyword arguments to the refiner function
-    result = await retry_api_call(
-        async_refiner, 
+    result = await async_refiner(
         hypothesis=hypothesis, 
         local_context=local_context, 
         research_document=research_report,
-        verbose=verbose_mode,
         previous_run=previous_run
     )
     
@@ -211,8 +206,7 @@ async def able_table():
         ]
 
     # Call the able_table function from the CLI module
-    able_md = await retry_api_call(
-        able_table,
+    able_md = await able_table(
         hypothesis=hypothesis,
         research_document=report_md,
         local_context=local_context,
@@ -263,8 +257,7 @@ async def data_discovery():
     # Import data discovery function
     from data_assistant.data_asssistant_cli import identify_data_sources as async_identify_data_sources
     
-    result = await retry_api_call(
-        async_identify_data_sources, 
+    result = await async_identify_data_sources(
         hypothesis, 
         report_md,
         able_info=able_table_md,
@@ -331,8 +324,7 @@ async def hunt_plan():
     # Import hunt planning function
     from planning_assistant.planning_assistant_cli import plan_hunt as async_hunt_planner
     
-    result = await retry_api_call(
-        async_hunt_planner,
+    result = await async_hunt_planner(
         hypothesis=hypothesis,
         research_document=report_md,
         able_info=able_table_md,

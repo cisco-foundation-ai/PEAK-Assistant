@@ -432,9 +432,13 @@ async def researcher(
             result = await team.run(task=messages)
 
         return result  
+    except (openai.RateLimitError, openai.APIError) as e:
+        # Re-raise specific OpenAI errors to be handled by the API layer
+        raise e
     except Exception as e:
-        print(f"Error while preparing report: {e}\n{traceback.format_exc()}")
-        return "An error occurred while preparing the report."
+        # Catch any other unexpected errors and wrap them
+        print(f"An unexpected error occurred in the researcher: {e}\n{traceback.format_exc()}")
+        raise Exception("An unexpected error occurred while preparing the report.") from e
 
 if __name__ == "__main__":
 

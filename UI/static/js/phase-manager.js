@@ -102,30 +102,29 @@ export class PhaseManager {
             throw new Error('API endpoint not configured');
         }
         
-        this.clearContent();
         window.UIFeedback.hideError();
         window.UIFeedback.show('loading', this.config.loadingMessage || 'Generating content...');
         
         try {
             const response = await apiClient.callWithRetry(this.config.apiEndpoint, requestBody);
-            if (response.success) {
-                const content = response[this.config.responseContentKey] || response.content;
-                this.displayContent(content);
-                
-                if (this.config.sessionStorageKey) {
-                    sessionStorage.setItem(this.config.sessionStorageKey, content);
-                }
-                
-                if (this.onContentGenerated) {
-                    this.onContentGenerated(response);
-                }
-                return response;
-            } else {
-                throw new Error(response.error || 'Generation failed');
+            
+            // On success, clear previous content and display the new report.
+            this.clearContent();
+            const content = response[this.config.responseContentKey] || response.content;
+            this.displayContent(content);
+            
+            if (this.config.sessionStorageKey) {
+                sessionStorage.setItem(this.config.sessionStorageKey, content);
             }
+            
+            if (this.onContentGenerated) {
+                this.onContentGenerated(response);
+            }
+            return response;
         } catch (error) {
-            window.UIFeedback.show('error', 'Error generating content: ' + error.message);
-            throw error;
+            // On error, show a toast and leave the current content intact.
+            window.UIFeedback.show('error', error.message);
+            throw error; // Re-throw to signal failure to the caller
         } finally {
             window.UIFeedback.hideLoading();
         }
