@@ -108,7 +108,6 @@ def initiate_oauth(server_name):
 
         # Perform dynamic client registration if needed
         if config.auth.client_registration_url and not config.auth.client_id:
-            logger.info(f"Client ID not found for {server_name}, attempting dynamic registration.")
             try:
                 loop = asyncio.get_running_loop()
             except RuntimeError:  # 'RuntimeError: There is no current event loop...'

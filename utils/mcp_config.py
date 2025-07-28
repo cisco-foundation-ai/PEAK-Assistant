@@ -789,9 +789,7 @@ class MCPConfigManager:
                 # Update the in-memory config with the new credentials
                 config.auth.client_id = registration_data['client_id']
                 config.auth.client_secret = registration_data['client_secret']
-                logger.info(f"[DIAGNOSTIC] DYNAMIC REGISTRATION for {server_name} SUCCEEDED.")
-                logger.info(f"[DIAGNOSTIC]   New Client ID: {config.auth.client_id}")
-                logger.info(f"[DIAGNOSTIC]   New Client Secret: {config.auth.client_secret[:5]}...")
+
                 
                 logger.info(f"Successfully registered client for {server_name}. Client ID: {config.auth.client_id}")
                 logger.info(f"Dynamic credentials stored in memory only - configuration file remains unchanged")

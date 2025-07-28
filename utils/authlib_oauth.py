@@ -5,10 +5,9 @@ Replaces custom OAuth2TokenManager with Authlib integration
 """
 
 import logging
-from typing import Dict, Optional, Any
-from authlib.integrations.flask_client import OAuth, FlaskOAuth2App
-from authlib.oauth2.rfc6749 import OAuth2Token
+from typing import Optional, Dict, List, Any
 from flask import Flask, session
+from authlib.integrations.flask_client import OAuth, FlaskOAuth2App
 from .mcp_config import MCPConfigManager, AuthType, AuthConfig
 
 logger = logging.getLogger(__name__)
@@ -21,7 +20,6 @@ class AuthlibOAuthManager:
         self.oauth = OAuth()
         self.config_manager = config_manager
         self.clients: Dict[str, FlaskOAuth2App] = {}
-        self.user_tokens: Dict[str, Dict[str, OAuth2Token]] = {}  # user_id -> server_name -> token
         
         if app:
             self.init_app(app)
@@ -119,55 +117,26 @@ class AuthlibOAuthManager:
     def get_client(self, server_name: str) -> Optional[FlaskOAuth2App]:
         """Get OAuth client for a server"""
         return self.clients.get(server_name)
-
-    def update_client(self, server_name: str):
-        """Reload a client's configuration and re-register it."""
-        if not self.config_manager:
-            logger.error("Cannot update client without a config manager.")
-            return
-
-        config = self.config_manager.get_server_config(server_name)
-        if config and config.auth and config.auth.type == AuthType.OAUTH2_AUTHORIZATION_CODE:
-            logger.info(f"Updating and re-registering client for {server_name}")
-            self._register_oauth_client(server_name, config.auth, config.url)
-        else:
-            logger.warning(f"Could not find configuration to update for client {server_name}")
-
-    def update_client(self, server_name: str):
-        """Reload a client's configuration and re-register it."""
-        if not self.config_manager:
-            logger.error("Cannot update client without a config manager.")
-            return
-
-        config = self.config_manager.get_server_config(server_name)
-        if config and config.auth and config.auth.type == AuthType.OAUTH2_AUTHORIZATION_CODE:
-            logger.info(f"Updating and re-registering client for {server_name}")
-            self._register_oauth_client(server_name, config.auth, config.url)
-        else:
-            logger.warning(f"Could not find configuration to update for client {server_name}")
     
-    def store_token(self, server_name: str, token: OAuth2Token, user_id: Optional[str] = None):
-        """Store OAuth token for a user and server"""
-        if not user_id:
-            user_id = session.get('user_id', 'default')
-            
-        if user_id not in self.user_tokens:
-            self.user_tokens[user_id] = {}
-            
-        self.user_tokens[user_id][server_name] = token
-        logger.info(f"[TOKEN DEBUG] Stored OAuth token for user {user_id}, server {server_name}")
+    def store_token(self, server_name: str, token: Dict[str, Any], user_id: Optional[str] = None):
+        """Store OAuth token for a user and server in the Flask session."""
+        if 'oauth_tokens' not in session:
+            session['oauth_tokens'] = {}
+        session['oauth_tokens'][server_name] = token
+        session.modified = True
+        logger.info(f"[TOKEN DEBUG] Stored token for server {server_name} in session.")
         logger.info(f"[TOKEN DEBUG] Token type: {type(token)}, Token keys: {list(token.keys()) if hasattr(token, 'keys') else 'N/A'}")
-        logger.info(f"[TOKEN DEBUG] Current user tokens count: {len(self.user_tokens.get(user_id, {}))}") 
-    
-    def get_token(self, server_name: str, user_id: Optional[str] = None) -> Optional[OAuth2Token]:
-        """Get OAuth token for a user and server"""
-        if not user_id:
-            user_id = session.get('user_id', 'default')
-        
-        token = self.user_tokens.get(user_id, {}).get(server_name)
-        logger.info(f"[TOKEN DEBUG] Getting token for user {user_id}, server {server_name}: {'Found' if token else 'Not found'}")
-        return token
-    
+        logger.info(f"[TOKEN DEBUG] Current user tokens count: {len(session['oauth_tokens'])}")
+
+    def get_token(self, server_name: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Get OAuth token for a user and server from the Flask session."""
+        if 'oauth_tokens' in session and server_name in session['oauth_tokens']:
+            token = session['oauth_tokens'][server_name]
+            logger.info(f"[TOKEN DEBUG] Getting token for server {server_name} from session: Found")
+            return token
+        logger.info(f"[TOKEN DEBUG] No token found in session for server {server_name}")
+        return None
+
     def has_valid_token(self, server_name: str, user_id: Optional[str] = None) -> bool:
         """Check if user has a valid token for a server"""
         token = self.get_token(server_name, user_id)
@@ -186,20 +155,19 @@ class AuthlibOAuthManager:
             # Fallback: if we can't check expiration, assume token is valid
             return True
     
-    def clear_token(self, server_name: str, user_id: Optional[str] = None):
-        """Clear token for a user and server"""
-        if not user_id:
-            user_id = session.get('user_id', 'default')
-            
-        if user_id in self.user_tokens and server_name in self.user_tokens[user_id]:
-            del self.user_tokens[user_id][server_name]
-            logger.info(f"Cleared OAuth token for user {user_id}, server {server_name}")
+    def clear_tokens(self, server_name: str, user_id: Optional[str] = None):
+        """Clear OAuth tokens for a specific server from the Flask session."""
+        if 'oauth_tokens' in session and server_name in session['oauth_tokens']:
+            del session['oauth_tokens'][server_name]
+            session.modified = True
+            logger.info(f"[TOKEN DEBUG] Cleared token for server {server_name} from session.")
     
-    def clear_user_tokens(self, user_id: str):
-        """Clear all tokens for a user"""
-        if user_id in self.user_tokens:
-            del self.user_tokens[user_id]
-            logger.info(f"Cleared all OAuth tokens for user {user_id}")
+    def clear_user_session(self, user_id: str):
+        """Clear all OAuth tokens from the Flask session."""
+        if 'oauth_tokens' in session:
+            del session['oauth_tokens']
+            session.modified = True
+            logger.info(f"[TOKEN DEBUG] Cleared all OAuth tokens from session.")
     
     def get_servers_needing_auth(self, user_id: Optional[str] = None) -> list:
         """Get list of servers that need authentication for a user"""
