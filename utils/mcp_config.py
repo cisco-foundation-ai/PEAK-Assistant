@@ -789,6 +789,9 @@ class MCPConfigManager:
                 # Update the in-memory config with the new credentials
                 config.auth.client_id = registration_data['client_id']
                 config.auth.client_secret = registration_data['client_secret']
+                logger.info(f"[DIAGNOSTIC] DYNAMIC REGISTRATION for {server_name} SUCCEEDED.")
+                logger.info(f"[DIAGNOSTIC]   New Client ID: {config.auth.client_id}")
+                logger.info(f"[DIAGNOSTIC]   New Client Secret: {config.auth.client_secret[:5]}...")
                 
                 logger.info(f"Successfully registered client for {server_name}. Client ID: {config.auth.client_id}")
                 logger.info(f"Dynamic credentials stored in memory only - configuration file remains unchanged")
@@ -974,12 +977,24 @@ class MCPClientManager:
                     logger.error(f"User ID is required for user-based OAuth on {config.name}")
                     return False
                 
-                token_manager = self.user_session_manager.get_or_create_token_manager(user_id, config.name, config.auth, config.url)
+                # Use authlib OAuth manager for OAuth token handling
                 try:
-                    token = await token_manager.get_token()
-                    headers["Authorization"] = f"Bearer {token}"
+                    from .authlib_oauth import get_oauth_manager
+                    oauth_manager = get_oauth_manager()
+                    
+                    # Try to refresh token if needed
+                    oauth_manager.refresh_token_if_needed(config.name, user_id)
+                    
+                    # Get authentication headers from OAuth manager
+                    oauth_headers = oauth_manager.get_auth_headers(config.name, user_id)
+                    if oauth_headers:
+                        headers.update(oauth_headers)
+                    else:
+                        logger.error(f"No valid OAuth token available for {config.name}")
+                        return False
+                        
                 except Exception as e:
-                    logger.error(f"Failed to get user OAuth token for {config.name}: {e}")
+                    logger.error(f"Failed to get OAuth headers for {config.name}: {e}")
                     return False
         
         return headers

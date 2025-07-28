@@ -1,24 +1,22 @@
 #!/usr/bin/env python3
 """
-OAuth authentication routes for PEAK Assistant
-Handles user authentication flows for MCP servers requiring authorization code flow
+Authlib-based OAuth authentication routes for PEAK Assistant
+Handles user authentication flows for MCP servers using Authlib
 """
 
 import os
 import sys
 import secrets
-import hashlib
-import base64
-from urllib.parse import urlencode
-import asyncio
 import logging
+import asyncio
 from flask import Blueprint, request, redirect, url_for, session, jsonify, render_template, flash
-from ..utils.decorators import async_action
 from functools import wraps
+from authlib.integrations.requests_client import OAuth2Session
 
 # Add parent directory to path for importing utils
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..')))
 from utils.mcp_config import get_config_manager, get_client_manager, AuthType
+from utils.authlib_oauth import get_oauth_manager
 
 logger = logging.getLogger(__name__)
 
@@ -36,14 +34,6 @@ def require_session(f):
             logger.info(f"Created new session with user_id: {session['user_id']}")
         return f(*args, **kwargs)
     return decorated_function
-
-def generate_pkce_pair():
-    """Generate PKCE code verifier and challenge"""
-    code_verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode('utf-8').rstrip('=')
-    code_challenge = base64.urlsafe_b64encode(
-        hashlib.sha256(code_verifier.encode('utf-8')).digest()
-    ).decode('utf-8').rstrip('=')
-    return code_verifier, code_challenge
 
 @oauth_bp.route('/status')
 @require_session
@@ -106,142 +96,124 @@ def oauth_status():
 
 @oauth_bp.route('/authenticate/<server_name>', methods=['GET'])
 @require_session
-@async_action  
-async def initiate_oauth(server_name):
-    """Initiate OAuth flow for a specific MCP server using standard OAuth 2.0 approach."""
+def initiate_oauth(server_name):
+    """Initiate OAuth flow for a specific MCP server using Authlib."""
     try:
-        session_user_id = session['user_id']
         config_manager = get_config_manager()
         config = config_manager.get_server_config(server_name)
 
         if not config or not config.auth:
             flash(f'Authentication not configured for server: {server_name}', 'error')
             return redirect(url_for('pages.index'))
-        
-        # Debug: Log auth config values
-        logger.info(f"[DEBUG] OAuth initiation for {server_name}:")
-        logger.info(f"[DEBUG]   client_id: {config.auth.client_id}")
-        logger.info(f"[DEBUG]   client_secret: {'***' if config.auth.client_secret else None}")
-        logger.info(f"[DEBUG]   client_registration_url: {config.auth.client_registration_url}")
-        logger.info(f"[DEBUG]   Dynamic registration condition: client_registration_url={bool(config.auth.client_registration_url)}, not client_id={not config.auth.client_id}")
-        
+
         # Perform dynamic client registration if needed
         if config.auth.client_registration_url and not config.auth.client_id:
             logger.info(f"Client ID not found for {server_name}, attempting dynamic registration.")
-            registered = await config_manager._register_dynamic_client(server_name)
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:  # 'RuntimeError: There is no current event loop...'
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            registered = loop.run_until_complete(config_manager._register_dynamic_client(server_name))
             if not registered:
                 flash(f'Failed to dynamically register client for {server_name}. Please check server logs.', 'error')
                 return redirect(url_for('pages.index'))
             # Reload config to ensure we have the new client_id for the next steps
             config = config_manager.get_server_config(server_name)
-        elif config.auth.client_registration_url and config.auth.client_id:
-            # Check if redirect URI has changed and force re-registration if needed
-            logger.info(f"Client ID exists for {server_name}, clearing credentials to force fresh registration with correct redirect URI.")
-            config.auth.client_id = None
-            config.auth.client_secret = None
-            registered = await config_manager._register_dynamic_client(server_name)
-            if not registered:
-                flash(f'Failed to re-register client for {server_name}. Please check server logs.', 'error')
+            # Store dynamic credentials and token endpoint in session to survive the redirect
+            session['dynamic_oauth_credentials'] = {
+                'client_id': config.auth.client_id,
+                'client_secret': config.auth.client_secret,
+                'token_url': config.auth.token_url
+            }
+
+        oauth_manager = get_oauth_manager()
+        # Store server name in session for callback
+        session['oauth_server_name'] = server_name
+        session.modified = True
+
+        dynamic_creds = session.get('dynamic_oauth_credentials')
+        if dynamic_creds:
+            # For dynamic clients, create a temporary session to generate the auth URL
+            with OAuth2Session(
+                client_id=dynamic_creds['client_id'],
+                client_secret=dynamic_creds['client_secret'],
+                redirect_uri=url_for('oauth.oauth_callback', _external=True),
+                scope=config.auth.scope
+            ) as temp_client:
+                authorization_url, state = temp_client.create_authorization_url(config.auth.authorization_url)
+                session['oauth_state'] = state
+                return redirect(authorization_url)
+        else:
+            # Standard flow for pre-configured clients
+            client = oauth_manager.get_client(server_name)
+            if not client:
+                flash(f'OAuth not configured for server: {server_name}', 'error')
                 return redirect(url_for('pages.index'))
-            # Reload config to ensure we have the new client_id for the next steps
-            config = config_manager.get_server_config(server_name)
-
-        # PKCE for security
-        code_verifier, code_challenge = generate_pkce_pair()
-
-        # State for CSRF protection
-        state = secrets.token_urlsafe(32)
-        state_key = f'oauth_state_{state}'
-        session[state_key] = {
-            'server_name': server_name,
-            'code_verifier': code_verifier
-        }
-
-        # Use session user ID for initial OAuth flow
-        # Real user ID will be obtained from userinfo endpoint after authentication
-        token_manager = config_manager.user_session_manager.get_or_create_token_manager(
-            session_user_id, server_name, config.auth, config.url
-        )
+            redirect_uri = url_for('oauth.oauth_callback', _external=True)
+            return client.authorize_redirect(redirect_uri)
         
-        auth_url = await token_manager.get_authorization_url(state, code_challenge)
-        logger.info(f"Redirecting to OAuth authorization URL for server {server_name}")
-        return redirect(auth_url)
-
     except Exception as e:
         logger.error(f"Error initiating OAuth for {server_name}: {e}", exc_info=True)
         flash(f'Failed to initiate authentication for {server_name}: {str(e)}', 'error')
         return redirect(url_for('pages.index'))
 
-async def _exchange_token_async(token_manager, code, code_verifier):
-    """Asynchronous helper to exchange the authorization code for a token."""
-    await token_manager.exchange_authorization_code(code, code_verifier)
-
-
-
-@oauth_bp.route('/callback')
+@oauth_bp.route('/callback', methods=['GET'])
 @require_session
 def oauth_callback():
-    """Handle OAuth callback from authorization server."""
+    """Handle OAuth callback from authorization server using Authlib."""
     try:
         user_id = session['user_id']
-        state = request.args.get('state')
-        code = request.args.get('code')
+        server_name = session.get('oauth_server_name')
         error = request.args.get('error')
 
         if error:
             flash(f'OAuth authorization failed: {error}', 'error')
             return redirect(url_for('pages.index'))
 
-        if not code or not state:
-            flash('Invalid OAuth callback parameters', 'error')
+        if not server_name:
+            flash('OAuth session expired or invalid', 'error')
             return redirect(url_for('pages.index'))
 
-        state_key = f'oauth_state_{state}'
-        if state_key not in session:
-            logger.warning(f"OAuth state not found in session for user {user_id}. Possible CSRF or session issue.")
-            flash('Invalid OAuth state - possible CSRF attack', 'error')
+        oauth_manager = get_oauth_manager()
+        client = oauth_manager.get_client(server_name)
+        if not client:
+            flash(f'OAuth client not found for server: {server_name}', 'error')
             return redirect(url_for('pages.index'))
 
-        state_info = session.pop(state_key) # Pop the state to prevent reuse
-        server_name = state_info['server_name']
-        code_verifier = state_info.get('code_verifier')
-
-        config_manager = get_config_manager()
-        config = config_manager.get_server_config(server_name)
-
-        if not config or not config.auth:
-            flash('Server configuration not found', 'error')
-            return redirect(url_for('pages.index'))
-
-        # Start with session user ID for token exchange
-        token_manager = config_manager.user_session_manager.get_or_create_token_manager(
-            user_id, server_name, config.auth, config.url
-        )
-
-        # Run the async token exchange in a dedicated event loop
         try:
-            asyncio.run(_exchange_token_async(token_manager, code, code_verifier))
-            logger.info(f"OAuth token exchange successful for server {server_name}")
-            
-            # Get user ID from token response if available
-            if token_manager.token_user_id:
-                logger.info(f"Retrieved user ID from token response: {token_manager.token_user_id} for server {server_name}")
-                
-                # Create a new token manager with the token-discovered user ID
-                real_token_manager = config_manager.user_session_manager.get_or_create_token_manager(
-                    token_manager.token_user_id, server_name, config.auth, config.url
-                )
-                # Copy the tokens to the new token manager
-                real_token_manager.access_token = token_manager.access_token
-                real_token_manager.refresh_token = token_manager.refresh_token
-                real_token_manager.token_expiry = token_manager.token_expiry
-                real_token_manager.token_user_id = token_manager.token_user_id
-                
-                logger.info(f"OAuth authentication complete with token user ID: {token_manager.token_user_id}")
+            client = oauth_manager.get_client(server_name)
+            if not client:
+                flash(f'OAuth client not found for server: {server_name}', 'error')
+                return redirect(url_for('pages.index'))
+
+            dynamic_creds = session.pop('dynamic_oauth_credentials', None)
+            if dynamic_creds:
+                # For dynamic clients, create a temporary session to fetch the token
+                with OAuth2Session(
+                    client_id=dynamic_creds['client_id'],
+                    client_secret=dynamic_creds['client_secret'],
+                    redirect_uri=url_for('oauth.oauth_callback', _external=True),
+                    scope=client.client_kwargs.get('scope')
+                ) as temp_client:
+                    token = temp_client.fetch_token(
+                        url=dynamic_creds['token_url'],
+                        authorization_response=request.url
+                    )
             else:
-                logger.info(f"No user ID in token response for {server_name}, using session user ID as fallback")
+                # Standard flow for pre-configured clients
+                token = client.authorize_access_token()
             
+            # Store the token for the user
+            oauth_manager.store_token(server_name, token, user_id)
+            
+            # Clean up session
+            session.pop('oauth_server_name', None)
+            session.modified = True
+            
+            logger.info(f"OAuth authentication successful for user {user_id}, server {server_name}")
             flash(f'Successfully authenticated with {server_name}', 'success')
+            
         except Exception as e:
             logger.error(f"OAuth token exchange failed for server {server_name}: {e}", exc_info=True)
             flash(f'Authentication failed for {server_name}: {str(e)}', 'error')
@@ -254,21 +226,17 @@ def oauth_callback():
         flash(f'OAuth authentication failed: {str(e)}', 'error')
         return redirect(url_for('pages.index'))
 
-@oauth_bp.route('/disconnect/<server_name>')
+@oauth_bp.route('/disconnect/<server_name>', methods=['POST'])
 @require_session
 def disconnect_oauth(server_name):
     """Disconnect user from a specific MCP server"""
     try:
         user_id = session['user_id']
-        config_manager = get_config_manager()
+        oauth_manager = get_oauth_manager()
         
-        # Clear user token for this server
-        user_sessions = config_manager.user_session_manager.user_sessions.get(user_id, {})
-        if server_name in user_sessions:
-            del user_sessions[server_name]
-            flash(f'Disconnected from {server_name}', 'success')
-        else:
-            flash(f'Not connected to {server_name}', 'info')
+        # Clear OAuth token for this server
+        oauth_manager.clear_token(server_name, user_id)
+        flash(f'Disconnected from {server_name}', 'success')
         
         return redirect(url_for('pages.index'))
         
@@ -283,10 +251,10 @@ def logout_all():
     """Logout user from all MCP servers"""
     try:
         user_id = session['user_id']
-        config_manager = get_config_manager()
+        oauth_manager = get_oauth_manager()
         
-        # Clear all user sessions
-        config_manager.user_session_manager.clear_user_session(user_id)
+        # Clear all OAuth tokens for this user
+        oauth_manager.clear_user_tokens(user_id)
         
         # Clear Flask session
         session.clear()
@@ -307,10 +275,9 @@ def servers_needing_auth():
     try:
         user_id = session['user_id']
         config_manager = get_config_manager()
+        oauth_manager = get_oauth_manager()
         
-        needing_auth = config_manager.user_session_manager.get_user_servers_needing_auth(
-            user_id, config_manager.servers
-        )
+        needing_auth = oauth_manager.get_servers_needing_auth(user_id)
         
         # Get detailed info about servers needing auth
         server_details = []
@@ -318,7 +285,7 @@ def servers_needing_auth():
             config = config_manager.get_server_config(server_name)
             server_details.append({
                 "name": server_name,
-                "description": config.description,
+                "description": config.description if config else server_name,
                 "auth_url": url_for('oauth.initiate_oauth', server_name=server_name)
             })
         
@@ -340,6 +307,7 @@ def servers_status():
     try:
         user_id = session['user_id']
         config_manager = get_config_manager()
+        oauth_manager = get_oauth_manager()
         
         # Get all configured servers
         all_servers = []
@@ -348,12 +316,10 @@ def servers_status():
             # Check if server requires authentication
             requires_auth = hasattr(config, 'auth') and config.auth is not None
             
-            # Check current authentication status
+            # Check current authentication status using authlib manager
             is_authenticated = False
             if requires_auth:
-                is_authenticated = config_manager.user_session_manager.has_valid_tokens(
-                    user_id, server_name
-                )
+                is_authenticated = oauth_manager.has_valid_token(server_name, user_id)
             
             server_info = {
                 "name": server_name,
@@ -386,13 +352,14 @@ def disconnect_server(server_name):
     try:
         user_id = session['user_id']
         config_manager = get_config_manager()
+        oauth_manager = get_oauth_manager()
         
         # Check if server exists
         if server_name not in config_manager.servers:
             return jsonify({"error": f"Server '{server_name}' not found"}), 404
         
-        # Remove stored tokens for this user and server
-        config_manager.user_session_manager.clear_tokens(user_id, server_name)
+        # Remove stored OAuth tokens for this user and server
+        oauth_manager.clear_token(server_name, user_id)
         
         logger.info(f"Successfully disconnected server {server_name} for user {user_id}")
         return jsonify({

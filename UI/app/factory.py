@@ -84,6 +84,10 @@ def create_app(config_name='default'):
     if parent_dir not in sys.path:
         sys.path.append(parent_dir)
     
+    # Initialize OAuth manager for MCP server authentication
+    from utils.authlib_oauth import init_oauth_manager
+    oauth_manager = init_oauth_manager(app)
+    
     # Suppress asyncio event loop closure warnings from background HTTP cleanup
     logging.getLogger("httpx").setLevel(logging.ERROR)
     warnings.filterwarnings("ignore", category=RuntimeWarning, module="asyncio")
