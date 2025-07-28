@@ -166,4 +166,8 @@ def get_all_session_data():
 
 def clear_all_session_data():
     """Clear all data from the session."""
+    # Preserve OAuth tokens while clearing the rest of the session
+    oauth_tokens = session.get('oauth_tokens')
     session.clear()
+    if oauth_tokens:
+        session['oauth_tokens'] = oauth_tokens

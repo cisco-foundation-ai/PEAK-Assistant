@@ -234,10 +234,9 @@ def disconnect_oauth(server_name):
         oauth_manager = get_oauth_manager()
         
         # Clear OAuth token for this server
-        oauth_manager.clear_token(server_name, user_id)
+        oauth_manager.clear_tokens(server_name, user_id)
         flash(f'Disconnected from {server_name}', 'success')
-        
-        return redirect(url_for('pages.index'))
+        return jsonify({'success': True})
         
     except Exception as e:
         logger.error(f"Error disconnecting from {server_name}: {e}")

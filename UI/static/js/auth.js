@@ -136,8 +136,8 @@ async function disconnectServer(serverName) {
         if (response.ok && result.success) {
             // Show success message briefly
             showSuccess(`Disconnected from ${serverName}`);
-            // Refresh the server list
-            await loadServerStatus();
+            // Reload the page to reflect the change in authentication status
+            window.location.reload();
         } else {
             showError(result.error || 'Failed to disconnect from server');
         }
