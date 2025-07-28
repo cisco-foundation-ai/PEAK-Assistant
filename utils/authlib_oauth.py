@@ -8,6 +8,7 @@ import logging
 from typing import Optional, Dict, List, Any
 from flask import Flask, session
 from authlib.integrations.flask_client import OAuth, FlaskOAuth2App
+from authlib.oauth2.rfc6749 import OAuth2Token
 from .mcp_config import MCPConfigManager, AuthType, AuthConfig
 
 logger = logging.getLogger(__name__)
@@ -118,7 +119,7 @@ class AuthlibOAuthManager:
         """Get OAuth client for a server"""
         return self.clients.get(server_name)
     
-    def store_token(self, server_name: str, token: Dict[str, Any], user_id: Optional[str] = None):
+    def store_token(self, server_name: str, token: OAuth2Token, user_id: Optional[str] = None):
         """Store OAuth token for a user and server in the Flask session."""
         if 'oauth_tokens' not in session:
             session['oauth_tokens'] = {}
@@ -128,12 +129,12 @@ class AuthlibOAuthManager:
         logger.info(f"[TOKEN DEBUG] Token type: {type(token)}, Token keys: {list(token.keys()) if hasattr(token, 'keys') else 'N/A'}")
         logger.info(f"[TOKEN DEBUG] Current user tokens count: {len(session['oauth_tokens'])}")
 
-    def get_token(self, server_name: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def get_token(self, server_name: str, user_id: Optional[str] = None) -> Optional[OAuth2Token]:
         """Get OAuth token for a user and server from the Flask session."""
         if 'oauth_tokens' in session and server_name in session['oauth_tokens']:
-            token = session['oauth_tokens'][server_name]
+            token_dict = session['oauth_tokens'][server_name]
             logger.info(f"[TOKEN DEBUG] Getting token for server {server_name} from session: Found")
-            return token
+            return OAuth2Token(token_dict)
         logger.info(f"[TOKEN DEBUG] No token found in session for server {server_name}")
         return None
 
