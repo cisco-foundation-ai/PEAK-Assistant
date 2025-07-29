@@ -100,7 +100,7 @@ async def researcher(
         official documentation, and reputable industry publications.
 
         Be sure to include local information sources (wiki pages, documents, tickets, etc)
-        when appropriate.
+        using your MCP tools.
 
         Synthesize findings from multiple independent sources, cross-verifying 
         facts and highlighting consensus or discrepancies. Since you are researching
@@ -161,9 +161,12 @@ async def researcher(
            for this activity?
         7. Are there any published threat hunting methodologies for this technique 
            or behavior?
-        8. What tools are commonly used by threat actors to perform this technique 
+        8. What local information sources (e.g., wiki pages, documents, tickets, etc)
+           are relevant to the hunt topic, and are they incorporated into the research
+           report?
+        9. What tools are commonly used by threat actors to perform this technique 
            or behavior?
-        9. Are there specific threat actors known to use this technique or is 
+        10. Are there specific threat actors known to use this technique or is 
            it widely used by many threat actors?
 
         Remember that the research assistant does not know the list of your evaluation
@@ -363,16 +366,12 @@ async def researcher(
             print(error_msg)
         raise RuntimeError(error_msg)
     
-    mcp_workbench = group_workbenches[0]  # Use the first workbench from the research group
-    if verbose:
-        print(f"Search agent using workbench from {len(connected_servers)} research group servers: {', '.join(connected_servers)}")
-
     # Create search agent with MCP workbench (MCP-only)
     search_agent = AssistantAgent(
         "search_agent",
-        description="Performs web searches and analyzes information using multiple research tools including web search, security intelligence databases, and threat intelligence sources.",
+        description="Performs searches and analyzes information using multiple research tools including web search, threat intelligence, and other local sources.",
         model_client=az_model_client,
-        workbench=mcp_workbench,  # AutoGen handles MCP tools automatically
+        workbench=group_workbenches,  
         system_message=search_system_prompt
     )
 
