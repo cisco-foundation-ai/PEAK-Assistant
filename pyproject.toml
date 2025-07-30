@@ -1,0 +1,30 @@
+[project]
+name = "peak-assistant"
+version = "0.1.0"
+description = "An AI-powered threat hunting assistant designed to help cybersecurity professionals generate, refine, and document threat hunting hypotheses and research"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "flask-session>=0.8.0",
+    "flask==2.3.2",
+    "flask-sqlalchemy>=3.1.1",
+    "python-dotenv>=1.1.1",
+    "markdown-pdf>=1.7",
+    "openai>=1.98.0",
+    "markdown>=3.8.2",
+    "fpdf>=1.7.2",
+    "gunicorn>=21.0.0",
+    "tavily-python>=0.7.10",
+    "autogen>=0.9.7",
+    "autogen-agentchat>=0.7.1",
+    "autogen-ext>=0.7.1",
+    "dotenv>=0.9.9",
+    "mcp>=1.12.2",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.17.0",
+    "pytest>=8.4.1",
+    "ruff>=0.12.7",
+]
