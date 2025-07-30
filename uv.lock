@@ -733,7 +733,7 @@ wheels = [
 [[package]]
 name = "peak-assistant"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "autogen" },
     { name = "autogen-agentchat" },
@@ -748,6 +748,7 @@ dependencies = [
     { name = "markdown-pdf" },
     { name = "mcp" },
     { name = "openai" },
+    { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "tavily-python" },
 ]
@@ -774,6 +775,7 @@ requires-dist = [
     { name = "markdown-pdf", specifier = ">=1.7" },
     { name = "mcp", specifier = ">=1.12.2" },
     { name = "openai", specifier = ">=1.98.0" },
+    { name = "pydantic", specifier = ">=2.11.7" },
     { name = "python-dotenv", specifier = ">=1.1.1" },
     { name = "tavily-python", specifier = ">=0.7.10" },
 ]
