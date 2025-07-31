@@ -38,7 +38,15 @@ def load_initial_context():
         INITIAL_LOCAL_CONTEXT = ""
 
 
+def configure_session(app):
+    """Configure the Flask session for robust cross-site handling."""
+    app.config['SESSION_COOKIE_SAMESITE'] = 'None'
+    app.config['SESSION_COOKIE_SECURE'] = True
+    app.config['SESSION_COOKIE_PATH'] = '/'
+
 def create_app(config_name='default'):
+    # Configure logging to show INFO messages
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     """
     Flask application factory
     
@@ -62,9 +70,12 @@ def create_app(config_name='default'):
     # Load configuration
     app.config.from_object(config[config_name])
     config[config_name].init_app(app)
-    
+
     # Initialize extensions
     db.init_app(app)
+    
+    # Configure and initialize session management
+    configure_session(app)
     app.config['SESSION_SQLALCHEMY'] = db
     session_manager.init_app(app)
     
@@ -72,6 +83,10 @@ def create_app(config_name='default'):
     parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
     if parent_dir not in sys.path:
         sys.path.append(parent_dir)
+    
+    # Initialize OAuth manager for MCP server authentication
+    from utils.authlib_oauth import init_oauth_manager
+    oauth_manager = init_oauth_manager(app)
     
     # Suppress asyncio event loop closure warnings from background HTTP cleanup
     logging.getLogger("httpx").setLevel(logging.ERROR)
@@ -81,10 +96,12 @@ def create_app(config_name='default'):
     from .routes.api_routes import api_bp
     from .routes.upload_routes import upload_bp
     from .routes.page_routes import page_bp
+    from .routes.oauth_routes import oauth_bp
     
     app.register_blueprint(api_bp)
     app.register_blueprint(upload_bp)
     app.register_blueprint(page_bp)
+    app.register_blueprint(oauth_bp)
     
     # Create database tables
     with app.app_context():

@@ -1,7 +1,9 @@
 /**
  * Standardized Phase Manager for consistent workflow handling
  */
-class PhaseManager {
+import { apiClient } from './api-client.js';
+
+export class PhaseManager {
     constructor(phaseId, config = {}) {
         this.phaseId = phaseId;
         this.config = {
@@ -14,7 +16,6 @@ class PhaseManager {
             ...config
         };
         
-        this.apiClient = new APIClient();
         this.setupEventListeners();
         this.loadInitialData();
         this.checkPrerequisites();
@@ -36,7 +37,7 @@ class PhaseManager {
         } else {
             console.log(`[${this.phaseId}] 3b. No data in sessionStorage. Falling back to server.`);
             try {
-                const sessionData = await this.apiClient.getSessionData();
+                const sessionData = await apiClient.callWithRetry('/api/session-state');
                 const serverContent = sessionData[this.config.sessionStorageKey];
                 if (serverContent && serverContent.trim()) {
                     console.log(`[${this.phaseId}] 6a. Found data on server.`);
@@ -65,7 +66,7 @@ class PhaseManager {
                 window[this.config.globalContentVar] = content;
             }
             contentElement.dataset.rawMarkdown = content;
-            ContentRenderer.renderMarkdown(content, contentElement);
+            window.ContentRenderer.renderMarkdown(content, contentElement);
             
             if (downloadContainer) {
                 downloadContainer.style.display = 'flex';
@@ -82,7 +83,7 @@ class PhaseManager {
         const contentElement = document.getElementById(this.config.contentContainer);
         const downloadContainer = document.getElementById(this.config.downloadContainer);
         
-        ContentRenderer.clearContent(contentElement);
+        window.ContentRenderer.clearContent(contentElement);
         if (downloadContainer) {
             downloadContainer.style.display = 'none';
         }
@@ -101,32 +102,31 @@ class PhaseManager {
             throw new Error('API endpoint not configured');
         }
         
-        this.clearContent();
-        UIFeedback.hideError();
-        UIFeedback.show('loading', this.config.loadingMessage || 'Generating content...');
+        window.UIFeedback.hideError();
+        window.UIFeedback.show('loading', this.config.loadingMessage || 'Generating content...');
         
         try {
-            const response = await this.apiClient.callWithRetry(this.config.apiEndpoint, requestBody);
-            if (response.success) {
-                const content = response[this.config.responseContentKey] || response.content;
-                this.displayContent(content);
-                
-                if (this.config.sessionStorageKey) {
-                    sessionStorage.setItem(this.config.sessionStorageKey, content);
-                }
-                
-                if (this.onContentGenerated) {
-                    this.onContentGenerated(response);
-                }
-                return response;
-            } else {
-                throw new Error(response.error || 'Generation failed');
+            const response = await apiClient.callWithRetry(this.config.apiEndpoint, requestBody);
+            
+            // On success, clear previous content and display the new report.
+            this.clearContent();
+            const content = response[this.config.responseContentKey] || response.content;
+            this.displayContent(content);
+            
+            if (this.config.sessionStorageKey) {
+                sessionStorage.setItem(this.config.sessionStorageKey, content);
             }
+            
+            if (this.onContentGenerated) {
+                this.onContentGenerated(response);
+            }
+            return response;
         } catch (error) {
-            UIFeedback.show('error', 'Error generating content: ' + error.message);
-            throw error;
+            // On error, show a toast and leave the current content intact.
+            window.UIFeedback.show('error', error.message);
+            throw error; // Re-throw to signal failure to the caller
         } finally {
-            UIFeedback.hideLoading();
+            window.UIFeedback.hideLoading();
         }
     }
     
@@ -139,7 +139,7 @@ class PhaseManager {
             return { valid: true, missing: [] };
         }
         
-        const sessionData = await this.apiClient.getSessionData();
+        const sessionData = await apiClient.callWithRetry('/api/session-state');
         const missing = [];
         
         for (const prereq of this.config.prerequisites) {

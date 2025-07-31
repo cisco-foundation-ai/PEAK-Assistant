@@ -55,16 +55,59 @@ async def retry_api_call(func, *args, max_retries=3, **kwargs):
 
 def extract_report_md(messages):
     """Try to extract the research report markdown from agent output"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     report_md = None
+    
+    # Log the message structure for debugging
+    logger.info(f"extract_report_md: Input type: {type(messages)}")
+    
     if hasattr(messages, 'messages'):
+        # Get all sources for debugging
+        sources = [getattr(m, 'source', 'no_source') for m in messages.messages]
+        logger.info(f"extract_report_md: Available sources: {sources}")
+        
+        # Try to find summarizer_agent message
         report_md = next((m.content for m in reversed(messages.messages) if getattr(m, 'source', None) == "summarizer_agent"), None)
+        
+        if not report_md:
+            # Try alternative sources as fallback
+            logger.info("extract_report_md: No summarizer_agent found, trying fallbacks...")
+            
+            # Try summarizer (without _agent suffix)
+            report_md = next((m.content for m in reversed(messages.messages) if getattr(m, 'source', None) == "summarizer"), None)
+            
+            if not report_md:
+                # Try any message that looks like a report (contains markdown headers)
+                for m in reversed(messages.messages):
+                    content = getattr(m, 'content', '')
+                    if content and ('# ' in content or '## ' in content) and len(content) > 200:
+                        logger.info(f"extract_report_md: Found report-like content from source: {getattr(m, 'source', 'unknown')}")
+                        report_md = content
+                        break
+                        
+            if not report_md:
+                # Last resort - get the longest message content
+                longest_msg = max(messages.messages, key=lambda m: len(getattr(m, 'content', '')), default=None)
+                if longest_msg and hasattr(longest_msg, 'content'):
+                    logger.info(f"extract_report_md: Using longest message from source: {getattr(longest_msg, 'source', 'unknown')}")
+                    report_md = longest_msg.content
+    
+    # Additional fallback strategies
     if not report_md:
         if isinstance(messages, str):
             report_md = messages
         elif hasattr(messages, 'content'):
             report_md = messages.content
         else:
-            report_md = str(messages)
+            logger.warning("extract_report_md: No suitable content found, falling back to string representation")
+            # Instead of str(messages), try to extract any readable content
+            if hasattr(messages, '__dict__'):
+                logger.info(f"extract_report_md: Message attributes: {list(messages.__dict__.keys())}")
+            report_md = "Error: Could not extract report content from agent response. Please try again."
+    
+    logger.info(f"extract_report_md: Extracted report length: {len(report_md) if report_md else 0}")
     return report_md
 
 
@@ -123,4 +166,8 @@ def get_all_session_data():
 
 def clear_all_session_data():
     """Clear all data from the session."""
+    # Preserve OAuth tokens while clearing the rest of the session
+    oauth_tokens = session.get('oauth_tokens')
     session.clear()
+    if oauth_tokens:
+        session['oauth_tokens'] = oauth_tokens

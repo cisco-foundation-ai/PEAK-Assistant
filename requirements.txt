@@ -1,6 +1,7 @@
 flask==2.3.2
 Flask-Session
 Flask-SQLAlchemy
+authlib
 python-dotenv
 markdown-pdf
 openai

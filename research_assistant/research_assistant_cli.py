@@ -7,11 +7,10 @@ import re
 import sys
 from pathlib import Path
 import warnings
+from typing import Optional
 from dotenv import load_dotenv
 import traceback
 from markdown_pdf import MarkdownPdf, Section
-
-from tavily import TavilyClient
 
 from autogen_agentchat.messages import TextMessage
 from autogen_ext.models.openai import AzureOpenAIChatCompletionClient
@@ -23,6 +22,7 @@ from autogen_agentchat.ui import Console
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from utils.assistant_auth import PEAKAssistantAuthManager
 from utils.azure_client import PEAKAssistantAzureOpenAIClient
+from utils.mcp_config import get_client_manager, setup_mcp_servers
 
 def find_dotenv_file():
     """Search for a .env file in current directory and parent directories"""
@@ -46,24 +46,6 @@ def generate_unique_filename(title, extension):
 
     return base_filename
 
-async def tavily_search(
-    query: str,
-    max_results: int = 15,
-    raw_content: bool = False
-):
-    tavily_client = TavilyClient(
-        api_key=os.getenv("TAVILY_API_KEY")
-    )
-
-    search_results = tavily_client.search(
-        query=query,
-        max_results=max_results,
-        search_depth="advanced",
-        include_raw_content=raw_content
-    )
-
-    return search_results
-
 async def websocket_input():
     return
 
@@ -77,7 +59,10 @@ async def researcher(
     technique: str = None, 
     local_context: str = None,
     verbose: bool = False,
-    previous_run: list = None
+    previous_run: list = None,
+    mcp_server_group_external: str = "research-external",
+    mcp_server_group_internal: str = "research-internal",
+    user_id: Optional[str] = None
 ) -> str:
     """
     Orchestrates a multi-agent, multi-stage research workflow to generate a 
@@ -104,6 +89,8 @@ async def researcher(
         Exception: If an error occurs during the research or report generation process.
     """
     
+    # NOTE: This prompt is used for both the external and internal search agents.
+    # They're basically the same, just with different MCP tools.
     search_system_prompt = """
         You are a world-class research assistant specializing in deep, high-quality 
         technical research to assist cybersecurity threat hunters. Given a threat actor
@@ -123,6 +110,9 @@ async def researcher(
         For each piece of information, clearly explain its relevance, technical 
         significance, and how it addresses the research query. Provide detailed, 
         nuanced explanations suitable for expert and highly-technical audiences.
+
+        You may need to make multiple calls to your tools to gather all the 
+        information you need to answer the research question.
 
         When receiving feedback from a verifier agent, use your tools to 
         iteratively refine your research, address gaps, and ensure the highest 
@@ -174,9 +164,12 @@ async def researcher(
            for this activity?
         7. Are there any published threat hunting methodologies for this technique 
            or behavior?
-        8. What tools are commonly used by threat actors to perform this technique 
+        8. What local information sources (e.g., wiki pages, documents, tickets, etc)
+           are relevant to the hunt topic, and are they incorporated into the research
+           report?
+        9. What tools are commonly used by threat actors to perform this technique 
            or behavior?
-        9. Are there specific threat actors known to use this technique or is 
+        10. Are there specific threat actors known to use this technique or is 
            it widely used by many threat actors?
 
         Remember that the research assistant does not know the list of your evaluation
@@ -213,7 +206,8 @@ async def researcher(
           Include details about what each step does and why. Call this section 
           "Technique Details".
         - A description of how to detect this technique. Include published detection 
-          rules if you found any, giving priority to Splunk/SPL rules. Call this 
+          rules or signatures if you found any, giving priority to content for 
+          detection platforms or SIEMs the user is using. Call this 
           section "Detection".
         - A detailed description of the typical datasets that would be required to 
           hunt for this activity. Include details about what each dataset contains 
@@ -231,6 +225,12 @@ async def researcher(
         - A brief list of published threat hunt methodologies for this technique. For each, 
           include a short description of exactly what their looking for and how they 
           look for it. Call this section "Published Hunts".
+        - A summary of any local information about previous times you have hunted this
+          technique, or previous times the technique has been found in incidents. 
+          Begin this section with a table listing each of the relevant local items,
+          a summary of each, and any key information that would be helpful to a 
+          threat hunter, including any relevant log entries, code, detection rules,
+          or security incidents opened. Call this section "Previous Hunting Information".
         - A brief list of tools threat actors commonly use to perform this technique. 
           Call this section "Commonly-Used Tools".
         - A numbered list of references to all the sourcesq you consulted, including a 
@@ -285,9 +285,11 @@ async def researcher(
            for this activity?
         7. Are there any published threat hunting methodologies for this technique 
            or behavior?
-        8. What tools are commonly used by threat actors to perform this technique 
+        8. Has this technique or behavior been found in previous incidents or threat
+           hunts?
+        9. What tools are commonly used by threat actors to perform this technique 
            or behavior?
-        9. Are there specific threat actors known to use this technique or is 
+        10. Are there specific threat actors known to use this technique or is 
            it widely used by many threat actors?        
 
         Remember that we are providing a report to an audence of threat hunters
@@ -319,15 +321,17 @@ async def researcher(
             {roles}
 
         Given the current context, select the most appropriate next speaker.
-            - The search agent should search for and analyze information from
-            the Internet.
+            - The externalsearch agent should search for and analyze information from
+              the Internet.
+            - The internalsearch agent should search for and analyze information from
+              local information sources (e.g., wikis, ticket systems, threat intel databases, etc).
             - The research critic should evaluate progress and guide the research 
-            (select this role when there is a need to verify/evaluate progress 
-            of the research). 
+              (select this role when there is a need to verify/evaluate progress 
+              of the research). 
             - The summarizer agent should summarize the research findings (select 
-            this role when the research is complete and approved by the research critic).
+              this role when the research is complete and approved by the research critic).
             - The summary critic agent should evaluate the report from the summarizer
-            and ensure it meets the user's needs. 
+              and ensure it meets the user's needs. 
             - The user feedback agent should request user feedback or approval of the summarizer's 
               report AFTER the summary critic has approved it. 
             - The termination agent should stop the conversation after the user has approved the report.
@@ -345,6 +349,12 @@ async def researcher(
             5. The need for additional research or more detail in the report
             6. The user's feedback
 
+        If there is already a draft of the report, only call the agent(s) necessary to incorporate
+        the user feedback into the report. 
+        
+        If there is not yet a draft of the report, for your first call, select the internal search 
+        agent role. 
+
         Read the following conversation, then select the next role to speak Only return the role name.
 
         {history}
@@ -353,12 +363,52 @@ async def researcher(
     auth_mgr = PEAKAssistantAuthManager()
     az_model_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr)
     az_model_reasoning_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr, model_type="reasoning")
-
-    search_agent = AssistantAgent(
-        "search_agent",
-        description="Performs web searches and analyzes information.",
+    
+    # Set up MCP servers for research
+    mcp_client_manager = get_client_manager()
+    connected_servers_external = await setup_mcp_servers(mcp_server_group_external, user_id=user_id)
+    connected_servers_internal = await setup_mcp_servers(mcp_server_group_internal, user_id=user_id)
+    
+    # Get workbenches only from the external research server group
+    group_workbenches_external = []
+    for server_name in connected_servers_external:
+        workbench = mcp_client_manager.get_workbench(server_name, user_id=user_id)
+        if workbench:
+            group_workbenches_external.append(workbench)
+    
+    if not group_workbenches_external:
+        error_msg = f"No MCP workbenches available for external research group '{mcp_server_group_external}'. Check your MCP configuration."
+        if verbose:
+            print(error_msg)
+        raise RuntimeError(error_msg)
+    
+    # Get workbenches only from the internal research server group
+    group_workbenches_internal = []
+    for server_name in connected_servers_internal:
+        workbench = mcp_client_manager.get_workbench(server_name, user_id=user_id)
+        if workbench:
+            group_workbenches_internal.append(workbench)
+    
+    if not group_workbenches_internal:
+        error_msg = f"No MCP workbenches available for internal research group '{mcp_server_group_internal}'. Check your MCP configuration."
+        if verbose:
+            print(error_msg)
+        raise RuntimeError(error_msg)
+    
+    # Create search agent with MCP workbench (MCP-only)
+    external_search_agent = AssistantAgent(
+        "external_search_agent",
+        description="Performs searches and analyzes information using external research tools (i.e. web search)",
         model_client=az_model_client,
-        tools=[tavily_search],
+        workbench=group_workbenches_external,  
+        system_message=search_system_prompt
+    )
+
+    internal_search_agent = AssistantAgent(
+        "internal_search_agent",
+        description="Performs searches and analyzes information using local information sources (e.g., wikis, ticket systems, etc)",
+        model_client=az_model_client,
+        workbench=group_workbenches_internal,  
         system_message=search_system_prompt
     )
 
@@ -390,7 +440,8 @@ async def researcher(
     # Create a team 
     team = SelectorGroupChat(
         participants=[
-                        search_agent, 
+                        external_search_agent, 
+                        internal_search_agent, 
                         research_critic_agent, 
                         summarizer_agent, 
                         summary_critic_agent, 
@@ -418,9 +469,13 @@ async def researcher(
             result = await team.run(task=messages)
 
         return result  
+    except (openai.RateLimitError, openai.APIError) as e:
+        # Re-raise specific OpenAI errors to be handled by the API layer
+        raise e
     except Exception as e:
-        print(f"Error while preparing report: {e}\n{traceback.format_exc()}")
-        return "An error occurred while preparing the report."
+        # Catch any other unexpected errors and wrap them
+        print(f"An unexpected error occurred in the researcher: {e}\n{traceback.format_exc()}")
+        raise Exception("An unexpected error occurred while preparing the report.") from e
 
 if __name__ == "__main__":
 

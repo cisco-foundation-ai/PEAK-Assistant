@@ -165,12 +165,7 @@ class AbleTableManager {
         document.getElementById('generate-able-btn').addEventListener('click', () => this.handleGenerate());
         document.getElementById('send-feedback-btn').addEventListener('click', () => this.handleSendFeedback());
 
-        this.feedbackInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                this.handleSendFeedback();
-            }
-        });
+
     }
 
     setupUploadHandlers() {

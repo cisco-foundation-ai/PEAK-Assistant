@@ -4,12 +4,11 @@ API routes for PEAK Assistant - AI-powered threat hunting operations
 import os
 import re
 import logging
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, session
 from autogen_agentchat.messages import TextMessage, UserMessage
 
 from ..utils.decorators import async_action, handle_async_api_errors
 from ..utils.helpers import (
-    retry_api_call, 
     extract_report_md, 
     extract_accepted_hypothesis,
     get_session_value,
@@ -50,13 +49,16 @@ async def research():
             TextMessage(content=f"User feedback: {feedback}\n", source="user")
         ]
 
-    # Run the researcher
-    result = await retry_api_call(
-        async_researcher, 
+    # Get authenticated user context for OAuth-enabled MCP servers
+    user_id = session.get('user_id')
+    
+    # Run the researcher with user context
+    result = await async_researcher(
         technique=topic, 
         local_context=local_context, 
         verbose=verbose_mode,
-        previous_run=previous_run
+        previous_run=previous_run,
+        user_id=user_id
     )
     
     # Extract the report markdown
@@ -85,8 +87,7 @@ async def hypothesize():
     # Import hypothesizer
     from hypothesis_assistant.hypothesis_assistant_cli import hypothesizer as async_hypothesizer
     
-    hypos = await retry_api_call(
-        async_hypothesizer, 
+    hypos = await async_hypothesizer(
         report_md, 
         report_md,  # This seems to be duplicated, raw_text is the second param
         local_context=local_context,  # Pass local context
@@ -159,12 +160,10 @@ async def refine():
     logging.warning(f"Calling async_refiner with hypothesis: {hypothesis[:100]}...")
 
     # Explicitly pass keyword arguments to the refiner function
-    result = await retry_api_call(
-        async_refiner, 
+    result = await async_refiner(
         hypothesis=hypothesis, 
         local_context=local_context, 
         research_document=research_report,
-        verbose=verbose_mode,
         previous_run=previous_run
     )
     
@@ -207,8 +206,7 @@ async def able_table():
         ]
 
     # Call the able_table function from the CLI module
-    able_md = await retry_api_call(
-        able_table,
+    able_md = await able_table(
         hypothesis=hypothesis,
         research_document=report_md,
         local_context=local_context,
@@ -248,15 +246,7 @@ async def data_discovery():
     if not report_md:
         return jsonify({'success': False, 'error': 'No research report available'}), 400
 
-    # Get MCP configuration from environment variables
-    mcp_command = os.getenv('SPLUNK_MCP_COMMAND')
-    mcp_args = os.getenv('SPLUNK_MCP_ARGS')
-
-    if not mcp_command or not mcp_args:
-        return jsonify({
-            'success': False, 
-            'error': 'Splunk MCP configuration missing. Please ensure SPLUNK_MCP_COMMAND and SPLUNK_MCP_ARGS environment variables are set.'
-        }), 500
+    # MCP configuration now handled by configuration file system
 
     # Set up the conversation history
     messages = []
@@ -267,14 +257,11 @@ async def data_discovery():
     # Import data discovery function
     from data_assistant.data_asssistant_cli import identify_data_sources as async_identify_data_sources
     
-    result = await retry_api_call(
-        async_identify_data_sources, 
+    result = await async_identify_data_sources(
         hypothesis, 
         report_md,
         able_info=able_table_md,
         local_context=local_context,  # Pass local context to the function
-        mcp_command=mcp_command,
-        mcp_args=mcp_args,
         verbose=verbose_mode,
         previous_run=messages,
         max_retries=retry_count
@@ -337,8 +324,7 @@ async def hunt_plan():
     # Import hunt planning function
     from planning_assistant.planning_assistant_cli import plan_hunt as async_hunt_planner
     
-    result = await retry_api_call(
-        async_hunt_planner,
+    result = await async_hunt_planner(
         hypothesis=hypothesis,
         research_document=report_md,
         able_info=able_table_md,
