@@ -37,4 +37,65 @@
     --shadow-lg: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
     
     --transition: all 0.15s ease-in-out;
+    
+    /* Theme colors - Light mode (default) */
+    --bg-color: #ffffff;
+    --bg-secondary: #f8f9fa;
+    --text-color: #212529;
+    --text-muted: #6c757d;
+    --sidebar-bg: #f8f9fa;
+    --card-bg: #ffffff;
+    --input-bg: #ffffff;
+    --input-border: #ced4da;
+    --navbar-bg: #f8f9fa;
+}
+
+/* Auto theme based on system preference - only when no manual theme is set */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) {
+        --bg-color: #1a1a1a;
+        --bg-secondary: #2d2d2d;
+        --text-color: #ffffff;
+        --text-muted: #adb5bd;
+        --sidebar-bg: #2d2d2d;
+        --card-bg: #2d2d2d;
+        --input-bg: #3d3d3d;
+        --input-border: #495057;
+        --navbar-bg: #2d2d2d;
+        --border-color: #495057;
+        --shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.3);
+        --shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.4);
+        --shadow-lg: 0 0.5rem 1rem rgba(0, 0, 0, 0.5);
+    }
+}
+
+/* Manual light mode */
+[data-theme="light"] {
+    --bg-color: #ffffff;
+    --bg-secondary: #f8f9fa;
+    --text-color: #212529;
+    --text-muted: #6c757d;
+    --sidebar-bg: #f8f9fa;
+    --card-bg: #ffffff;
+    --input-bg: #ffffff;
+    --input-border: #ced4da;
+    --navbar-bg: #f8f9fa;
+    --border-color: #dee2e6;
+}
+
+/* Manual dark mode */
+[data-theme="dark"] {
+    --bg-color: #1a1a1a;
+    --bg-secondary: #2d2d2d;
+    --text-color: #ffffff;
+    --text-muted: #adb5bd;
+    --sidebar-bg: #2d2d2d;
+    --card-bg: #2d2d2d;
+    --input-bg: #3d3d3d;
+    --input-border: #495057;
+    --navbar-bg: #2d2d2d;
+    --border-color: #495057;
+    --shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.3);
+    --shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 0.5rem 1rem rgba(0, 0, 0, 0.5);
 }

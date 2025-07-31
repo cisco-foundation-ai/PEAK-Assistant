@@ -14,6 +14,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/utilities.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/navigation.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
 </head>
 <body>
     <div class="container-fluid">
@@ -84,6 +85,18 @@
                                 <a class="nav-link" href="/debug">
                                     Debug
                                 </a>
+                            </li>
+                            <li class="nav-item mt-2">
+                                <div class="theme-toggle-container">
+                                    <span id="theme-text" class="theme-toggle-text">Dark Mode</span>
+                                    <label class="theme-toggle-label">
+                                        <input type="checkbox" id="theme-toggle" class="theme-toggle-input">
+                                        <span class="theme-toggle-slider">
+                                            <i class="bi bi-sun-fill theme-icon-light"></i>
+                                            <i class="bi bi-moon-fill theme-icon-dark"></i>
+                                        </span>
+                                    </label>
+                                </div>
                             </li>
                         </ul>
                         
@@ -198,6 +211,7 @@
     <script src="{{ url_for('static', filename='js/phase-manager.js') }}" type="module"></script>
     <script src="{{ url_for('static', filename='js/feedback-handler.js') }}" type="module"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}" type="module"></script>
+    <script src="{{ url_for('static', filename='js/theme-manager.js') }}" type="module"></script>
     
     <script>
         // All inline JavaScript has been moved to external files.
