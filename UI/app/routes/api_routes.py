@@ -88,10 +88,9 @@ async def hypothesize():
     from hypothesis_assistant.hypothesis_assistant_cli import hypothesizer as async_hypothesizer
     
     hypos = await async_hypothesizer(
-        report_md, 
-        report_md,  # This seems to be duplicated, raw_text is the second param
-        local_context=local_context,  # Pass local context
-        max_retries=retry_count
+        user_input=None,  # No specific user input for auto-generation
+        research_document=report_md,  # Pass the research report as the document
+        local_context=local_context  # Pass local context
     )
     
     if isinstance(hypos, str):
@@ -258,13 +257,13 @@ async def data_discovery():
     from data_assistant.data_asssistant_cli import identify_data_sources as async_identify_data_sources
     
     result = await async_identify_data_sources(
-        hypothesis, 
-        report_md,
+        hypothesis=hypothesis, 
+        research_document=report_md,
         able_info=able_table_md,
         local_context=local_context,  # Pass local context to the function
         verbose=verbose_mode,
-        previous_run=messages,
-        max_retries=retry_count
+        previous_run=messages
+        # Note: max_retries parameter removed as it's not supported by this function
     )
     # Extract the final message from the "Data_Discovery_Agent" similar to CLI version
     data_sources_md = None
@@ -331,8 +330,8 @@ async def hunt_plan():
         data_discovery=data_sources_md,
         local_context=local_context,
         verbose=verbose_mode,
-        previous_run=messages,
-        max_retries=retry_count
+        previous_run=messages
+        # Note: max_retries parameter removed as it's not supported by this function
     )
     
     # Extract the hunt plan from the result
