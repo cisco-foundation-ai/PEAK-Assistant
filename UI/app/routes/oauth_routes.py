@@ -199,12 +199,18 @@ def oauth_callback():
                         url=dynamic_creds['token_url'],
                         authorization_response=request.url
                     )
+                
+                # Store dynamic client credentials in the token for refresh operations
+                token['_dynamic_client_id'] = dynamic_creds['client_id']
+                token['_dynamic_client_secret'] = dynamic_creds['client_secret']
+                token['_dynamic_token_url'] = dynamic_creds['token_url']
+                logger.info(f"[TOKEN DEBUG] Stored dynamic client credentials for {server_name}")
             else:
                 # Standard flow for pre-configured clients
                 token = client.authorize_access_token()
             
             # Store the token for the user
-            oauth_manager.store_token(server_name, token, user_id)
+            oauth_manager.store_token(server_name, token)
             
             # Clean up session
             session.pop('oauth_server_name', None)
@@ -234,7 +240,7 @@ def disconnect_oauth(server_name):
         oauth_manager = get_oauth_manager()
         
         # Clear OAuth token for this server
-        oauth_manager.clear_tokens(server_name, user_id)
+        oauth_manager.clear_tokens(server_name)
         flash(f'Disconnected from {server_name}', 'success')
         return jsonify({'success': True})
         
@@ -317,7 +323,15 @@ def servers_status():
             # Check current authentication status using authlib manager
             is_authenticated = False
             if requires_auth:
-                is_authenticated = oauth_manager.has_valid_token(server_name, user_id)
+                # Proactively refresh expired tokens for accurate status display
+                fresh_headers = oauth_manager.get_fresh_auth_headers(server_name)
+                is_authenticated = bool(fresh_headers.get('Authorization'))
+                
+                # Log status check result
+                if is_authenticated:
+                    logger.info(f"[Server Status] {server_name}: Authenticated (token fresh)")
+                else:
+                    logger.info(f"[Server Status] {server_name}: Not authenticated (no valid token)")
             
             server_info = {
                 "name": server_name,

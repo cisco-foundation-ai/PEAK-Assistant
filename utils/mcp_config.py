@@ -980,11 +980,8 @@ class MCPClientManager:
                     from .authlib_oauth import get_oauth_manager
                     oauth_manager = get_oauth_manager()
                     
-                    # Try to refresh token if needed
-                    oauth_manager.refresh_token_if_needed(config.name, user_id)
-                    
-                    # Get authentication headers from OAuth manager
-                    oauth_headers = oauth_manager.get_auth_headers(config.name, user_id)
+                    # Get authentication headers from OAuth manager using hybrid approach (OAuth client + manual fallback)
+                    oauth_headers = oauth_manager.get_fresh_auth_headers(config.name)
                     if oauth_headers:
                         headers.update(oauth_headers)
                     else:
