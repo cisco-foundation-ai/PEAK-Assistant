@@ -3,58 +3,24 @@
 {% block title %}Hunt Plan - PEAK Assistant{% endblock %}
 
 {% block nav %}
-    {% set prev_phase_url = url_for('pages.data_discovery_page') %}
-    {% set prev_phase_name = "Data Discovery" %}
-    {% set next_phase_url = None %}
-    {% set next_phase_name = None %}
-    {{ super() }}
+{% set prev_phase_url = url_for('pages.data_discovery_page') %}
+{% set prev_phase_name = "Data Discovery" %}
+{% set next_phase_url = None %}
+{% set next_phase_name = None %}
+{{ super() }}
 {% endblock %}
 
 {% block content %}
 <style>
     /* Custom styles for Hunt Planning page */
-    .phase-container {
-        display: flex;
-        flex-direction: column;
-        height: calc(100vh - 56px); /* Full height minus navbar */
-        overflow: hidden;
-    }
-    
-    .hunt-top-section {
-        padding-bottom: 0.5rem;
-        flex-shrink: 0;
-    }
-    
     .plan-container {
         flex: 1;
         overflow-y: auto;
     }
-    
-    .feedback-container-fixed {
-        position: sticky;
-        bottom: 0;
-        background-color: var(--bs-body-bg);
-        border-top: 1px solid var(--bs-border-color);
-        padding: 0.75rem;
-        z-index: 1000;
-    }
-    
-    /* More compact elements */
-    .compact-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 0.5rem;
-    }
-    
-    .compact-header h1 {
-        font-size: 1.5rem;
-        margin-bottom: 0;
-    }
 </style>
 <div class="phase-container">
     <!-- Top Section (Header, description, hypothesis) -->
-    <div class="hunt-top-section">
+    <div class="top-section">
         <!-- Compact Phase Header -->
         <div class="compact-header">
             <h1 class="phase-title">Generate Hunt Plan</h1>
@@ -67,16 +33,17 @@
                 </button>
             </div>
         </div>
-        
+
         <!-- Compact Phase Description -->
         <p class="phase-description">
-            Use AI agents to combine your research, hypothesis, ABLE table, and data sources into a comprehensive hunt plan.
+            Use AI agents to combine your research, hypothesis, ABLE table, and data sources into a comprehensive hunt
+            plan.
         </p>
 
 
 
-    </div><!-- End of hunt-top-section -->
-    
+    </div><!-- End of top-section -->
+
     <!-- Content Display - Takes up most of the page -->
     <div id="plan-container" class="plan-container">
         <div id="plan-content-wrapper" style="display: none;">
@@ -89,11 +56,12 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Feedback Input Area - Always visible at the bottom -->
     <div id="feedback-container" class="feedback-container-fixed">
         <div class="input-group">
-            <textarea id="feedback-input" class="form-control" rows="3" placeholder="Provide feedback to refine the hunt plan."></textarea>
+            <textarea id="feedback-input" class="form-control" rows="3"
+                placeholder="Provide feedback to refine the hunt plan."></textarea>
             <button id="send-feedback-btn" class="btn btn-primary">
                 <i class="bi bi-send me-2"></i>Send Feedback
             </button>
@@ -104,123 +72,124 @@
 
 {% block script %}
 /**
- * Hunt Plan Manager - Modeled after ResearchManager
- */
+* Hunt Plan Manager - Modeled after ResearchManager
+*/
 class HuntPlanManager {
-    constructor() {
-        this.apiEndpoint = '/api/hunt-plan';
-        this.contentContainer = document.getElementById('plan-content');
-        this.downloadContainer = document.getElementById('plan-actions-container');
-        this.sessionStorageKey = 'hunt_plan_md';
-        
-        // Set up event listeners
-        document.getElementById('generate-btn').addEventListener('click', () => this.handleGenerate());
-        document.getElementById('send-feedback-btn').addEventListener('click', () => this.handleFeedback());
-        
-        // Initialize the existing data if it exists
-        const existingData = sessionStorage.getItem(this.sessionStorageKey);
-        if (existingData) {
-            this.updateContent(existingData);
-            document.getElementById('plan-container').style.display = 'block';
-        }
-    }
+constructor() {
+this.apiEndpoint = '/api/hunt-plan';
+this.contentContainer = document.getElementById('plan-content');
+this.downloadContainer = document.getElementById('plan-actions-container');
+this.sessionStorageKey = 'hunt_plan_md';
+
+// Set up event listeners
+document.getElementById('generate-btn').addEventListener('click', () => this.handleGenerate());
+document.getElementById('send-feedback-btn').addEventListener('click', () => this.handleFeedback());
+
+// Initialize the existing data if it exists
+const existingData = sessionStorage.getItem(this.sessionStorageKey);
+if (existingData) {
+this.updateContent(existingData);
+document.getElementById('plan-container').style.display = 'block';
+}
+}
 
 
 
 
 
-    updateContent(markdown) {
-        ContentRenderer.renderMarkdown(markdown, this.contentContainer);
-        this.contentContainer.dataset.rawMarkdown = markdown;
-        sessionStorage.setItem(this.sessionStorageKey, markdown);
-        DownloadManager.setupDownloadButton('plan-content', 'hunt_plan', 'plan-actions-container');
-        this.downloadContainer.style.display = 'flex';
-        document.getElementById('plan-content-wrapper').style.display = 'block';
-        
-        // Hide the placeholder text if there is markdown content
-        const placeholder = document.getElementById('plan-placeholder');
-        if (placeholder && markdown) {
-            placeholder.style.display = 'none';
-        }
-    }
-    
-    async handleFeedback() {
-        const feedbackInput = document.getElementById('feedback-input');
-        const feedback = feedbackInput.value.trim();
-        
-        if (!feedback) {
-            UIFeedback.show('error', 'Please enter feedback before submitting.');
-            return;
-        }
-        
-        const currentPlan = sessionStorage.getItem(this.sessionStorageKey);
-        if (!currentPlan) {
-            UIFeedback.show('error', 'No existing hunt plan found to refine.');
-            return;
-        }
-        
-        const requestBody = {
-            report_md: sessionStorage.getItem('report_md'),
-            hypothesis: sessionStorage.getItem('refined_hypothesis') || sessionStorage.getItem('hypothesis'),
-            able_table_md: sessionStorage.getItem('able_table_md'),
-            data_sources_md: sessionStorage.getItem('data_sources_md'),
-            feedback: feedback,
-            current_hunt_plan: currentPlan
-        };
-        
-        UIFeedback.show('loading', 'AI agents are refining your hunt plan based on feedback... (this may take several minutes)');
-        try {
-            const response = await fetch(this.apiEndpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody)
-            });
-            const data = await response.json();
-            
-            if (data.success) {
-                this.updateContent(data.hunt_plan);
-                feedbackInput.value = ''; // Clear the feedback input
-            } else {
-                throw new Error(data.error || 'Failed to refine hunt plan');
-            }
-        } catch (error) {
-            UIFeedback.show('error', 'Error refining plan: ' + error.message);
-        } finally {
-            UIFeedback.hideLoading();
-        }
-    }
+updateContent(markdown) {
+ContentRenderer.renderMarkdown(markdown, this.contentContainer);
+this.contentContainer.dataset.rawMarkdown = markdown;
+sessionStorage.setItem(this.sessionStorageKey, markdown);
+DownloadManager.setupDownloadButton('plan-content', 'hunt_plan', 'plan-actions-container');
+this.downloadContainer.style.display = 'flex';
+document.getElementById('plan-content-wrapper').style.display = 'block';
 
-    async handleGenerate() {
-        const requestBody = {
-            report_md: sessionStorage.getItem('report_md'),
-            hypothesis: sessionStorage.getItem('refined_hypothesis') || sessionStorage.getItem('hypothesis'),
-            able_table_md: sessionStorage.getItem('able_table_md'),
-            data_sources_md: sessionStorage.getItem('data_sources_md')
-        };
+// Hide the placeholder text if there is markdown content
+const placeholder = document.getElementById('plan-placeholder');
+if (placeholder && markdown) {
+placeholder.style.display = 'none';
+}
+}
 
-        UIFeedback.show('loading', 'AI agents are creating your comprehensive hunt plan... (this may take several minutes)');
-        try {
-            const response = await fetch(this.apiEndpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody)
-            });
-            const data = await response.json();
-            if (data.success) {
-                this.updateContent(data.hunt_plan);
-            } else {
-                throw new Error(data.error || 'Failed to generate content');
-            }
-        } catch (error) {
-            UIFeedback.show('error', 'Error generating content: ' + error.message);
-        } finally {
-            UIFeedback.hideLoading();
-        }
-    }
+async handleFeedback() {
+const feedbackInput = document.getElementById('feedback-input');
+const feedback = feedbackInput.value.trim();
+
+if (!feedback) {
+UIFeedback.show('error', 'Please enter feedback before submitting.');
+return;
+}
+
+const currentPlan = sessionStorage.getItem(this.sessionStorageKey);
+if (!currentPlan) {
+UIFeedback.show('error', 'No existing hunt plan found to refine.');
+return;
+}
+
+const requestBody = {
+report_md: sessionStorage.getItem('report_md'),
+hypothesis: sessionStorage.getItem('refined_hypothesis') || sessionStorage.getItem('hypothesis'),
+able_table_md: sessionStorage.getItem('able_table_md'),
+data_sources_md: sessionStorage.getItem('data_sources_md'),
+feedback: feedback,
+current_hunt_plan: currentPlan
+};
+
+UIFeedback.show('loading', 'AI agents are refining your hunt plan based on feedback... (this may take several
+minutes)');
+try {
+const response = await fetch(this.apiEndpoint, {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify(requestBody)
+});
+const data = await response.json();
+
+if (data.success) {
+this.updateContent(data.hunt_plan);
+feedbackInput.value = ''; // Clear the feedback input
+} else {
+throw new Error(data.error || 'Failed to refine hunt plan');
+}
+} catch (error) {
+UIFeedback.show('error', 'Error refining plan: ' + error.message);
+} finally {
+UIFeedback.hideLoading();
+}
+}
+
+async handleGenerate() {
+const requestBody = {
+report_md: sessionStorage.getItem('report_md'),
+hypothesis: sessionStorage.getItem('refined_hypothesis') || sessionStorage.getItem('hypothesis'),
+able_table_md: sessionStorage.getItem('able_table_md'),
+data_sources_md: sessionStorage.getItem('data_sources_md')
+};
+
+UIFeedback.show('loading', 'AI agents are creating your comprehensive hunt plan... (this may take several minutes)');
+try {
+const response = await fetch(this.apiEndpoint, {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify(requestBody)
+});
+const data = await response.json();
+if (data.success) {
+this.updateContent(data.hunt_plan);
+} else {
+throw new Error(data.error || 'Failed to generate content');
+}
+} catch (error) {
+UIFeedback.show('error', 'Error generating content: ' + error.message);
+} finally {
+UIFeedback.hideLoading();
+}
+}
 }
 
 // Initialize the Hunt Plan Manager when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
-    window.huntPlanManager = new HuntPlanManager();
+window.huntPlanManager = new HuntPlanManager();
 });
 {% endblock %}

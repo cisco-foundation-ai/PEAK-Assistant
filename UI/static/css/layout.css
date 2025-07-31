@@ -15,9 +15,18 @@
 /* ==========================================================================
    COMPACT PHASE CONTAINER SYSTEM
    ========================================================================== */
+
+.top-section {
+    padding-bottom: 0.5rem;
+    flex-shrink: 0;
+}
+
 .phase-container {
     max-width: 1400px;
     margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
 }
 
 .phase-header {
@@ -41,4 +50,26 @@
     margin-bottom: var(--spacing-lg);
     font-size: var(--font-size-sm);
     line-height: 1.4;
+}
+
+/* More compact elements */
+.compact-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.compact-header h1 {
+    font-size: 1.5rem;
+    margin-bottom: 0;
+}
+
+.feedback-container-fixed {
+    position: sticky;
+    bottom: 0;
+    background-color: var(--bs-body-bg);
+    border-top: 1px solid var(--bs-border-color);
+    padding: 0.75rem;
+    z-index: 1000;
 }

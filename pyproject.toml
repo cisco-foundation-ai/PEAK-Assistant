@@ -21,10 +21,16 @@ dependencies = [
     "dotenv>=0.9.9",
     "mcp>=1.12.2",
     "pydantic>=2.11.7",
+    "aiohttp>=3.12.15",
 ]
 
 [dependency-groups]
-dev = ["mypy>=1.17.0", "pytest>=8.4.1", "ruff>=0.12.7"]
+dev = [
+    "mypy>=1.17.0",
+    "pytest>=8.4.1",
+    "ruff>=0.12.7",
+    "types-requests>=2.32.4.20250611",
+]
 
 
 [build-system]
@@ -41,3 +47,13 @@ packages = [
     "data_assistant",
     "utils",
 ]
+
+[project.scripts]
+able-assistant = "able_assistant.__main__:main"
+data-assistant = "data_assistant.__main__:main"
+hypothesis-assistant = "hypothesis_assistant.hypothesis_assistant_cli:main"
+hypothesis-refiner = "hypothesis_assistant.hypothesis_refiner_cli:main"
+planning-assistant = "planning_assistant.__main__:main"
+peak-mcp = "peak_mcp.__main__:main"
+peak-assistant = "UI.__main__:main"
+research-assistant = "research_assistant.__main__:main"

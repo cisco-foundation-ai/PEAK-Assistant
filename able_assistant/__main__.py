@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 
 import os
+import sys
 import argparse
+
+from typing import List
 from dotenv import load_dotenv
 import asyncio
 
-from utils import find_dotenv_file
+from autogen_core.models import UserMessage
 
-from . import hypothesizer
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from . import able_table
+from utils import find_dotenv_file
 
 
 def main() -> None:
-    """Hypothesis Assistant"""
-
     # Set up argument parser
     parser = argparse.ArgumentParser(
         description="Given a threat hunting technique dossier, generate potential hypotheses for the hunter."
@@ -25,11 +28,7 @@ def main() -> None:
         required=True,
     )
     parser.add_argument(
-        "-u",
-        "--user_input",
-        help="User input for hypothesis generation",
-        required=False,
-        default="",
+        "-y", "--hypothesis", help="The hunting hypothesis", required=True, default=""
     )
     parser.add_argument(
         "-c",
@@ -38,7 +37,6 @@ def main() -> None:
         required=False,
         default=None,
     )
-
     args = parser.parse_args()
 
     # Load environment variables
@@ -81,16 +79,36 @@ def main() -> None:
             print(f"Error reading local context: {e}")
             exit(1)
 
-    # Run the hypothesizer asynchronously
-    hypotheses = asyncio.run(
-        hypothesizer(
-            user_input=args.user_input,
-            research_document=research_data,
-            local_context=local_context,
+    messages: List[UserMessage] = list()
+    while True:
+        # Run the hypothesizer asynchronously
+        able = asyncio.run(
+            able_table(
+                hypothesis=args.hypothesis,
+                research_document=research_data,
+                local_context=local_context,
+                previous_run=messages,
+            )
         )
-    )
-    print(hypotheses)
+        print(able)
+
+        feedback = input(
+            "Please provide your feedback on the ABLE table (or press Enter to approve it): "
+        )
+
+        if feedback.strip():
+            # If feedback is provided, add it to the messages and loop back to
+            # the research team for further refinement
+            messages = [
+                UserMessage(
+                    content=f"The current ABLE draft is: {able}\n", source="user"
+                ),
+                UserMessage(content=f"User feedback: {feedback}\n", source="user"),
+            ]
+        else:
+            break
 
 
+# Example usage
 if __name__ == "__main__":
     main()

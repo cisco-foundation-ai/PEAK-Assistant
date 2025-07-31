@@ -19,18 +19,23 @@ The PEAK-Assistant includes a Flask-based web interface that provides an intuiti
 - **Hunt Planning**: Combine all phases into a comprehensive hunt plan
 
 ### Running the Web Interface
+
+
 ```bash
-cd UI
-python app.py
+peak-assistant
+```
+or
+
+```bash
+python -m UI
 ```
 
 By default, the application will run on `https://127.0.0.1:8000/` (note HTTPS - you'll need SSL certificates).
 
-For more details on the web interface, see [UI/README.md](UI/README.md).
-
 ## Tools and CLI Scripts
 
-### 1. `research_assistant_cli.py`
+### 1. research-assistant
+
 **Purpose:** Generate a comprehensive threat hunting research report for a given technique, using automated research and summarization agents.
 
 **Arguments:**
@@ -43,12 +48,10 @@ For more details on the web interface, see [UI/README.md](UI/README.md).
 
 **Example:**
 ```bash
-python research_assistant/research_assistant_cli.py -t "Kerberoasting" -f markdown -c context.txt
+research-assistant -t "Kerberoasting" -f markdown -c context.txt
 ```
 
----
-
-### 2. `hypothesis_assistant_cli.py`
+### 2. hypothesis-assistant
 **Purpose:** Suggest testable threat hunting hypotheses based on user input and a research document.
 
 **Arguments:**
@@ -59,17 +62,18 @@ python research_assistant/research_assistant_cli.py -t "Kerberoasting" -f markdo
 - `-h`, `--help`: Show help message and exit.
 
 **Example:**
+
 ```bash
-python hypothesis_assistant/hypothesis_assistant_cli.py -r kerberoasting.md -u "Focus on use for lateral movement." -c context.txt
+hypothesis-assistant -r kerberoasting.md \
+   -u "Focus on use for lateral movement." \
+   -c context.txt
 ```
 
 **Notes:**
 Use the `-u` option to provide additional guidance or input (e.g., specific focus areas) to the hypothesis generation process.
 Use the `-c` option to provide local context from a file that contains organization-specific information.
 
----
-
-### 3. `hypothesis_refiner_cli.py`
+### 3. hypothesis-refiner
 **Purpose:** Refine and improve a threat hunting hypothesis using automated and/or human-in-the-loop feedback.
 
 **Arguments:**
@@ -83,21 +87,25 @@ Use the `-c` option to provide local context from a file that contains organizat
 
 **Example:**
 ```bash
-python hypothesis_assistant/hypothesis_refiner_cli.py -y "threat actors are using kerberoasting for lateral movement by requesting user tickets and then using them shortly after" -r kerberoasting.md -a -c context.txt
+hypothesis-refiner -y "threat actors are using kerberoasting for lateral movement by requesting user tickets and then using them shortly after" \
+   -r kerberoasting.md \
+   -a \
+   -c context.txt
 ```
 
 **Notes:**
-Hypothesis refinement is an interactive process with human involvement to steer things in the correct direction. By default, `hypothesis_refiner_cli.py` will prompt the user for their 
-input/feedback after every refinement attempt. You can continue with as many rounds of refinement as you like; when you are finished, mention the string 
-`YYY-HYPOTHESIS-ACCEPTED-YYY` to let the agent know you're finished. 
+
+Hypothesis refinement is an interactive process with human involvement to steer things in the correct direction. 
+By default, `hypothesis-refiner` will prompt the user for their input/feedback after every refinement attempt. 
+You can continue with as many rounds of refinement as you like; when you are finished, press enter on an 
+empty line to let the agent know you're finished. 
 
 **I WILL be improving this experience later.**
 
 If you prefer a completely automated refinement experience, use the `-a` option, as shown in the example. This will prevent all prompts for user input and simply output the refined hypothesis.
 
----
+### 4. able-assistant
 
-### 4. `able_assistant_cli.py`
 **Purpose:** Generate a PEAK ABLE table (Actor, Behavior, Location, Evidence) for a given hypothesis and research document.
 
 **Arguments:**
@@ -109,12 +117,14 @@ If you prefer a completely automated refinement experience, use the `-a` option,
 
 **Example:**
 ```bash
-python able_assistant/able_assistant_cli.py -r kerberoasting.md -y "Adversaries seeking lateral movement via Kerberoasting will request Kerberos service tickets (TGS) for user-based SPNs associated with privileged or lateral-movement-enabled service accounts, followed shortly by successful authentication or remote access events (e.g., SMB, RDP, WinRM) using those accounts from previously unseen endpoints." -c context.txt
+able-assistant -r kerberoasting.md \
+   -y "Adversaries seeking lateral movement via Kerberoasting will request Kerberos service tickets (TGS) for user-based SPNs associated with privileged or lateral-movement-enabled service accounts, followed shortly by successful authentication or remote access events (e.g., SMB, RDP, WinRM) using those accounts from previously unseen endpoints." \
+   -c context.txt
 ```
 
 ---
 
-### 5. `data_asssistant_cli.py`
+### 5. data-assistant
 **Purpose:** Identify relevant Splunk indices and data sources for testing a threat hunting hypothesis.
 
 **Arguments:**
@@ -128,10 +138,14 @@ python able_assistant/able_assistant_cli.py -r kerberoasting.md -y "Adversaries 
 
 **Example:**
 ```bash
-python data_assistant/data_asssistant_cli.py -r kerberoasting.md -y "Adversaries seeking lateral movement via Kerberoasting will request Kerberos service tickets" -a able_table.md -c context.txt -v
+data-assistant -r kerberoasting.md \
+   -y "Adversaries seeking lateral movement via Kerberoasting will request Kerberos service tickets" \
+   -a able_table.md \
+   -c context.txt -v
 ```
 
 **Notes:**
+
 This tool requires additional Splunk-specific environment variables (see Environment Variables section below).
 The data assistant uses an MCP (Model Context Protocol) server to interact with Splunk. You must specify the path to your MCP server command and any required arguments through the `SPLUNK_MCP_COMMAND` and `SPLUNK_MCP_ARGS` environment variables.
 
@@ -179,6 +193,7 @@ cd PEAK-Assistant
 ```
 
 ### 2. Environment Variables
+
 Create a `.env` file in the project root with the following variables:
 
 #### Required for All Tools:
@@ -194,6 +209,8 @@ AZURE_OPENAI_API_VERSION=2023-05-15
 ```
 TAVILY_API_KEY=your-tavily-api-key
 ```
+
+If you want to use an alternate "reasoning" model, you can set `AZURE_OPENAI_REASONING_MODEL` and `AZURE_OPENAI_REASONING_DEPLOYMENT` - it'll fall back to the general ones set above.
 
 #### Required for Data Assistant:
 ```
@@ -214,6 +231,7 @@ The data assistant requires a Model Context Protocol (MCP) server to interact wi
 - `SPLUNK_MCP_ARGS`: Arguments to pass to the MCP server command (can be multiple arguments separated by spaces)
 
 Example configuration:
+
 ```bash
 # Use a version of python3 that has the MCP module in it, such as the one
 # that the PEAK-Assistant app is using
@@ -222,11 +240,12 @@ SPLUNK_MCP_ARGS=/home/user/splunk-mcp/splunk-mcp.py
 ```
 
 ### 3. Set Up a Python Environment
+
 These instructions assume you are using `pyenv` to manage your Python environment.
 If you are using another tool (e.g., `conda` or some other method of creating virtual
 environments), adjust accordingly.
 
-1. Install [pyenv](https://github.com/pyenv/pyenv) if not already installed. Configure
+1. Install [pyenv](https://github.com/pyenv/pyenv) and [pyenv-virtualenv](https://github.com/pyenv/pyenv-virtualenv) if not already installed. Configure
    your shell integration as per their instructions.
 2. Install Python 3.13.2:
    ```bash
@@ -239,19 +258,24 @@ environments), adjust accordingly.
    ```
 
 ### 4. Install Required Python Modules
+
 Install dependencies using pip:
+
 ```bash
-pip install -r requirements.txt
+pip install -e .
 ```
 
 ### 5. SSL Certificates (Web Interface Only)
 If you plan to use the web interface, you'll need SSL certificates. The Flask app expects `cert.pem` and `key.pem` files in the `UI/` directory.
 
 For development, you can create self-signed certificates:
+
 ```bash
 cd UI
 openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
 ```
+
+There's also a handy `generate_certificates.sh` script.
 
 ## Quick Start
 
@@ -260,14 +284,20 @@ openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -node
 1. Complete the installation steps above
 2. Create SSL certificates for the web interface:
    ```bash
-   cd UI
-   openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
+   ./generate_certificates.sh
    ```
 3. Start the web interface:
+   
    ```bash
-   cd UI
-   python app.py
+   python -m UI
    ```
+
+   or
+
+   ```bash
+   peak-assistant
+   ```
+
 4. Open your browser to `https://127.0.0.1:8000/`
 5. Follow the guided workflow through each phase
 
@@ -275,22 +305,22 @@ openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -node
 
 1. Generate a research report:
    ```bash
-   python research_assistant/research_assistant_cli.py -t "Kerberoasting" -f markdown
+   research-assistant -t "Kerberoasting" -f markdown
    ```
 
 2. Generate hypotheses from the research:
    ```bash
-   python hypothesis_assistant/hypothesis_assistant_cli.py -r kerberoasting.md
+   hypothesis-assistant -r kerberoasting.md
    ```
 
 3. Refine a hypothesis:
    ```bash
-   python hypothesis_assistant/hypothesis_refiner_cli.py -y "Your hypothesis here" -r kerberoasting.md -a
+   hypothesis-refiner -y "Your hypothesis here" -r kerberoasting.md -a
    ```
 
 4. Create an ABLE table:
    ```bash
-   python able_assistant/able_assistant_cli.py -r kerberoasting.md -y "Your refined hypothesis"
+   able-assistant -r kerberoasting.md -y "Your refined hypothesis"
    ```
 
 ## Workflow
@@ -306,18 +336,18 @@ The PEAK-Assistant follows a structured workflow that aligns with the PEAK Threa
 
 You can use either the web interface for a guided experience or the CLI tools for automation and scripting.
 
-See `requirements.txt` for the full list of required Python modules.
+See `pyproject.toml` for the full list of required Python modules.
 
 ## Project Structure
 
 ```
 PEAK-Assistant/
-├── README.md                    # This file
-├── requirements.txt             # Python dependencies
-├── .env                        # Environment variables (create this)
-├── context.txt                 # Local context file (optional, ignored by git)
-├── research_assistant/         # Research report generation
-├── hypothesis_assistant/       # Hypothesis generation and refinement
+├── README.md                  # This file
+├── pyproject.toml             # Python project definition
+├── .env                       # Environment variables (create this)
+├── context.txt                # Local context file (optional, ignored by git)
+├── research_assistant/        # Research report generation
+├── hypothesis_assistant/      # Hypothesis generation and refinement
 ├── able_assistant/            # ABLE table creation
 ├── data_assistant/            # Splunk data source discovery
 └── UI/                        # Flask web interface
