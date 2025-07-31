@@ -1,143 +1,123 @@
 # PEAK-Assistant
-PEAK-Assistant is an AI-powered threat hunting assistant designed to help cybersecurity professionals generate, refine, and document threat hunting hypotheses and research. It aligns with the [PEAK Threat Hunting Framework](https://www.splunk.com/en_us/form/the-peak-threat-hunting-framework.html) and leverages large language models and automated research tools to streamline the process of preparing for a hunt.
+PEAK-Assistant is an AI-powered threat hunting assistant designed to guide hunters quickly through the process of researching and planning a hypothesis-driven hunt. It aligns with the [PEAK Threat Hunting Framework](https://www.splunk.com/en_us/form/the-peak-threat-hunting-framework.html) and leverages large language models, agents, and automated research tools to streamline the process of preparing for a hunt.
 
-## Overview
-This repository provides both a web-based UI and a suite of command-line tools to:
-- Generate detailed threat hunting research reports for specific techniques.
-- Suggest and refine threat hunting hypotheses.
+⛔️⛔️ **The PEAK Assistant is intended solely as a proof-of-concept project to demonstrate the potential of agentic security solutions. It has not undergone security testing. Be cautious when deploying this to anything but a local system environment.** ⛔️⛔️
+
+## Features
+The PEAK Assistant offers the following features:
+
+- Generate detailed threat hunting research reports for specific techniques, tactics, or actors. It can access both Internet-based sources and local databases (ticket systems, wiki pages, threat intel platforms, etc).
+- Suggest and refine threat hunting hypotheses based on the research it performed.
 - Create PEAK ABLE tables to help scope the hunt.
-- Identify relevant data sources in Splunk for testing hypotheses.
+- Automatically identify relevant data sources in your Splunk instance.
+- Create step-by-step hunt plans, including guidance for how to analyze and interpret the results
+- Export any documents in Markdown or PDF format
+- Upload documents that you have prepared yourself, so the AI doesn't have to regenerate them.
+- Integration with research and Splunk data sources via either local or remote MCP servers, including OAuth2 support for authenticating to the MCP servers.
+- Each phase incorporates user feedback so you can collaborate with the assistant to refine outputs until they exactly right
+- Dark / Light mode UI
 
-## Web Interface
-The PEAK-Assistant includes a Flask-based web interface that provides an intuitive way to work through the threat hunting workflow. The web interface includes:
-
-- **Research Phase**: Generate detailed research reports on cybersecurity topics
-- **Hypothesis Phase**: Create and select hypotheses based on research findings  
-- **Refinement Phase**: Refine and improve your hypotheses
-- **ABLE Table Phase**: Generate ABLE Tables to guide threat hunting activities
-- **Data Discovery Phase**: Identify relevant Splunk data sources for testing hypotheses
-- **Hunt Planning**: Combine all phases into a comprehensive hunt plan
-
-### Running the Web Interface
+## Setting up the Python Environment
+Clone the [GitHub repo] to a directory on your local system:
 ```bash
-cd UI
-python app.py
+git clone https://github.com/splunk/PEAK-Assistant
 ```
 
-By default, the application will run on `https://127.0.0.1:8000/` (note HTTPS - you'll need SSL certificates).
+**I strongly recommend you use a python virtualenv to run this app.**
 
-For more details on the web interface, see [UI/README.md](UI/README.md).
-
-## Tools and CLI Scripts
-
-### 1. `research_assistant_cli.py`
-**Purpose:** Generate a comprehensive threat hunting research report for a given technique, using automated research and summarization agents.
-
-**Arguments:**
-- `-t`, `--technique` (required): The cybersecurity technique to research.
-- `-e`, `--environment`: Path to a specific `.env` file to use.
-- `-c`, `--local_context`: Path to a local context file to provide additional information.
-- `-f`, `--format`: Output format (`pdf` or `markdown`). Default: `markdown`.
-- `-v`, `--verbose`: Enable verbose output.
-- `-h`, `--help`: Show help message and exit.
-
-**Example:**
+Inside your virtualenv, install the required Python modules:
 ```bash
-python research_assistant/research_assistant_cli.py -t "Kerberoasting" -f markdown -c context.txt
+pip install -r requirements.txt
 ```
 
----
-
-### 2. `hypothesis_assistant_cli.py`
-**Purpose:** Suggest testable threat hunting hypotheses based on user input and a research document.
-
-**Arguments:**
-- `-e`, `--environment`: Path to a specific `.env` file to use.
-- `-r`, `--research` (required): Path to the research document (markdown file).
-- `-u`, `--user_input`: User input for hypothesis generation (optional).
-- `-c`, `--local_context`: Path to a local context file to provide additional information.
-- `-h`, `--help`: Show help message and exit.
-
-**Example:**
+## Web App Configuration
+Once that's done, you'll need to generate the SSL certificate and private key. The files must be named `cert.pem` and `key.pem`, and reside in the `UI` directory of the repository:
 ```bash
-python hypothesis_assistant/hypothesis_assistant_cli.py -r kerberoasting.md -u "Focus on use for lateral movement." -c context.txt
+cd PEAK-Assistant
+openssl req -x509 -newkey rsa:2048 -keyout UI/key.pem -out UI/cert.pem -days 365 -nodes -subj "/C=US/ST=CA/L=My Town/O=PEAK Assistant/OU=Threat Hunting Team/CN=localhost"
 ```
 
-**Notes:**
-Use the `-u` option to provide additional guidance or input (e.g., specific focus areas) to the hypothesis generation process.
-Use the `-c` option to provide local context from a file that contains organization-specific information.
+## MCP Server Configuration
+You will also need to configure the MCP servers the assistant uses to research topics and discover available data. Create a file called `mcp_servers.json` in the root of the repository. This file has the same format as you might be used to if you have configured MCP servers in Claude Desktop or other popular chat applications. You can use the following example as a template:
 
----
-
-### 3. `hypothesis_refiner_cli.py`
-**Purpose:** Refine and improve a threat hunting hypothesis using automated and/or human-in-the-loop feedback.
-
-**Arguments:**
-- `-e`, `--environment`: Path to a specific `.env` file to use.
-- `-y`, `--hypothesis` (required): The hypothesis to be refined.
-- `-r`, `--research` (required): Path to the research document (markdown file).
-- `-c`, `--local_context`: Path to a local context file to provide additional information.
-- `-v`, `--verbose`: Enable verbose output.
-- `-a`, `--automated`: Enable automated mode (no human feedback).
-- `-h`, `--help`: Show help message and exit.
-
-**Example:**
-```bash
-python hypothesis_assistant/hypothesis_refiner_cli.py -y "threat actors are using kerberoasting for lateral movement by requesting user tickets and then using them shortly after" -r kerberoasting.md -a -c context.txt
+```json
+{
+  "mcpServers": {
+    "tavily-search": {
+      "transport": "stdio",
+      "description": "Provides Internet searches",
+      "command": "npx",
+      "args": [
+        "-y",
+        "tavily-mcp@0.1.2"
+      ],
+      "env": {
+        "TAVILY_API_KEY": "tvly-dev-YOUR-KEY"
+      }
+    },
+    "splunk-mcp-surge": {
+      "transport": "stdio",
+      "description": null,
+      "timeout": 300,
+      "command": "/home/user/.pyenv/versions/peak-assistant/bin/python3",
+      "args": [
+        "/home/user/splunk-mcp/splunk-mcp.py"
+      ],
+      "env": {
+        "SPLUNK_SERVER_URL": "https://1.1.1.1:8089",
+        "SPLUNK_MCP_USER": "mcpuser",
+        "SPLUNK_MCP_PASSWD": "mcp_p4ss47"
+      }
+    },
+    "atlassian-remote-mcp": {
+      "transport": "sse",
+      "description": "Provides access to Jira and Confluence",
+      "url": "https://mcp.atlassian.com/v1/sse"
+    }
+  },
+  "serverGroups": {
+    "research-external": [
+      "tavily-search"
+    ],
+    "research-internal": [
+      "atlassian-remote-mcp"
+    ],
+    "data_discovery": [
+      "splunk-mcp-surge"
+    ]
+  }
+}
 ```
 
-**Notes:**
-Hypothesis refinement is an interactive process with human involvement to steer things in the correct direction. By default, `hypothesis_refiner_cli.py` will prompt the user for their 
-input/feedback after every refinement attempt. You can continue with as many rounds of refinement as you like; when you are finished, mention the string 
-`YYY-HYPOTHESIS-ACCEPTED-YYY` to let the agent know you're finished. 
+At a minimum, you must provide the following types of MCP server (at least one of each):
 
-**I WILL be improving this experience later.**
+* Internet search (e.g., Tavily)
+* Splunk search (e.g., the official Splunk MCP server)
 
-If you prefer a completely automated refinement experience, use the `-a` option, as shown in the example. This will prevent all prompts for user input and simply output the refined hypothesis.
+If you want to incorporate local data sources, for example to learn from the results of past hunts you may have performed on a topic, you may optionally also include MCP servers for those sources, though they are not required. In this example, we used:
 
----
+* [Atlassian's offical MCP server](https://www.atlassian.com/platform/remote-mcp-server) (provides access to Jira and Confluence)
 
-### 4. `able_assistant_cli.py`
-**Purpose:** Generate a PEAK ABLE table (Actor, Behavior, Location, Evidence) for a given hypothesis and research document.
+Feel free to substitute MCP servers with functional equivalents. For example, if you have a different Internet search provider, replace the Tavily configuration with whatever you're using.
 
-**Arguments:**
-- `-e`, `--environment`: Path to a specific `.env` file to use.
-- `-r`, `--research` (required): Path to the research document (markdown file).
-- `-y`, `--hypothesis` (required): The hunting hypothesis.
-- `-c`, `--local_context`: Path to a local context file to provide additional information.
-- `-h`, `--help`: Show help message and exit.
+### Telling the Assistant Which MCP Servers to Use
+In addition to defining the servers, you'll also have to add them to the appropriate MCP server groups, to let the different agents know which they should be using. 
 
-**Example:**
-```bash
-python able_assistant/able_assistant_cli.py -r kerberoasting.md -y "Adversaries seeking lateral movement via Kerberoasting will request Kerberos service tickets (TGS) for user-based SPNs associated with privileged or lateral-movement-enabled service accounts, followed shortly by successful authentication or remote access events (e.g., SMB, RDP, WinRM) using those accounts from previously unseen endpoints." -c context.txt
-```
+The server groups are:
 
----
+* `research-external`: Used for any Internet searches in the topic research phase
+* `research-internal`: Used for searching any local data sources during the topic research phase
+* `data-discovery`: Allows access to Splunk (or whatever other local data sources you use) for purposes of automated data discovery. 
 
-### 5. `data_asssistant_cli.py`
-**Purpose:** Identify relevant Splunk indices and data sources for testing a threat hunting hypothesis.
+You may add multiple MCP servers to each group if you would like the Assistant to have access to several sources, but you **must have at least one server in each group**.
 
-**Arguments:**
-- `-e`, `--environment`: Path to a specific `.env` file to use.
-- `-r`, `--research` (required): Path to the research document (markdown file).
-- `-y`, `--hypothesis` (required): The hunting hypothesis.
-- `-a`, `--able_info`: Path to ABLE table information file (optional).
-- `-c`, `--local_context`: Path to a local context file to provide additional information.
-- `-v`, `--verbose`: Enable verbose output.
-- `-h`, `--help`: Show help message and exit.
+### MCP Authentication
 
-**Example:**
-```bash
-python data_assistant/data_asssistant_cli.py -r kerberoasting.md -y "Adversaries seeking lateral movement via Kerberoasting will request Kerberos service tickets" -a able_table.md -c context.txt -v
-```
+The PEAK Assistant supports OAuth2 authentication for remote MCP servers, as well as OAuth resource autodiscovery. If your MCP server also supports those, you should be automatically directed to the server's authentication provider when you connect the MCP server from the app's main page.
 
-**Notes:**
-This tool requires additional Splunk-specific environment variables (see Environment Variables section below).
-The data assistant uses an MCP (Model Context Protocol) server to interact with Splunk. You must specify the path to your MCP server command and any required arguments through the `SPLUNK_MCP_COMMAND` and `SPLUNK_MCP_ARGS` environment variables.
+### Local Context Files
 
-## Local Context Files
-
-All CLI tools support a `-c` or `--local_context` parameter that allows you to provide additional context specific to your organization or environment. This context file should contain information that helps the AI agents understand your specific environment, such as:
+The Assistant supports an optional file for providing "local context". This provides a way for you to give the LLM clues and guidance about your local environment or preferences so you can adapt the AI to your needs without having to edit the prompts. If present, this context file lives at `UI/context.txt` and should contain information that helps the AI agents understand your specific environment, such as:
 
 - Organizational structure and naming conventions
 - Specific technologies and tools in use
@@ -145,153 +125,66 @@ All CLI tools support a `-c` or `--local_context` parameter that allows you to p
 - Compliance requirements or regulatory considerations
 - Previous hunting activities or findings
 
-### Creating a context.txt File
-
-Create a `context.txt` file in your project directory with relevant information. For example:
+There is no specific format requirement, but you may find it helpful to have some sort of basic structure to help you maintain it easily over time. Here's a simple example:
 
 ```
-# Organization Context
-Organization: ACME Corporation
-Environment: Mixed Windows/Linux environment with cloud infrastructure
-Primary Technologies: Active Directory, AWS, Splunk Enterprise
-Compliance: SOX, PCI DSS
+Environmental hints:
+    - We use primarily Splunk SIEM and Zeek NIDS.
 
-# Known Threat Landscape
-Recent Activity: Increased phishing attempts targeting finance department
-Focus Areas: Lateral movement detection, privilege escalation
-Previous Findings: Evidence of credential stuffing attacks in Q3 2024
+Local Information Sources:
+    - Always consult the following sources of information when you are preparing your research
+      reports, using the Atlassian MCP server. You may also consult them any other time you
+      believe it to be appropriate.
+      - Hunt team documents hunts in Confluence wiki, under the "Threat Hunting" space
+      - Hunt team tracks in-progress and upcoming hunts in Jira, under the "Threat Hunting" project
+    - The Atlassian server is my-cloud-tenant.atlassian.net.
 
-# Infrastructure Details
-Domain: acme.local
-Key Servers: DC01, DC02, EXCH01
-Network Segments: Corporate LAN (10.0.0.0/8), DMZ (192.168.1.0/24)
-```
+Splunk hints:
+    - If you encounter base64-encoded data, and if you decide that you must decode it,
+      you can use the following sample SPL as a reference:
 
-The context file is automatically ignored by Git (included in .gitignore) to prevent accidental commit of sensitive organizational information.
+        <your query>
+        | code field=base64_encoded_field method=base64 action=decode destfield=decoded_field
+        <the rest of your query>
 
-## Installation and Configuration
+      Where the "field" parameter is the name of the field that has base64 data in it, and
+      the "destfield" parameter is the name of a new field you want to hold the decoded value.
 
-### 1. Clone the Repository
-Clone this repository from GitHub:
-```bash
-git clone https://github.com/splunk/PEAK-Assistant.git
-cd PEAK-Assistant
+    - Some of the indices are extremely large and have many events. You will need to check your
+      SPL queries carefully to ensure that they are as efficient as possible. One good strategy
+      is to use 'tstats' whenever possible, rather than normal searches.
+
+    - Don't try to use accelerated datamodels. There are no datamodels on this server.
 ```
 
 ### 2. Environment Variables
-Create a `.env` file in the project root with the following variables:
+The rest of the Assistant configuration has to do with the LLM configuration, and is held in environment variables. Create a `.env` file in the project root with the following variables:
 
-#### Required for All Tools:
 ```
+# Note that the PEAK Assistant only supports Azure OpenAI at this time.
 AZURE_OPENAI_API_KEY=your-azure-openai-api-key
 AZURE_OPENAI_ENDPOINT=https://your-azure-endpoint.openai.azure.com/
 AZURE_OPENAI_DEPLOYMENT=your-deployment-name
-AZURE_OPENAI_MODEL=gpt-4
 AZURE_OPENAI_API_VERSION=2023-05-15
+
+# Use this model for most tasks
+AZURE_OPENAI_MODEL=gpt-4o
+
+# Use this model when you need extended thinking (some of the research, data discovery, and planning tasks).
+# If you prefer not to use a reasoning model, simply set it to whatever model you're using above
+AZURE_OPENAI_REASONING_MODEL=o4-mini
 ```
 
-#### Required for Research Assistant:
-```
-TAVILY_API_KEY=your-tavily-api-key
-```
+## Running the Assistant
+Now that it is configured it's time to run the app. From the root of the repository, issue the following command:
 
-#### Required for Data Assistant:
-```
-SPLUNK_SERVER_URL=https://your-splunk-server:8089
-SPLUNK_MCP_USER=your-splunk-username
-SPLUNK_MCP_PASSWD=your-splunk-password
-SPLUNK_MCP_COMMAND=/path/to/python3
-SPLUNK_MCP_ARGS=/path/to/splunk-mcp/splunk-mcp.py
-```
-
-The assistant primarily supports Azure OpenAI as an LLM backend. You may use any model available in your Azure deployment.
-
-#### MCP Server Configuration (Data Assistant Only)
-
-The data assistant requires a Model Context Protocol (MCP) server to interact with Splunk. The MCP server acts as a bridge between the AI agents and your Splunk instance. It is designed to work with the [`splunk-mcp` server](https://github.com/splunk/splunk-mcp).
-
-- `SPLUNK_MCP_COMMAND`: Full path to the executable or script that starts your Splunk MCP server
-- `SPLUNK_MCP_ARGS`: Arguments to pass to the MCP server command (can be multiple arguments separated by spaces)
-
-Example configuration:
 ```bash
-# Use a version of python3 that has the MCP module in it, such as the one
-# that the PEAK-Assistant app is using
-SPLUNK_MCP_COMMAND=/home/user/.pyenv/versions/peak-assistant/bin/python3
-SPLUNK_MCP_ARGS=/home/user/splunk-mcp/splunk-mcp.py
+python UI/app.py
 ```
 
-### 3. Set Up a Python Environment
-These instructions assume you are using `pyenv` to manage your Python environment.
-If you are using another tool (e.g., `conda` or some other method of creating virtual
-environments), adjust accordingly.
+By default, the application will run on `https://127.0.0.1:8000/` (note HTTPS - if you're using self-signed certificates as in the examples above, you'll also need to tell the browser to accept the certificate before you can proceed).
 
-1. Install [pyenv](https://github.com/pyenv/pyenv) if not already installed. Configure
-   your shell integration as per their instructions.
-2. Install Python 3.13.2:
-   ```bash
-   pyenv install 3.13.2
-   ```
-3. Create and activate a virtual environment:
-   ```bash
-   pyenv virtualenv 3.13.2 peak-assistant
-   pyenv local peak-assistant
-   ```
 
-### 4. Install Required Python Modules
-Install dependencies using pip:
-```bash
-pip install -r requirements.txt
-```
-
-### 5. SSL Certificates (Web Interface Only)
-If you plan to use the web interface, you'll need SSL certificates. The Flask app expects `cert.pem` and `key.pem` files in the `UI/` directory.
-
-For development, you can create self-signed certificates:
-```bash
-cd UI
-openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
-```
-
-## Quick Start
-
-### Using the Web Interface (Recommended for beginners):
-
-1. Complete the installation steps above
-2. Create SSL certificates for the web interface:
-   ```bash
-   cd UI
-   openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
-   ```
-3. Start the web interface:
-   ```bash
-   cd UI
-   python app.py
-   ```
-4. Open your browser to `https://127.0.0.1:8000/`
-5. Follow the guided workflow through each phase
-
-### Using CLI Tools (For automation/scripting):
-
-1. Generate a research report:
-   ```bash
-   python research_assistant/research_assistant_cli.py -t "Kerberoasting" -f markdown
-   ```
-
-2. Generate hypotheses from the research:
-   ```bash
-   python hypothesis_assistant/hypothesis_assistant_cli.py -r kerberoasting.md
-   ```
-
-3. Refine a hypothesis:
-   ```bash
-   python hypothesis_assistant/hypothesis_refiner_cli.py -y "Your hypothesis here" -r kerberoasting.md -a
-   ```
-
-4. Create an ABLE table:
-   ```bash
-   python able_assistant/able_assistant_cli.py -r kerberoasting.md -y "Your refined hypothesis"
-   ```
 
 ## Workflow
 
@@ -303,62 +196,6 @@ The PEAK-Assistant follows a structured workflow that aligns with the PEAK Threa
 4. **ABLE Table Creation**: Develop Actor, Behavior, Location, Evidence tables to scope the hunt
 5. **Data Discovery**: Identify relevant data sources in your Splunk environment for testing hypotheses
 6. **Hunt Planning**: Combine all components into a comprehensive threat hunting plan
-
-You can use either the web interface for a guided experience or the CLI tools for automation and scripting.
-
-See `requirements.txt` for the full list of required Python modules.
-
-## Project Structure
-
-```
-PEAK-Assistant/
-├── README.md                    # This file
-├── requirements.txt             # Python dependencies
-├── .env                        # Environment variables (create this)
-├── context.txt                 # Local context file (optional, ignored by git)
-├── research_assistant/         # Research report generation
-├── hypothesis_assistant/       # Hypothesis generation and refinement
-├── able_assistant/            # ABLE table creation
-├── data_assistant/            # Splunk data source discovery
-└── UI/                        # Flask web interface
-    ├── app.py                 # Main Flask application
-    ├── context.txt            # UI-specific context file (optional)
-    ├── cert.pem & key.pem     # SSL certificates (create these)
-    └── templates/             # HTML templates
-```
-
-## Notes
-
-- All generated files (PDF reports, markdown files) are automatically ignored by Git to prevent repository bloat
-- Context files (`context.txt`) are ignored by Git to protect sensitive organizational information
-- The assistant is designed to work with Azure OpenAI and requires proper API credentials
-- Some features (research, data discovery) require additional API keys and services
-- The web interface provides a more user-friendly experience while CLI tools are better for automation
-
-## Troubleshooting
-
-### Common Issues:
-
-1. **Missing Environment Variables**: Ensure your `.env` file contains all required variables for the features you want to use
-2. **OpenAI API Errors**: Usually indicates rate limiting or server issues - try increasing retry counts or waiting
-3. **SSL Certificate Issues**: For the web interface, ensure you've created the required SSL certificates
-4. **Splunk Connection Issues**: Verify your Splunk credentials and server URL for data discovery features
-5. **MCP Server Issues**: Ensure the `SPLUNK_MCP_COMMAND` points to a valid executable and that the MCP server can connect to your Splunk instance
-6. **Permission Issues**: Ensure the application has write permissions for session storage
-
-### Getting Help:
-
-- Check the web interface's built-in help page for detailed usage instructions
-- Review the CLI tool help with `python <tool_name> --help`
-- Examine error messages in the debug page of the web interface
-
-## Contributing
-
-When contributing to this project:
-- Follow the existing code structure and naming conventions
-- Test both CLI and web interface functionality
-- Update documentation for any new features
-- Be mindful of sensitive information in context files
 
 ## License
 See the [LICENSE](LICENSE) for details.
