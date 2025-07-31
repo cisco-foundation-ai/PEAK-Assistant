@@ -14,6 +14,7 @@ from autogen_agentchat.teams import RoundRobinGroupChat
 from autogen_agentchat.ui import Console
 from autogen_ext.tools.mcp import McpWorkbench, StdioServerParams
 from autogen_agentchat.conditions import TextMentionTermination
+from autogen_agentchat.base import TaskResult
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from utils.assistant_auth import PEAKAssistantAuthManager
@@ -115,6 +116,33 @@ async def identify_data_sources(
         respond with "YYY-TERMINATE-YYY" to indicate that the data discovery agent can stop iterating.
     """
 
+    no_data_discovery_msg = f"""
+# Data Discovery Report
+
+## Status: <span style="color: red;">Not Available</span>
+
+Data discovery could not be performed because no MCP servers are configured for the `{mcp_server_group}` group.
+
+## Impact on Hunt Planning
+
+Hunt planning will proceed without specific data source recommendations. The hunt plan will need to rely on:
+- General knowledge of common data sources
+- Manual data source identification
+- Analyst expertise in available systems
+
+## Recommendation
+
+<span style="color: red;">Configure MCP servers for data discovery to get specific data source recommendations for future hunts.</span>
+    """
+    
+    # In case we need this later
+    no_data_discovery_result = TaskResult(
+        messages=[
+            TextMessage(content=no_data_discovery_msg, source="Data_Discovery_Agent")
+        ]
+    )
+
+    # The messages we'll send to the agents
     messages = [
         TextMessage(content=f"Here is the research document:\n{research_document}\n", source="user"),
         TextMessage(content=f"Here is the hypothesis: {hypothesis}\n", source="user"),
@@ -136,11 +164,11 @@ async def identify_data_sources(
     connected_servers = await setup_mcp_servers(mcp_server_group)
     
     if not connected_servers:
-        error_msg = f"No MCP servers could be connected from group '{mcp_server_group}'. Check your MCP configuration."
+        error_msg = f"WARNING: No MCP servers could be connected from group '{mcp_server_group}'. Check your MCP configuration."
         if verbose:
             print(error_msg)
-        raise RuntimeError(error_msg)
-    
+        return no_data_discovery_result 
+
     if verbose:
         print(f"Connected to {len(connected_servers)} MCP servers for data discovery: {', '.join(connected_servers)}")
     
@@ -152,21 +180,19 @@ async def identify_data_sources(
             group_workbenches.append(workbench)
     
     if not group_workbenches:
-        error_msg = f"No MCP workbenches available for data discovery group '{mcp_server_group}'. Check your MCP configuration."
+        error_msg = f"WARNING: No MCP workbenches available for data discovery group '{mcp_server_group}'. Skipping data discovery."
         if verbose:
             print(error_msg)
-        raise RuntimeError(error_msg)
+        return no_data_discovery_result 
     
-    # Use the first workbench from the data discovery group
-    mcp_workbench = group_workbenches[0]
     return await _run_data_discovery_with_workbench(
-        mcp_workbench, messages, data_discovery_prompt, discovery_critic_prompt,
+        group_workbenches, messages, data_discovery_prompt, discovery_critic_prompt,
         az_model_client, az_model_reasoning_client, verbose, previous_run
     )
 
 
 async def _run_data_discovery_with_workbench(
-    mcp_workbench,
+    workbenches,
     messages,
     data_discovery_prompt,
     discovery_critic_prompt,
@@ -180,7 +206,7 @@ async def _run_data_discovery_with_workbench(
     data_discovery_agent = AssistantAgent(
         "Data_Discovery_Agent",
         model_client=az_model_client,
-        workbench=mcp_workbench,
+        workbench=workbenches,
         reflect_on_tool_use=True,
         model_client_stream=True,
         system_message=data_discovery_prompt
@@ -208,8 +234,8 @@ async def _run_data_discovery_with_workbench(
             result = await team.run(task=messages)
         return result
     except Exception as e:
-        print(f"Error during data source identification: {e}")
-        return f"An error occurred during data source identification: {e}"
+        print(f"An unexpected error occurred in the data discovery agent: {e}\n{traceback.format_exc()}")
+        raise Exception("An unexpected error occurred while running the data discovery agent.") from e
 
 # Example usage
 if __name__ == "__main__":
