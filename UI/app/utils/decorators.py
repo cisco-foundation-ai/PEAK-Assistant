@@ -22,6 +22,13 @@ def handle_async_api_errors(f):
         try:
             return await f(*args, **kwargs)
         except Exception as e:
+            # Log the full exception with traceback for debugging
+            import traceback
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error in {f.__name__}: {str(e)}")
+            logger.error(f"Full traceback:\n{traceback.format_exc()}")
+            
             # Universally handle any exception. The autogen library often wraps exceptions
             # and includes the traceback in the error message string itself. We must parse it.
             error_message = str(e)
