@@ -4,7 +4,7 @@ import asyncio
 from typing import List
 
 from dotenv import load_dotenv
-from autogen_core.models import UserMessage
+from autogen_core.models import UserMessage, SystemMessage
 
 from utils import find_dotenv_file
 from . import able_table
@@ -75,7 +75,7 @@ def main() -> None:
             print(f"Error reading local context: {e}")
             exit(1)
 
-    messages: List[UserMessage] = list()
+    messages: List[UserMessage | SystemMessage] = list()
     while True:
         # Run the hypothesizer asynchronously
         able = asyncio.run(

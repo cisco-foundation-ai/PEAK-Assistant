@@ -227,9 +227,7 @@ async def test_configuration_comparison() -> None:
             }
         }
     }
-    print(
-        f"   Fields required: {len(list(old_config['mcpServers']['oauth-server'].keys())) + len(list(old_config['mcpServers']['oauth-server']['auth'].keys()))}"
-    )
+
     print("   Manual OAuth setup required")
     print("   Client credentials must be known")
 
@@ -252,13 +250,13 @@ async def test_configuration_comparison() -> None:
         (
             (
                 len(list(old_config["mcpServers"]["oauth-server"].keys()))
-                + len(list(old_config["mcpServers"]["oauth-server"]["auth"].keys()))
+                + len(list(old_config["mcpServers"]["oauth-server"]["auth"].keys()))  # type: ignore[attr-defined]
             )
             - len(list(new_config["servers"][0].keys()))
         )
         / (
             len(list(old_config["mcpServers"]["oauth-server"].keys()))
-            + len(list(old_config["mcpServers"]["oauth-server"]["auth"].keys()))
+            + len(list(old_config["mcpServers"]["oauth-server"]["auth"].keys()))  # type: ignore[attr-defined]
         )
         * 100
     )
