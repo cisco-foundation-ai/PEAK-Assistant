@@ -1,190 +1,199 @@
 """
 File upload and download routes for PEAK Assistant
 """
+
 import os
 import io
-from flask import Blueprint, request, jsonify, Response, send_file, current_app
-from ..utils.helpers import get_session_value, set_session_value, clear_session_key, clear_all_session_data
+from flask import Blueprint, request, jsonify, send_file, current_app
+from ..utils.helpers import (
+    get_session_value,
+    set_session_value,
+    clear_session_key,
+    clear_all_session_data,
+)
 from werkzeug.utils import secure_filename
 from markdown_pdf import MarkdownPdf, Section
 
 # Create upload blueprint
-upload_bp = Blueprint('upload', __name__, url_prefix='/api')
+upload_bp = Blueprint("upload", __name__, url_prefix="/api")
 
 # Global constants
-ALLOWED_UPLOAD_EXTENSIONS = {'.md', '.txt'}
+ALLOWED_UPLOAD_EXTENSIONS = {".md", ".txt"}
 
 
-@upload_bp.route('/upload-report', methods=['POST'])
+@upload_bp.route("/upload-report", methods=["POST"])
 def upload_report():
     """Upload research report file"""
-    if 'file' not in request.files:
-        return jsonify({'success': False, 'error': 'No file part'}), 400
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'success': False, 'error': 'No selected file'}), 400
+    if "file" not in request.files:
+        return jsonify({"success": False, "error": "No file part"}), 400
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"success": False, "error": "No selected file"}), 400
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in ALLOWED_UPLOAD_EXTENSIONS:
-        return jsonify({'success': False, 'error': 'Invalid file type'}), 400
+        return jsonify({"success": False, "error": "Invalid file type"}), 400
     filename = secure_filename(file.filename)
-    filepath = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+    filepath = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
     file.save(filepath)
-    with open(filepath, 'r', encoding='utf-8') as f:
+    with open(filepath, "r", encoding="utf-8") as f:
         content = f.read()
-    set_session_value('report_md', content)
-    set_session_value('last_topic', '[Uploaded]')
-    return jsonify({'success': True, 'content': content})
+    set_session_value("report_md", content)
+    set_session_value("last_topic", "[Uploaded]")
+    return jsonify({"success": True, "content": content})
 
 
-@upload_bp.route('/upload-able-table', methods=['POST'])
+@upload_bp.route("/upload-able-table", methods=["POST"])
 def upload_able_table():
     """Upload ABLE table file"""
-    if 'file' not in request.files:
-        return jsonify({'success': False, 'error': 'No file part'}), 400
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'success': False, 'error': 'No selected file'}), 400
+    if "file" not in request.files:
+        return jsonify({"success": False, "error": "No file part"}), 400
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"success": False, "error": "No selected file"}), 400
     try:
-        content = file.read().decode('utf-8')
-        set_session_value('able_table_md', content)
-        return jsonify({'success': True, 'able_table': content})
+        content = file.read().decode("utf-8")
+        set_session_value("able_table_md", content)
+        return jsonify({"success": True, "able_table": content})
     except Exception as e:
-        return jsonify({'success': False, 'error': f'Error reading file: {e}'}), 500
+        return jsonify({"success": False, "error": f"Error reading file: {e}"}), 500
 
 
-@upload_bp.route('/upload-data-sources', methods=['POST'])
+@upload_bp.route("/upload-data-sources", methods=["POST"])
 def upload_data_sources():
     """Upload data sources file"""
-    if 'file' not in request.files:
-        return jsonify({'success': False, 'error': 'No file part'}), 400
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'success': False, 'error': 'No selected file'}), 400
+    if "file" not in request.files:
+        return jsonify({"success": False, "error": "No file part"}), 400
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"success": False, "error": "No selected file"}), 400
     try:
-        content = file.read().decode('utf-8')
-        set_session_value('data_sources_md', content)
-        return jsonify({'success': True, 'data_sources': content})
+        content = file.read().decode("utf-8")
+        set_session_value("data_sources_md", content)
+        return jsonify({"success": True, "data_sources": content})
     except Exception as e:
-        return jsonify({'success': False, 'error': f'Error reading file: {e}'}), 500
+        return jsonify({"success": False, "error": f"Error reading file: {e}"}), 500
 
 
-@upload_bp.route('/upload-hypothesis', methods=['POST'])
+@upload_bp.route("/upload-hypothesis", methods=["POST"])
 def upload_hypothesis():
     """Upload hypothesis file"""
-    if 'file' not in request.files:
-        return jsonify({'success': False, 'error': 'No file part in the request.'}), 400
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'success': False, 'error': 'No file selected for uploading.'}), 400
+    if "file" not in request.files:
+        return jsonify({"success": False, "error": "No file part in the request."}), 400
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify(
+            {"success": False, "error": "No file selected for uploading."}
+        ), 400
     if file:
         try:
-            content = file.read().decode('utf-8')
+            content = file.read().decode("utf-8")
             # Save to session
-            set_session_value('hypothesis', content)
+            set_session_value("hypothesis", content)
             # Clear any old refined hypothesis
-            clear_session_key('refined_hypothesis')
-            return jsonify({'success': True, 'hypothesis': content})
+            clear_session_key("refined_hypothesis")
+            return jsonify({"success": True, "hypothesis": content})
         except Exception as e:
-            return jsonify({'success': False, 'error': f'Error reading file: {e}'}), 500
-    return jsonify({'success': False, 'error': 'An unknown error occurred.'}), 500
+            return jsonify({"success": False, "error": f"Error reading file: {e}"}), 500
+    return jsonify({"success": False, "error": "An unknown error occurred."}), 500
 
 
-@upload_bp.route('/download/markdown', methods=['POST', 'GET'])
+@upload_bp.route("/download/markdown", methods=["POST", "GET"])
 def download_markdown():
     """Download content as markdown file"""
-    if request.method == 'POST':
+    if request.method == "POST":
         data = request.json
-        content = data.get('content', '')
-        filename = data.get('filename', 'download.md')
+        content = data.get("content", "")
+        filename = data.get("filename", "download.md")
     else:
         # GET method - use session data
-        content = get_session_value('report_md', '')
-        filename = 'research_report.md'
-    
+        content = get_session_value("report_md", "")
+        filename = "research_report.md"
+
     if not content:
-        return jsonify({'success': False, 'error': 'No content to download'}), 400
-    
+        return jsonify({"success": False, "error": "No content to download"}), 400
+
     # Create file-like object
-    file_obj = io.BytesIO(content.encode('utf-8'))
+    file_obj = io.BytesIO(content.encode("utf-8"))
     file_obj.seek(0)
-    
+
     return send_file(
-        file_obj,
-        as_attachment=True,
-        download_name=filename,
-        mimetype='text/markdown'
+        file_obj, as_attachment=True, download_name=filename, mimetype="text/markdown"
     )
 
 
-@upload_bp.route('/download/pdf', methods=['POST', 'GET'])
+@upload_bp.route("/download/pdf", methods=["POST", "GET"])
 def download_pdf():
     """Download content as PDF file"""
-    if request.method == 'POST':
+    if request.method == "POST":
         data = request.json
-        content = data.get('content', '')
-        filename = data.get('filename', 'download.pdf')
+        content = data.get("content", "")
+        filename = data.get("filename", "download.pdf")
     else:
         # GET method - use session data
-        content = get_session_value('report_md', '')
-        filename = 'research_report.pdf'
-    
+        content = get_session_value("report_md", "")
+        filename = "research_report.pdf"
+
     if not content:
-        return jsonify({'success': False, 'error': 'No content to download'}), 400
-    
+        return jsonify({"success": False, "error": "No content to download"}), 400
+
     try:
         import tempfile
-        
+
         # Create PDF from markdown using temporary file
         pdf = MarkdownPdf(toc_level=2)
         pdf.add_section(Section(content, toc=False))
-        
+
         # Create temporary file for PDF generation
-        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as temp_file:
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as temp_file:
             temp_filename = temp_file.name
-        
+
         # Generate PDF to temporary file
         pdf.save(temp_filename)
-        
+
         # Read PDF content from temporary file
-        with open(temp_filename, 'rb') as pdf_file:
+        with open(temp_filename, "rb") as pdf_file:
             pdf_content = pdf_file.read()
-        
+
         # Clean up temporary file
         os.unlink(temp_filename)
-        
+
         # Create file-like object
         file_obj = io.BytesIO(pdf_content)
         file_obj.seek(0)
-        
+
         return send_file(
             file_obj,
             as_attachment=True,
             download_name=filename,
-            mimetype='application/pdf'
+            mimetype="application/pdf",
         )
     except Exception as e:
-        return jsonify({'success': False, 'error': f'PDF generation failed: {str(e)}'}), 500
+        return jsonify(
+            {"success": False, "error": f"PDF generation failed: {str(e)}"}
+        ), 500
 
 
-@upload_bp.route('/save-selected-hypothesis', methods=['POST'])
+@upload_bp.route("/save-selected-hypothesis", methods=["POST"])
 def save_selected_hypothesis():
     """Save a selected hypothesis to the session directly."""
     data = request.json
-    if not data or 'hypothesis' not in data:
-        return jsonify({'success': False, 'error': 'No hypothesis provided in request data.'}), 400
-        
-    hypothesis = data['hypothesis']
-    set_session_value('hypothesis', hypothesis)
+    if not data or "hypothesis" not in data:
+        return jsonify(
+            {"success": False, "error": "No hypothesis provided in request data."}
+        ), 400
+
+    hypothesis = data["hypothesis"]
+    set_session_value("hypothesis", hypothesis)
     # When a new base hypothesis is selected, any previous refinement is invalid.
-    clear_session_key('refined_hypothesis')
+    clear_session_key("refined_hypothesis")
     print(f"Saved selected hypothesis to session: {hypothesis[:50]}...")
-    
-    return jsonify({'success': True})
+
+    return jsonify({"success": True})
 
 
-@upload_bp.route('/clear-session', methods=['POST'])
+@upload_bp.route("/clear-session", methods=["POST"])
 def clear_session():
     """Clear the session data from the server's storage."""
     clear_all_session_data()
     # The client-side code will handle the redirect after this is successful.
-    return jsonify({'success': True})
+    return jsonify({"success": True})

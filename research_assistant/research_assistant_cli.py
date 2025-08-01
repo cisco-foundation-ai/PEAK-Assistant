@@ -5,8 +5,6 @@ import argparse
 import asyncio
 import re
 import sys
-from pathlib import Path
-import warnings
 from typing import Optional
 from dotenv import load_dotenv
 import traceback
@@ -15,30 +13,22 @@ from markdown_pdf import MarkdownPdf, Section
 import openai
 
 from autogen_agentchat.messages import TextMessage
-from autogen_ext.models.openai import AzureOpenAIChatCompletionClient
-from autogen_agentchat.agents import AssistantAgent, UserProxyAgent
+from autogen_agentchat.agents import AssistantAgent
 from autogen_agentchat.conditions import TextMentionTermination
 from autogen_agentchat.teams import SelectorGroupChat
-from autogen_agentchat.ui import Console 
+from autogen_agentchat.ui import Console
+import openai
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from utils import find_dotenv_file
 from utils.assistant_auth import PEAKAssistantAuthManager
 from utils.azure_client import PEAKAssistantAzureOpenAIClient
 from utils.mcp_config import get_client_manager, setup_mcp_servers
 
-def find_dotenv_file():
-    """Search for a .env file in current directory and parent directories"""
-    current_dir = Path.cwd()
-    while current_dir != current_dir.parent:  # Stop at root directory
-        env_path = current_dir / '.env'
-        if env_path.exists():
-            return str(env_path)
-        current_dir = current_dir.parent
-    return None  # No .env file found
 
 def generate_unique_filename(title, extension):
     """Generate a unique filename based on the title and extension."""
-    sanitized_title = re.sub(r'[^a-zA-Z0-9_]', '_', title.lower().strip())
+    sanitized_title = re.sub(r"[^a-zA-Z0-9_]", "_", title.lower().strip())
     base_filename = f"{sanitized_title}{extension}"
     counter = 0
 
@@ -48,8 +38,10 @@ def generate_unique_filename(title, extension):
 
     return base_filename
 
+
 async def websocket_input():
     return
+
 
 def get_input_function():
     if os.getenv("FLASK_RUN_FROM_CLI") or os.getenv("WERKZEUG_RUN_MAIN"):
@@ -57,24 +49,25 @@ def get_input_function():
     else:
         return input
 
+
 async def researcher(
-    technique: str = None, 
+    technique: str = None,
     local_context: str = None,
     verbose: bool = False,
     previous_run: list = None,
     mcp_server_group_external: str = "research-external",
     mcp_server_group_internal: str = "research-internal",
-    user_id: Optional[str] = None
+    user_id: Optional[str] = None,
 ) -> str:
     """
-    Orchestrates a multi-agent, multi-stage research workflow to generate a 
-    comprehensive cybersecurity threat hunting report for a specified 
+    Orchestrates a multi-agent, multi-stage research workflow to generate a
+    comprehensive cybersecurity threat hunting report for a specified
     technique or behavior.
 
-    This function coordinates a team of specialized agents—search, research 
-    critic, summarizer, and summary critic—each with distinct roles in 
-    researching, verifying, summarizing, and validating information about a 
-    cybersecurity technique. The process is iterative and continues until a 
+    This function coordinates a team of specialized agents—search, research
+    critic, summarizer, and summary critic—each with distinct roles in
+    researching, verifying, summarizing, and validating information about a
+    cybersecurity technique. The process is iterative and continues until a
     high-quality, expert-level markdown report is produced and approved.
 
     Args:
@@ -84,13 +77,13 @@ async def researcher(
         previous_run (list, optional): List of conversation messages used to continue or resume a prior research session.
 
     Returns:
-        A TaskResult object containing all the agent messages, including the final 
+        A TaskResult object containing all the agent messages, including the final
         report, or a string error message if the process fails.
 
     Raises:
         Exception: If an error occurs during the research or report generation process.
     """
-    
+
     # NOTE: This prompt is used for both the external and internal search agents.
     # They're basically the same, just with different MCP tools.
     search_system_prompt = """
@@ -363,34 +356,42 @@ async def researcher(
     """
 
     auth_mgr = PEAKAssistantAuthManager()
-    az_model_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr)
-    az_model_reasoning_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr, model_type="reasoning")
-    
+    az_model_client = await PEAKAssistantAzureOpenAIClient().get_client(
+        auth_mgr=auth_mgr
+    )
+    az_model_reasoning_client = await PEAKAssistantAzureOpenAIClient().get_client(
+        auth_mgr=auth_mgr, model_type="reasoning"
+    )
+
     # Set up MCP servers for research
     mcp_client_manager = get_client_manager()
-    connected_servers_external = await setup_mcp_servers(mcp_server_group_external, user_id=user_id)
-    connected_servers_internal = await setup_mcp_servers(mcp_server_group_internal, user_id=user_id)
-    
+    connected_servers_external = await setup_mcp_servers(
+        mcp_server_group_external, user_id=user_id
+    )
+    connected_servers_internal = await setup_mcp_servers(
+        mcp_server_group_internal, user_id=user_id
+    )
+
     # Get workbenches only from the external research server group
     group_workbenches_external = []
     for server_name in connected_servers_external:
         workbench = mcp_client_manager.get_workbench(server_name, user_id=user_id)
         if workbench:
             group_workbenches_external.append(workbench)
-    
+
     if not group_workbenches_external:
         error_msg = f"ERROR: No MCP workbenches available for external research group '{mcp_server_group_external}'. Check your MCP configuration."
         if verbose:
             print(error_msg)
         raise RuntimeError(error_msg)
-    
+
     # Get workbenches only from the internal research server group
     group_workbenches_internal = []
     for server_name in connected_servers_internal:
         workbench = mcp_client_manager.get_workbench(server_name, user_id=user_id)
         if workbench:
             group_workbenches_internal.append(workbench)
-    
+
     if not group_workbenches_internal:
         error_msg = f"WARNING: No MCP workbenches available for internal research group '{mcp_server_group_internal}'. Skipping local research."
         if verbose:
@@ -436,27 +437,29 @@ async def researcher(
             )
         )
 
-    # Define a termination condition that stops the task once the report 
+    # Define a termination condition that stops the task once the report
     # has been approved
     text_termination = TextMentionTermination("YYY-TERMINATE-YYY")
 
-    # Create a team 
+    # Create a team
     team = SelectorGroupChat(
         participants=participants,
         model_client=az_model_client,
         termination_condition=text_termination,
-        selector_prompt=selector_prompt
+        selector_prompt=selector_prompt,
     )
 
     # Always add these, no matter if it's the first run or a subsequent one
     messages = [
         TextMessage(content=f"Research this technique: {technique}\n", source="user"),
-        TextMessage(content=f"Additional local context: {local_context}\n", source="user"),
+        TextMessage(
+            content=f"Additional local context: {local_context}\n", source="user"
+        ),
     ]
 
     # If we have messages from a previous run, add them so we can continue the research
     if previous_run:
-        messages = messages + previous_run 
+        messages = messages + previous_run
 
     try:
         # Run the team asynchronously
@@ -465,24 +468,49 @@ async def researcher(
         else:
             result = await team.run(task=messages)
 
-        return result  
+        return result
     except (openai.RateLimitError, openai.APIError) as e:
         # Re-raise specific OpenAI errors to be handled by the API layer
         raise e
     except Exception as e:
         # Catch any other unexpected errors and wrap them
-        print(f"An unexpected error occurred in the researcher: {e}\n{traceback.format_exc()}")
-        raise Exception("An unexpected error occurred while preparing the report.") from e
+        print(
+            f"An unexpected error occurred in the researcher: {e}\n{traceback.format_exc()}"
+        )
+        raise Exception(
+            "An unexpected error occurred while preparing the report."
+        ) from e
+
 
 if __name__ == "__main__":
-
     # Set up argument parser
-    parser = argparse.ArgumentParser(description='Generate a threat hunting report for a specific technique')
-    parser.add_argument('-t', '--technique', required=True, help='The cybersecurity technique to research')
-    parser.add_argument('-c', '--local_context', help='Additional local context to consider', required=False, default=None)
-    parser.add_argument('-e', '--environment', help='Path to specific .env file to use')
-    parser.add_argument('-f', '--format', choices=['pdf', 'markdown'], default='markdown', help='Output report format: pdf or markdown')
-    parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
+    parser = argparse.ArgumentParser(
+        description="Generate a threat hunting report for a specific technique"
+    )
+    parser.add_argument(
+        "-t",
+        "--technique",
+        required=True,
+        help="The cybersecurity technique to research",
+    )
+    parser.add_argument(
+        "-c",
+        "--local_context",
+        help="Additional local context to consider",
+        required=False,
+        default=None,
+    )
+    parser.add_argument("-e", "--environment", help="Path to specific .env file to use")
+    parser.add_argument(
+        "-f",
+        "--format",
+        choices=["pdf", "markdown"],
+        default="markdown",
+        help="Output report format: pdf or markdown",
+    )
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", help="Enable verbose output"
+    )
     args = parser.parse_args()
 
     # Load environment variables
@@ -505,7 +533,7 @@ if __name__ == "__main__":
     local_context = None
     if args.local_context:
         try:
-            with open(args.local_context, 'r', encoding='utf-8') as file:
+            with open(args.local_context, "r", encoding="utf-8") as file:
                 local_context = file.read()
         except FileNotFoundError:
             print(f"Error: Local context file '{args.local_context}' not found")
@@ -522,26 +550,34 @@ if __name__ == "__main__":
                 technique=args.technique,
                 local_context=local_context,
                 verbose=args.verbose,
-                previous_run=messages
+                previous_run=messages,
             )
         )
 
         # Find the final message from the "summarizer_agent" using next() and a generator expression
         report = next(
-            (message.content for message in reversed(task_result.messages) if message.source == "summarizer_agent"),
-            None  # Default value if no "summarizer_agent" message is found
+            (
+                message.content
+                for message in reversed(task_result.messages)
+                if message.source == "summarizer_agent"
+            ),
+            None,  # Default value if no "summarizer_agent" message is found
         )
 
         # Display the report and ask for user feedback
         print(report)
-        feedback = input("Please provide your feedback on the report (or press Enter to approve it): ")   
+        feedback = input(
+            "Please provide your feedback on the report (or press Enter to approve it): "
+        )
 
         if feedback.strip():
             # If feedback is provided, add it to the messages and loop back to
             # the research team for further refinement
             messages = [
-                TextMessage(content=f"The current report draft is: {report}\n", source="user"),
-                TextMessage(content=f"User feedback: {feedback}\n", source="user")
+                TextMessage(
+                    content=f"The current report draft is: {report}\n", source="user"
+                ),
+                TextMessage(content=f"User feedback: {feedback}\n", source="user"),
             ]
         else:
             break
@@ -550,24 +586,23 @@ if __name__ == "__main__":
     title = report.splitlines()[0] if report else "untitled_report"
 
     # Remove any markdown or extraneous whitespace from the title
-    title = re.sub(r'^[#\s]+', '', title).strip()  # Sanitize the title
+    title = re.sub(r"^[#\s]+", "", title).strip()  # Sanitize the title
 
     # Determine the file extension based on the selected format
-    if args.format == 'pdf':
-        extension = '.pdf'
-    elif args.format == 'markdown':
-        extension = '.md'
+    if args.format == "pdf":
+        extension = ".pdf"
+    elif args.format == "markdown":
+        extension = ".md"
 
     filename = generate_unique_filename(title, extension)
 
     # Save the report in the selected format
-    if args.format == 'pdf':
+    if args.format == "pdf":
         pdf = MarkdownPdf(toc_level=1)
         pdf.add_section(Section(report))
         pdf.save(filename)
     else:
-        with open(filename, 'w') as file:
+        with open(filename, "w") as file:
             file.write(report)
 
     print(f"Report saved as {filename}")
-
