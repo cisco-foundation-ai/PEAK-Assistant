@@ -181,7 +181,7 @@ class OAuth2TokenManager:
 
         raise ValueError("No token URL available from manual config or discovery")
 
-    async def get_effective_authorization_url(self) -> str:
+    async def get_effective_authorization_url(self) -> Optional[str]:
         """Get the effective authorization URL, using discovery if available, fallback to manual config"""
         if self.auth_config.authorization_url:
             # Manual configuration takes precedence
@@ -195,7 +195,7 @@ class OAuth2TokenManager:
             "No authorization URL available from manual config or discovery"
         )
 
-    async def get_token(self) -> str:
+    async def get_token(self) -> Optional[str]:
         """Get a valid access token, refreshing if necessary"""
         if self.access_token and not self._is_token_expired():
             return self.access_token
@@ -210,7 +210,7 @@ class OAuth2TokenManager:
 
         return time.time() >= self.token_expiry
 
-    async def _refresh_token(self) -> str:
+    async def _refresh_token(self) -> Optional[str]:
         """Refresh the OAuth2 token based on flow type"""
         if self.auth_config.type == AuthType.OAUTH2_CLIENT_CREDENTIALS:
             return await self._refresh_client_credentials_token()
@@ -224,7 +224,7 @@ class OAuth2TokenManager:
         else:
             raise ValueError(f"Unsupported OAuth2 flow: {self.auth_config.type}")
 
-    async def _refresh_client_credentials_token(self) -> str:
+    async def _refresh_client_credentials_token(self) -> Optional[str]:
         """Refresh token using client credentials flow"""
         data = {
             "grant_type": "client_credentials",
@@ -267,7 +267,7 @@ class OAuth2TokenManager:
 
             return self.access_token
 
-    async def _refresh_authorization_code_token(self) -> str:
+    async def _refresh_authorization_code_token(self) -> Optional[str]:
         """Refresh token using authorization code flow refresh token"""
         data = {
             "grant_type": "refresh_token",
@@ -303,7 +303,7 @@ class OAuth2TokenManager:
 
     async def exchange_authorization_code(
         self, authorization_code: str, code_verifier: Optional[str] = None
-    ) -> str:
+    ) -> Optional[str]:
         """Exchange authorization code for access token (authorization code flow)"""
         data = {
             "grant_type": "authorization_code",
@@ -377,7 +377,7 @@ class OAuth2TokenManager:
 class UserSessionManager:
     """Manages user-specific OAuth tokens and sessions"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         # In-memory storage for user sessions (in production, use Redis/database)
         self.user_sessions: Dict[str, Dict[str, OAuth2TokenManager]] = {}
         self.user_states: Dict[str, Dict[str, str]] = {}  # For OAuth state tracking
@@ -1010,7 +1010,7 @@ class MCPClientManager:
                     if hasattr(workbench, "_actor") and workbench._actor:
                         # Mark actor as closed
                         if hasattr(workbench._actor, "_closed"):
-                            workbench._actor._closed = True
+                            setattr(workbench._actor, "_closed", True)
                         # Clear the shutdown future to prevent awaiting
                         if hasattr(workbench._actor, "_shutdown_future"):
                             workbench._actor._shutdown_future = None
@@ -1028,7 +1028,7 @@ class MCPClientManager:
                     try:
                         if hasattr(workbench, "_actor") and workbench._actor:
                             if hasattr(workbench._actor, "_closed"):
-                                workbench._actor._closed = True
+                                setattr(workbench._actor, "_closed", True)
                             if hasattr(workbench._actor, "_shutdown_future"):
                                 workbench._actor._shutdown_future = None
                         if hasattr(workbench, "__del__"):
@@ -1155,14 +1155,14 @@ class MCPClientManager:
             if config.auth.type == AuthType.BEARER:
                 if not config.auth.token:
                     logger.error(f"No token specified for bearer auth on {config.name}")
-                    return False
+                    return {}
                 headers["Authorization"] = f"Bearer {config.auth.token}"
             elif config.auth.type == AuthType.API_KEY:
                 if not config.auth.api_key or not config.auth.header_name:
                     logger.error(
                         f"API key or header name not specified for {config.name}"
                     )
-                    return False
+                    return {}
                 headers[config.auth.header_name] = config.auth.api_key
             elif config.auth.type in [
                 AuthType.OAUTH2_CLIENT_CREDENTIALS,
@@ -1172,7 +1172,7 @@ class MCPClientManager:
                     logger.error(
                         f"User ID is required for user-based OAuth on {config.name}"
                     )
-                    return False
+                    return {}
 
                 # Use authlib OAuth manager for OAuth token handling
                 try:
@@ -1188,11 +1188,11 @@ class MCPClientManager:
                         logger.error(
                             f"No valid OAuth token available for {config.name}"
                         )
-                        return False
+                        return {}
 
                 except Exception as e:
                     logger.error(f"Failed to get OAuth headers for {config.name}: {e}")
-                    return False
+                    return {}
 
         return headers
 
@@ -1392,7 +1392,7 @@ _config_manager = None
 _client_manager = None
 
 # Global cleanup management
-_cleanup_managers = weakref.WeakSet()
+_cleanup_managers: weakref.WeakSet = weakref.WeakSet()
 _cleanup_registered = False
 
 

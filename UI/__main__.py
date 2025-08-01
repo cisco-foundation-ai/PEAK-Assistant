@@ -1,24 +1,8 @@
-#!/usr/bin/env python3
-"""
-PEAK Assistant - Modular Flask Application
-Streamlined entry point using factory pattern
-"""
-
 import os
-from app.factory import create_app
+from .app import app
 
-import app.routes.api_routes as api_routes
 
-# Determine configuration based on environment
-config_name = os.environ.get("FLASK_CONFIG", "development")
-
-# Create Flask application using factory pattern
-app = create_app(config_name)
-
-# Make INITIAL_LOCAL_CONTEXT available to route modules
-api_routes.INITIAL_LOCAL_CONTEXT = app.config.get("INITIAL_LOCAL_CONTEXT", "")
-
-if __name__ == "__main__":
+def main() -> None:
     # Create templates directory if it doesn't exist
     os.makedirs(os.path.join(os.path.dirname(__file__), "templates"), exist_ok=True)
 
@@ -27,6 +11,16 @@ if __name__ == "__main__":
         os.path.join(os.path.dirname(__file__), "cert.pem"),
         os.path.join(os.path.dirname(__file__), "key.pem"),
     )
+
+    failed = False
+    for file in context:
+        if not os.path.exists(file):
+            print(f"Warning: SSL file {file} not found.")
+            context = None
+            failed = True
+
+    if failed:
+        return
 
     print(
         "Note: You may see 'Task exception was never retrieved' errors related to HTTP client cleanup."
@@ -37,3 +31,7 @@ if __name__ == "__main__":
 
     # Run the application
     app.run(debug=True, port=8000, ssl_context=context)
+
+
+if __name__ == "__main__":
+    main()

@@ -14,7 +14,7 @@ class PEAKAssistantAzureOpenAIClient:
 
     async def get_client(
         self,
-        auth_mgr: PEAKAssistantAuthManager = None,
+        auth_mgr: PEAKAssistantAuthManager,
         model_type: str = "chat",
         **extra_params,
     ):

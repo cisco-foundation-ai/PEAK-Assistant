@@ -23,6 +23,7 @@ dependencies = [
     "pydantic>=2.11.7",
     "aiohttp>=3.12.15",
     "httpx>=0.28.1",
+    "authlib>=1.6.1",
 ]
 
 [dependency-groups]
@@ -33,6 +34,7 @@ dev = [
     "ruff>=0.12.7",
     "types-requests>=2.32.4.20250611",
     "coverage>=7.10.1",
+    "types-authlib>=1.6.0.20250711",
 ]
 
 
