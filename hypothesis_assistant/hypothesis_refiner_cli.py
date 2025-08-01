@@ -19,11 +19,11 @@ from utils.azure_client import PEAKAssistantAzureOpenAIClient
 
 
 async def refiner(
-    hypothesis: str = None,
-    local_context: str = None,
-    research_document: str = None,
+    hypothesis: str,
+    local_context: str,
+    research_document: str,
     verbose: bool = False,
-    previous_run: list = None,
+    previous_run: list = list(),
 ) -> str:
     """
     Threat hunting hypothesis refiner agent that combines user input, a markdown document, and its own prompt

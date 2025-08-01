@@ -19,13 +19,13 @@ from utils.azure_client import PEAKAssistantAzureOpenAIClient
 
 
 async def plan_hunt(
-    research_document: str = None,
-    hypothesis: str = None,
-    able_info: str = None,
-    data_discovery: str = None,
-    local_context: str = None,
+    research_document: str,
+    hypothesis: str,
+    able_info: str,
+    data_discovery: str,
+    local_context: str,
     verbose: bool = False,
-    previous_run: list = None,
+    previous_run: list = list(),
 ) -> str:
     """
     Agent that consumes data produced by all the other PEAK Prepare-phase agents and

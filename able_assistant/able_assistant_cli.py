@@ -15,10 +15,10 @@ from utils.azure_client import PEAKAssistantAzureOpenAIClient
 
 
 async def able_table(
-    hypothesis: str = None,
-    research_document: str = None,
-    local_context: str = None,
-    previous_run: list = None,
+    hypothesis: str,
+    research_document: str,
+    local_context: str,
+    previous_run: list = list(),
 ) -> str:
     """
     Generate a PEAK ABLE table based on the given hypothesis and research document.

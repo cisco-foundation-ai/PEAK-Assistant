@@ -87,16 +87,14 @@ async def test_minimal_config():
         # Test effective URL methods with manual fallback
         try:
             # Since discovery will fail, these should raise errors without manual URLs
-            token_url = await token_manager.get_effective_token_url()
-            print(
-                f"❌ Unexpected success - should have failed without manual token URL"
-            )
+            _token_url = await token_manager.get_effective_token_url()
+            print("❌ Unexpected success - should have failed without manual token URL")
         except ValueError as e:
             print(f"✅ Correctly failed without manual token URL: {e}")
 
         try:
-            auth_url = await token_manager.get_effective_authorization_url()
-            print(f"❌ Unexpected success - should have failed without manual auth URL")
+            _auth_url = await token_manager.get_effective_authorization_url()
+            print("❌ Unexpected success - should have failed without manual auth URL")
         except ValueError as e:
             print(f"✅ Correctly failed without manual authorization URL: {e}")
 
@@ -134,13 +132,13 @@ async def test_minimal_config_with_manual_fallback():
         token_url = await token_manager.get_effective_token_url()
         auth_url = await token_manager.get_effective_authorization_url()
 
-        print(f"✅ Manual fallback URLs working:")
+        print("✅ Manual fallback URLs working:")
         print(f"   Token URL: {token_url}")
         print(f"   Auth URL: {auth_url}")
 
         # Test authorization URL generation
         full_auth_url = await token_manager.get_authorization_url("test_state_123")
-        print(f"✅ Authorization URL generated successfully")
+        print("✅ Authorization URL generated successfully")
         print(f"   Full URL: {full_auth_url[:80]}...")
 
         # Verify the URL contains our expected components
@@ -178,7 +176,7 @@ async def test_configuration_field_count():
     for field in old_fields:
         print(f"   - {field}")
 
-    print(f"\n📊 New Minimal Configuration (4 fields required):")
+    print("\n📊 New Minimal Configuration (4 fields required):")
     new_fields = ["type", "requires_user_auth", "client_id", "client_secret", "scope"]
     for field in new_fields:
         print(f"   - {field}")
@@ -187,11 +185,11 @@ async def test_configuration_field_count():
         f"\n🎉 Reduction: {len(old_fields)} → {len(new_fields)} fields ({100 - (len(new_fields) / len(old_fields) * 100):.0f}% fewer!)"
     )
 
-    print(f"\n🤖 Auto-generated fields:")
-    print(f"   - discovery_url (from server URL)")
-    print(f"   - redirect_uri (from Flask app context)")
-    print(f"   - token_url (via OAuth discovery)")
-    print(f"   - authorization_url (via OAuth discovery)")
+    print("\n🤖 Auto-generated fields:")
+    print("   - discovery_url (from server URL)")
+    print("   - redirect_uri (from Flask app context)")
+    print("   - token_url (via OAuth discovery)")
+    print("   - authorization_url (via OAuth discovery)")
 
 
 async def main():

@@ -49,10 +49,10 @@ def get_input_function():
 
 
 async def researcher(
-    technique: str = None,
-    local_context: str = None,
+    technique: str,
+    local_context: str,
     verbose: bool = False,
-    previous_run: list = None,
+    previous_run: list = list(),
     mcp_server_group_external: str = "research-external",
     mcp_server_group_internal: str = "research-internal",
     user_id: Optional[str] = None,

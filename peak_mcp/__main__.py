@@ -176,7 +176,7 @@ async def plan_hunt_prompt() -> str:
     description="Generate a comprehensive cybersecurity threat hunting report for a specified technique or behavior.",
 )
 async def researcher(
-    technique: str = None, local_context: str = None
+    technique: str, local_context: str = None
 ) -> types.EmbeddedResource:
     """
     Orchestrates a multi-agent, multi-stage research workflow to generate a
@@ -212,7 +212,7 @@ async def researcher(
     name="peak-hypothesizer",
     description="Generate a list of threat hunting hypotheses based on the provided research document and local computing environment context.",
 )
-async def hypothesizer(research_document: str = None, local_context: str = None) -> str:
+async def hypothesizer(research_document: str, local_context: str = None) -> str:
     """
     Return a list of threat hunting hypotheses based on the provided research document
     and local computing environment context. Always display this as an artifact.
@@ -237,7 +237,7 @@ async def hypothesizer(research_document: str = None, local_context: str = None)
     description="Given a threat hunting hypothesis provided by the user, provide suggest improvements to the user.",
 )
 async def hypothesis_refiner(
-    hypothesis: str = None, research_document: str = None, local_context: str = None
+    hypothesis: str, research_document: str, local_context: str = None
 ) -> str:
     """
     Given a threat hunting hypothesis provided by the user, provide suggest improvements to the user.
@@ -278,7 +278,7 @@ async def hypothesis_refiner(
 
 @mcp.tool(name="peak-able-table", description="Create the PEAK ABLE table.")
 async def able_table(
-    hypothesis: str = None, research_document: str = None, local_context: str = None
+    hypothesis: str, research_document: str, local_context: str = None
 ) -> str:
     """
     Create the PEAK ABLE table based on the provided hypothesis, research document, and local context.
@@ -309,15 +309,15 @@ async def able_table(
     description="Query the Splunk server to identify indices, sourctypes and key fields relevant to the hunt.",
 )
 async def data_discovery(
-    hypothesis: str = None,
-    research_document: str = None,
-    able_info: str = None,
-    local_context: str = None,
-    mcp_command: str = None,
-    mcp_args: str = None,
-    mcp_username: str = None,
-    mcp_password: str = None,
-    mcp_splunk_url: str = None,
+    hypothesis: str,
+    research_document: str,
+    able_info: str,
+    local_context: str,
+    mcp_command: str,
+    mcp_args: str,
+    mcp_username: str,
+    mcp_password: str,
+    mcp_splunk_url: str,
 ) -> types.EmbeddedResource:
     """
     Given the provided threat hunting hypothesis, research report, ABLE table and
@@ -368,11 +368,11 @@ async def data_discovery(
 
 @mcp.tool(name="peak-hunt-planner", description="Produce a comprehensive hunting plan")
 async def plan_hunt(
-    hypothesis: str = None,
-    research_document: str = None,
-    able_info: str = None,
-    data_discovery: str = None,
-    local_context: str = None,
+    hypothesis: str,
+    research_document: str,
+    able_info: str,
+    data_discovery: str,
+    local_context: str,
 ) -> types.EmbeddedResource:
     """
     Produce a comprehensive hunting plan based on the provided hypothesis, research document, ABLE table,

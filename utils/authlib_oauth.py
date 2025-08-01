@@ -50,8 +50,8 @@ class AuthlibOAuthManager:
         self,
         name: str,
         token: dict,
-        refresh_token: str = None,
-        access_token: str = None,
+        refresh_token: str,
+        access_token: str,
     ):
         """Global callback for automatic token updates from Authlib"""
         if refresh_token:

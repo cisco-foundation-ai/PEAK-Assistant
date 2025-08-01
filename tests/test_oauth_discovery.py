@@ -104,7 +104,7 @@ async def test_fallback_to_manual_config():
         token_url = await token_manager.get_effective_token_url()
         auth_url = await token_manager.get_effective_authorization_url()
 
-        print(f"✅ Fallback successful!")
+        print("✅ Fallback successful!")
         print(f"   Token URL (manual): {token_url}")
         print(f"   Auth URL (manual): {auth_url}")
 
@@ -221,7 +221,7 @@ async def test_client_credentials_discovery():
             try:
                 auth_url = await token_manager.get_effective_authorization_url()
                 print(f"⚠️  Authorization URL available but not needed: {auth_url}")
-            except ValueError as e:
+            except ValueError:
                 print(
                     "✅ Authorization URL correctly not needed for client credentials"
                 )

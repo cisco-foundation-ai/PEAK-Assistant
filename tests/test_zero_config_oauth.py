@@ -16,7 +16,7 @@ from pathlib import Path
 # Add the project root to Python path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from utils.mcp_config import MCPConfigManager, AuthType
+from utils.mcp_config import MCPConfigManager
 
 # Configure logging
 logging.basicConfig(
@@ -119,8 +119,8 @@ async def test_mixed_config_formats():
         temp_config_file = f.name
 
     try:
-        print(f"✅ Created mixed format config file")
-        print(f"📄 Config has both 'mcpServers' and 'servers' sections")
+        print("✅ Created mixed format config file")
+        print("📄 Config has both 'mcpServers' and 'servers' sections")
 
         # Load the configuration
         config_manager = MCPConfigManager(temp_config_file)
@@ -137,7 +137,7 @@ async def test_mixed_config_formats():
                 if server.auth:
                     print(f"   Has OAuth: Yes ({server.auth.type})")
                 else:
-                    print(f"   Has OAuth: No")
+                    print("   Has OAuth: No")
             else:
                 print(f"❌ {server_name} not found")
 

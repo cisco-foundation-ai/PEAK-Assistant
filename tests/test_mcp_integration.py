@@ -10,7 +10,6 @@ import os
 import sys
 import tempfile
 import json
-from pathlib import Path
 
 # Add the project root to Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -275,7 +274,7 @@ def test_oauth_config():
 
     assert auth_code_config.type == AuthType.OAUTH2_AUTHORIZATION_CODE
     assert auth_code_config.authorization_url == "https://example.com/oauth/authorize"
-    assert auth_code_config.requires_user_auth == True
+    assert auth_code_config.requires_user_auth
     print("✓ OAuth2 Authorization Code configuration working")
 
     # Test Bearer auth config
@@ -428,7 +427,7 @@ async def test_oauth_token_manager():
     print("✓ Authorization URL generation working")
 
     # Test token expiry checking
-    assert token_manager._is_token_expired() == True  # No token set
+    assert token_manager._is_token_expired()  # No token set
     print("✓ Token expiry detection working")
 
 
