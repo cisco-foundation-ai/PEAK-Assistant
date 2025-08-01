@@ -26,9 +26,9 @@ cd PEAK-Assistant
 
 **I strongly recommend you use a python virtualenv to run this app.**
 
-Inside your virtualenv, install the required Python modules:
+Inside your virtualenv, install the entire Assistant repo as a Python module:
 ```bash
-pip install -r requirements.txt
+pip install -e .
 ```
 
 ## Generate TLS Certificate
@@ -122,7 +122,7 @@ You may add multiple MCP servers to each group if you would like the Assistant t
 
 The PEAK Assistant supports OAuth2 authentication for remote MCP servers, as well as OAuth resource autodiscovery. If your MCP server also supports those, you should be automatically directed to the server's authentication provider when you connect the MCP server from the app's main page.
 
-### Local Context Files
+## Local Context Files
 
 The Assistant supports an optional file for providing "local context". This provides a way for you to give the LLM clues and guidance about your local environment or preferences so you can adapt the AI to your needs without having to edit the prompts. If present, this context file lives at `UI/context.txt` and should contain information that helps the AI agents understand your specific environment, such as:
 
@@ -164,7 +164,7 @@ Splunk hints:
     - Don't try to use accelerated datamodels. There are no datamodels on this server.
 ```
 
-### 2. Environment Variables
+## 2. Environment Variables
 The rest of the Assistant configuration has to do with the LLM configuration, and is held in environment variables. Create a `.env` file in the project root with the following variables:
 
 ```
@@ -183,15 +183,13 @@ AZURE_OPENAI_REASONING_MODEL=o4-mini
 ```
 
 ## Running the Assistant
-Now that it is configured it's time to run the app. From the root of the repository, issue the following command:
+Now that it is configured it's time to run the app. Since you installed this as a module, you can simpley run the assistant:
 
 ```bash
-python UI/app.py
+peak-assistant
 ```
 
 By default, the application will run on `https://127.0.0.1:8000/` (note HTTPS - if you're using self-signed certificates as in the examples above, you'll also need to tell the browser to accept the certificate before you can proceed).
-
-
 
 ## Workflow
 
