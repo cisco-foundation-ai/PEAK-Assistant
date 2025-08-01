@@ -15,6 +15,16 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/utilities.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/navigation.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+    
+    <!-- Prevent theme flash by applying stored preference immediately -->
+    <script>
+        (function() {
+            const storedTheme = localStorage.getItem('peak-assistant-theme');
+            if (storedTheme) {
+                document.documentElement.setAttribute('data-theme', storedTheme);
+            }
+        })();
+    </script>
 </head>
 <body>
     <div class="container-fluid">

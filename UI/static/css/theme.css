@@ -220,6 +220,35 @@ body {
     color: #e2e8f0;
 }
 
+/* Remove white background from feedback containers */
+#feedback-container,
+.feedback-container-fixed {
+    background: transparent !important;
+    background-color: transparent !important;
+}
+
+/* Add margin between scrollable content and feedback areas */
+#report-container,
+#data-sources-container,
+#able-table-container,
+#plan-container,
+.flex-grow-1[style*="overflow-y: auto"] {
+    margin-bottom: 1rem !important;
+}
+
+/* Remove borders from hypothesis page elements */
+.hypothesis-options {
+    border: none !important;
+    background: var(--card-bg) !important;
+    color: var(--text-color) !important;
+}
+
+.hypothesis-option {
+    border: 1px solid var(--border-color) !important;
+    background: var(--card-bg) !important;
+    color: var(--text-color) !important;
+}
+
 /* Loading indicator */
 #loading-indicator {
     background-color: rgba(0, 0, 0, 0.5);
