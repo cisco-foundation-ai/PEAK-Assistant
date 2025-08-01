@@ -1,5 +1,6 @@
 import os
 import sys
+from typing import List
 
 from autogen_core.models import UserMessage, SystemMessage
 
@@ -96,7 +97,7 @@ async def able_table(
                 option section and should be omitted if there are no notes. 
     """
 
-    messages = [
+    messages: List[SystemMessage | UserMessage] = [
         SystemMessage(content=system_prompt),
         UserMessage(
             content=f"Here is the research document:\n{research_document}\n",

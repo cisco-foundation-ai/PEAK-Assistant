@@ -35,6 +35,7 @@ async def retry_api_call[T](
     # If we've exhausted all retries, raise the last exception
     if last_exception:
         raise last_exception
+    return None
 
 
 def extract_report_md(messages):
