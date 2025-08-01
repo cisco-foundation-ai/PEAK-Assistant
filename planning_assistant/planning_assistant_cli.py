@@ -3,40 +3,29 @@
 import os
 import sys
 import argparse
-from pathlib import Path
 from dotenv import load_dotenv
 import asyncio
 
 from autogen_agentchat.messages import TextMessage
-from autogen_ext.models.openai import AzureOpenAIChatCompletionClient
 from autogen_agentchat.agents import AssistantAgent
 from autogen_agentchat.teams import RoundRobinGroupChat
 from autogen_agentchat.ui import Console
-from autogen_ext.tools.mcp import McpWorkbench, StdioServerParams
 from autogen_agentchat.conditions import TextMentionTermination
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from utils import find_dotenv_file
 from utils.assistant_auth import PEAKAssistantAuthManager
 from utils.azure_client import PEAKAssistantAzureOpenAIClient
 
-def find_dotenv_file():
-    """Search for a .env file in current directory and parent directories"""
-    current_dir = Path.cwd()
-    while current_dir != current_dir.parent:  # Stop at root directory
-        env_path = current_dir / '.env'
-        if env_path.exists():
-            return str(env_path)
-        current_dir = current_dir.parent
-    return None  # No .env file found
 
 async def plan_hunt(
     research_document: str = None,
-    hypothesis: str = None, 
+    hypothesis: str = None,
     able_info: str = None,
     data_discovery: str = None,
     local_context: str = None,
     verbose: bool = False,
-    previous_run: list = None
+    previous_run: list = None,
 ) -> str:
     """
     Agent that consumes data produced by all the other PEAK Prepare-phase agents and
@@ -185,31 +174,43 @@ async def plan_hunt(
     """
 
     messages = [
-        TextMessage(content=f"Here is the research document:\n{research_document}\n", source="user"),
+        TextMessage(
+            content=f"Here is the research document:\n{research_document}\n",
+            source="user",
+        ),
         TextMessage(content=f"Here is the hypothesis: {hypothesis}\n", source="user"),
-        TextMessage(content=f"The Actor, Behavior, Location and Evidence (ABLE) information is as follows: {able_info}", source="user"),
-        TextMessage(content=f"Data discovery information: {data_discovery}\n", source="user"),
-        TextMessage(content=f"Additional local context: {local_context}\n", source="user"),
+        TextMessage(
+            content=f"The Actor, Behavior, Location and Evidence (ABLE) information is as follows: {able_info}",
+            source="user",
+        ),
+        TextMessage(
+            content=f"Data discovery information: {data_discovery}\n", source="user"
+        ),
+        TextMessage(
+            content=f"Additional local context: {local_context}\n", source="user"
+        ),
     ]
 
     # If we have messages from a previous run, add them so we can continue the planning
     if previous_run:
-        messages = messages + previous_run 
+        messages = messages + previous_run
 
     auth_mgr = PEAKAssistantAuthManager()
-#    az_model_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr)
-    az_model_reasoning_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr, model_type="reasoning")
+    #    az_model_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr)
+    az_model_reasoning_client = await PEAKAssistantAzureOpenAIClient().get_client(
+        auth_mgr=auth_mgr, model_type="reasoning"
+    )
 
     planning_agent = AssistantAgent(
         "hunt_planner",
         model_client=az_model_reasoning_client,
-        system_message=planner_prompt
+        system_message=planner_prompt,
     )
 
     plan_critic_agent = AssistantAgent(
         "hunt_plan_critic",
         model_client=az_model_reasoning_client,
-        system_message=plan_critic_prompt
+        system_message=plan_critic_prompt,
     )
 
     # Define a termination condition that stops the task once the critic
@@ -231,18 +232,51 @@ async def plan_hunt(
         print(f"Error during hunt planning: {e}")
         return "An error occurred while planning the hunt."
 
+
 # Example usage
 if __name__ == "__main__":
-
     # Set up argument parser
-    parser = argparse.ArgumentParser(description='Given the outputs of all the other Prepare-phase agents, create an actionable plan for the hunt.')
-    parser.add_argument('-e', '--environment', help='Path to specific .env file to use')
-    parser.add_argument('-r', '--research', help='Path to the research document (markdown file)', required=True)
-    parser.add_argument('-y', '--hypothesis', help='The hunting hypothesis', required=True)
-    parser.add_argument('-a', '--able_info', help='The Actor, Behavior, Location and Evidence (ABLE) information', required=False, default=None)
-    parser.add_argument('-d', '--data_discovery', help='Data discovery information from previous agents', required=False, default=None)
-    parser.add_argument('-c', '--local_context', help='Additional local context to consider', required=False, default=None)
-    parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output', default=False)
+    parser = argparse.ArgumentParser(
+        description="Given the outputs of all the other Prepare-phase agents, create an actionable plan for the hunt."
+    )
+    parser.add_argument("-e", "--environment", help="Path to specific .env file to use")
+    parser.add_argument(
+        "-r",
+        "--research",
+        help="Path to the research document (markdown file)",
+        required=True,
+    )
+    parser.add_argument(
+        "-y", "--hypothesis", help="The hunting hypothesis", required=True
+    )
+    parser.add_argument(
+        "-a",
+        "--able_info",
+        help="The Actor, Behavior, Location and Evidence (ABLE) information",
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
+        "-d",
+        "--data_discovery",
+        help="Data discovery information from previous agents",
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
+        "-c",
+        "--local_context",
+        help="Additional local context to consider",
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose output",
+        default=False,
+    )
     args = parser.parse_args()
 
     # Load environment variables
@@ -263,7 +297,7 @@ if __name__ == "__main__":
 
     # Read the contents of the research document
     try:
-        with open(args.research, 'r', encoding='utf-8') as file:
+        with open(args.research, "r", encoding="utf-8") as file:
             research_data = file.read()
     except FileNotFoundError:
         print(f"Error: Research document '{args.research}' not found")
@@ -276,7 +310,7 @@ if __name__ == "__main__":
     able_info = None
     if args.able_info:
         try:
-            with open(args.able_info, 'r', encoding='utf-8') as file:
+            with open(args.able_info, "r", encoding="utf-8") as file:
                 able_info = file.read()
         except FileNotFoundError:
             print(f"Error: ABLE information file '{args.able_info}' not found")
@@ -289,7 +323,7 @@ if __name__ == "__main__":
     data_discovery = None
     if args.data_discovery:
         try:
-            with open(args.data_discovery, 'r', encoding='utf-8') as file:
+            with open(args.data_discovery, "r", encoding="utf-8") as file:
                 data_discovery = file.read()
         except FileNotFoundError:
             print(f"Error: Data discovery file '{args.data_discovery}' not found")
@@ -302,7 +336,7 @@ if __name__ == "__main__":
     local_context = None
     if args.local_context:
         try:
-            with open(args.local_context, 'r', encoding='utf-8') as file:
+            with open(args.local_context, "r", encoding="utf-8") as file:
                 local_context = file.read()
         except FileNotFoundError:
             print(f"Error: Local context file '{args.local_context}' not found")
@@ -316,31 +350,39 @@ if __name__ == "__main__":
         # Run the hypothesizer asynchronously
         data_sources = asyncio.run(
             plan_hunt(
-                hypothesis=args.hypothesis, 
-                research_document=research_data, 
+                hypothesis=args.hypothesis,
+                research_document=research_data,
                 able_info=able_info,
                 data_discovery=data_discovery,
                 local_context=local_context,
                 verbose=args.verbose,
-                previous_run=messages
+                previous_run=messages,
             )
         )
 
         # Find the final message from the "hunt_planner" agent using next() and a generator expression
         hunt_plan = next(
-            (message.content for message in reversed(data_sources.messages) if message.source == "hunt_planner"),
-            None  # Default value if no "hunt_planner" message is found
+            (
+                message.content
+                for message in reversed(data_sources.messages)
+                if message.source == "hunt_planner"
+            ),
+            None,  # Default value if no "hunt_planner" message is found
         )
 
         print(hunt_plan)
-        feedback = input("Please provide your feedback on the plan (or press Enter to approve it): ")   
+        feedback = input(
+            "Please provide your feedback on the plan (or press Enter to approve it): "
+        )
 
         if feedback.strip():
             # If feedback is provided, add it to the messages and loop back to
             # the research team for further refinement
             messages = [
-                TextMessage(content=f"The current plan draft is: {hunt_plan}\n", source="user"),
-                TextMessage(content=f"User feedback: {feedback}\n", source="user")
+                TextMessage(
+                    content=f"The current plan draft is: {hunt_plan}\n", source="user"
+                ),
+                TextMessage(content=f"User feedback: {feedback}\n", source="user"),
             ]
         else:
-            break        
+            break

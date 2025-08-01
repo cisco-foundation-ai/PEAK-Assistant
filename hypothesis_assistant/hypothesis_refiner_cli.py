@@ -3,37 +3,27 @@
 import os
 import sys
 import argparse
-from pathlib import Path
 from dotenv import load_dotenv
 import asyncio
 
 from autogen_agentchat.messages import TextMessage
-from autogen_ext.models.openai import AzureOpenAIChatCompletionClient
-from autogen_agentchat.agents import AssistantAgent, UserProxyAgent
+from autogen_agentchat.agents import AssistantAgent
 from autogen_agentchat.conditions import TextMentionTermination
 from autogen_agentchat.teams import RoundRobinGroupChat
 from autogen_agentchat.ui import Console
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from utils import find_dotenv_file
 from utils.assistant_auth import PEAKAssistantAuthManager
 from utils.azure_client import PEAKAssistantAzureOpenAIClient
 
-def find_dotenv_file():
-    """Search for a .env file in current directory and parent directories"""
-    current_dir = Path.cwd()
-    while current_dir != current_dir.parent:  # Stop at root directory
-        env_path = current_dir / '.env'
-        if env_path.exists():
-            return str(env_path)
-        current_dir = current_dir.parent
-    return None  # No .env file found
 
 async def refiner(
-        hypothesis: str = None, 
-        local_context: str = None, 
-        research_document: str = None, 
-        verbose: bool = False,
-        previous_run: list = None
+    hypothesis: str = None,
+    local_context: str = None,
+    research_document: str = None,
+    verbose: bool = False,
+    previous_run: list = None,
 ) -> str:
     """
     Threat hunting hypothesis refiner agent that combines user input, a markdown document, and its own prompt
@@ -90,21 +80,21 @@ async def refiner(
     """
 
     auth_mgr = PEAKAssistantAuthManager()
-    az_model_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr)
-    az_model_reasoning_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr, model_type="reasoning")
+    az_model_client = await PEAKAssistantAzureOpenAIClient().get_client(
+        auth_mgr=auth_mgr
+    )
+    # _az_model_reasoning_client = await PEAKAssistantAzureOpenAIClient().get_client(
+    #     auth_mgr=auth_mgr, model_type="reasoning"
+    # )
 
     # Create the primary agent.
     refiner_agent = AssistantAgent(
-        "refiner",
-        model_client=az_model_client,
-        system_message=refiner_system_prompt
+        "refiner", model_client=az_model_client, system_message=refiner_system_prompt
     )
 
     # Create the critic agent.
     critic_agent = AssistantAgent(
-        "critic",
-        model_client=az_model_client,
-        system_message=critic_system_prompt
+        "critic", model_client=az_model_client, system_message=critic_system_prompt
     )
 
     # Define a termination condition that stops the task if the critic approves.
@@ -112,20 +102,26 @@ async def refiner(
 
     # Create a team with the primary and critic agents.
     team = RoundRobinGroupChat(
-        [critic_agent, refiner_agent],
-        termination_condition=text_termination
+        [critic_agent, refiner_agent], termination_condition=text_termination
     )
 
     # Always add these, no matter if it's the first run or a subsequent one
     messages = [
-        TextMessage(content=f"Here is the user's hypothesis: {hypothesis}\n", source="user"),
-        TextMessage(content=f"Here is the research document:\n{research_document}\n", source="user"),
-        TextMessage(content=f"Additional local context: {local_context}\n", source="user"),
+        TextMessage(
+            content=f"Here is the user's hypothesis: {hypothesis}\n", source="user"
+        ),
+        TextMessage(
+            content=f"Here is the research document:\n{research_document}\n",
+            source="user",
+        ),
+        TextMessage(
+            content=f"Additional local context: {local_context}\n", source="user"
+        ),
     ]
 
     # If we have messages from a previous run, add them so we can continue the research
     if previous_run:
-        messages = messages + previous_run 
+        messages = messages + previous_run
 
     try:
         # Run the team asynchronously
@@ -140,17 +136,44 @@ async def refiner(
         print(f"Error while refining hypotheses: {e}")
         return "An error occurred while refining hypotheses."
 
+
 # Example usage
 if __name__ == "__main__":
-
     # Set up argument parser
-    parser = argparse.ArgumentParser(description='Given a threat hunting technique dossier, generate potential hypotheses for the hunter.')
-    parser.add_argument('-e', '--environment', help='Path to specific .env file to use')
-    parser.add_argument("-y", "--hypothesis", help="The hypothesis to be refined", required=True)
-    parser.add_argument('-r', '--research', help='Path to the research document (markdown file)', required=True)
-    parser.add_argument('-c', '--local_context', help='Additional local context to consider', required=False, default=None)
-    parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output', default=False)
-    parser.add_argument('-a', '--automated', action='store_true', help='Enable automated mode', default=False)
+    parser = argparse.ArgumentParser(
+        description="Given a threat hunting technique dossier, generate potential hypotheses for the hunter."
+    )
+    parser.add_argument("-e", "--environment", help="Path to specific .env file to use")
+    parser.add_argument(
+        "-y", "--hypothesis", help="The hypothesis to be refined", required=True
+    )
+    parser.add_argument(
+        "-r",
+        "--research",
+        help="Path to the research document (markdown file)",
+        required=True,
+    )
+    parser.add_argument(
+        "-c",
+        "--local_context",
+        help="Additional local context to consider",
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose output",
+        default=False,
+    )
+    parser.add_argument(
+        "-a",
+        "--automated",
+        action="store_true",
+        help="Enable automated mode",
+        default=False,
+    )
 
     # Parse the arguments
     args = parser.parse_args()
@@ -178,7 +201,7 @@ if __name__ == "__main__":
 
     # Read the contents of the research document
     try:
-        with open(args.research, 'r', encoding='utf-8') as file:
+        with open(args.research, "r", encoding="utf-8") as file:
             research_data = file.read()
     except FileNotFoundError:
         print(f"Error: Research document '{args.research}' not found")
@@ -191,7 +214,7 @@ if __name__ == "__main__":
     local_context = None
     if args.local_context:
         try:
-            with open(args.local_context, 'r', encoding='utf-8') as file:
+            with open(args.local_context, "r", encoding="utf-8") as file:
                 local_context = file.read()
         except FileNotFoundError:
             print(f"Error: Local context file '{args.local_context}' not found")
@@ -203,30 +226,37 @@ if __name__ == "__main__":
     messages = list()
     current_hypothesis = args.hypothesis
     while True:
-
         # Run the hypothesizer asynchronously
         messages = asyncio.run(
             refiner(
                 hypothesis=current_hypothesis,
-                local_context=local_context, 
+                local_context=local_context,
                 research_document=research_data,
                 verbose=args.verbose,
-                previous_run=messages
+                previous_run=messages,
             )
         )
 
         # Find the final message from the "critic" agent using next() and a generator expression
         refined_hypothesis_message = next(
-            (message.content for message in reversed(messages.messages) if message.source == "critic"),
-            None  # Default value if no "critic" message is found
+            (
+                message.content
+                for message in reversed(messages.messages)
+                if message.source == "critic"
+            ),
+            None,  # Default value if no "critic" message is found
         )
 
         # Remove the trailing "YYY-HYPOTHESIS-ACCEPTED-YYY" string
-        current_hypothesis = refined_hypothesis_message.replace("YYY-HYPOTHESIS-ACCEPTED-YYY", "").strip()
+        current_hypothesis = refined_hypothesis_message.replace(
+            "YYY-HYPOTHESIS-ACCEPTED-YYY", ""
+        ).strip()
 
         # Print the refined hypothesis and ask for user feedback
         print(current_hypothesis)
-        feedback = input("Please provide your feedback on the refined hypothesis (or press Enter to approve it): ")
+        feedback = input(
+            "Please provide your feedback on the refined hypothesis (or press Enter to approve it): "
+        )
 
         if feedback.strip():
             # If feedback is provided, add it to the messages and loop back to the refiner
@@ -235,4 +265,3 @@ if __name__ == "__main__":
             ]
         else:
             break
-

@@ -3,45 +3,34 @@
 import os
 import sys
 import argparse
-from pathlib import Path
 from dotenv import load_dotenv
 import asyncio
 
 from autogen_agentchat.messages import TextMessage
-from autogen_ext.models.openai import AzureOpenAIChatCompletionClient
 from autogen_agentchat.agents import AssistantAgent
 from autogen_agentchat.teams import RoundRobinGroupChat
 from autogen_agentchat.ui import Console
-from autogen_ext.tools.mcp import McpWorkbench, StdioServerParams
 from autogen_agentchat.conditions import TextMentionTermination
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from utils import find_dotenv_file
 from utils.assistant_auth import PEAKAssistantAuthManager
 from utils.azure_client import PEAKAssistantAzureOpenAIClient
 from utils.mcp_config import get_client_manager, setup_mcp_servers
 
-def find_dotenv_file():
-    """Search for a .env file in current directory and parent directories"""
-    current_dir = Path.cwd()
-    while current_dir != current_dir.parent:  # Stop at root directory
-        env_path = current_dir / '.env'
-        if env_path.exists():
-            return str(env_path)
-        current_dir = current_dir.parent
-    return None  # No .env file found
 
 async def identify_data_sources(
-    hypothesis: str = None, 
+    hypothesis: str = None,
     research_document: str = None,
     able_info: str = None,
     local_context: str = None,
     verbose: bool = False,
     previous_run: list = None,
-    mcp_server_group: str = "data_discovery"
+    mcp_server_group: str = "data_discovery",
 ) -> str:
     """
     Data agent that consumes a hunting research report and a hypothesis, then
-    queries the Splunk server to try to identify data sources that could be used 
+    queries the Splunk server to try to identify data sources that could be used
     to test the hypothesis.
 
     Args:
@@ -116,10 +105,18 @@ async def identify_data_sources(
     """
 
     messages = [
-        TextMessage(content=f"Here is the research document:\n{research_document}\n", source="user"),
+        TextMessage(
+            content=f"Here is the research document:\n{research_document}\n",
+            source="user",
+        ),
         TextMessage(content=f"Here is the hypothesis: {hypothesis}\n", source="user"),
-        TextMessage(content=f"The Actor, Behavior, Location and Evidence (ABLE) information is as follows: {able_info}", source="user"),
-        TextMessage(content=f"Additional local context: {local_context}\n", source="user")
+        TextMessage(
+            content=f"The Actor, Behavior, Location and Evidence (ABLE) information is as follows: {able_info}",
+            source="user",
+        ),
+        TextMessage(
+            content=f"Additional local context: {local_context}\n", source="user"
+        ),
     ]
 
     # If we have messages from a previous run, add them so we can continue the research
@@ -128,40 +125,52 @@ async def identify_data_sources(
 
     # Initialize the model client
     auth_mgr = PEAKAssistantAuthManager()
-    az_model_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr)
-    az_model_reasoning_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr, model_type="reasoning")
+    az_model_client = await PEAKAssistantAzureOpenAIClient().get_client(
+        auth_mgr=auth_mgr
+    )
+    az_model_reasoning_client = await PEAKAssistantAzureOpenAIClient().get_client(
+        auth_mgr=auth_mgr, model_type="reasoning"
+    )
 
     # Set up MCP servers for data discovery
     mcp_client_manager = get_client_manager()
     connected_servers = await setup_mcp_servers(mcp_server_group)
-    
+
     if not connected_servers:
         error_msg = f"No MCP servers could be connected from group '{mcp_server_group}'. Check your MCP configuration."
         if verbose:
             print(error_msg)
         raise RuntimeError(error_msg)
-    
+
     if verbose:
-        print(f"Connected to {len(connected_servers)} MCP servers for data discovery: {', '.join(connected_servers)}")
-    
+        print(
+            f"Connected to {len(connected_servers)} MCP servers for data discovery: {', '.join(connected_servers)}"
+        )
+
     # Get workbenches only from the data discovery server group
     group_workbenches = []
     for server_name in connected_servers:
         workbench = mcp_client_manager.get_workbench(server_name)
         if workbench:
             group_workbenches.append(workbench)
-    
+
     if not group_workbenches:
         error_msg = f"No MCP workbenches available for data discovery group '{mcp_server_group}'. Check your MCP configuration."
         if verbose:
             print(error_msg)
         raise RuntimeError(error_msg)
-    
+
     # Use the first workbench from the data discovery group
     mcp_workbench = group_workbenches[0]
     return await _run_data_discovery_with_workbench(
-        mcp_workbench, messages, data_discovery_prompt, discovery_critic_prompt,
-        az_model_client, az_model_reasoning_client, verbose, previous_run
+        mcp_workbench,
+        messages,
+        data_discovery_prompt,
+        discovery_critic_prompt,
+        az_model_client,
+        az_model_reasoning_client,
+        verbose,
+        previous_run,
     )
 
 
@@ -173,23 +182,23 @@ async def _run_data_discovery_with_workbench(
     az_model_client,
     az_model_reasoning_client,
     verbose,
-    previous_run
+    previous_run,
 ):
     """Helper function to run data discovery with a given MCP workbench"""
-    
+
     data_discovery_agent = AssistantAgent(
         "Data_Discovery_Agent",
         model_client=az_model_client,
         workbench=mcp_workbench,
         reflect_on_tool_use=True,
         model_client_stream=True,
-        system_message=data_discovery_prompt
+        system_message=data_discovery_prompt,
     )
 
     discovery_critic_agent = AssistantAgent(
         "Discovery_Critic_Agent",
         model_client=az_model_reasoning_client,
-        system_message=discovery_critic_prompt
+        system_message=discovery_critic_prompt,
     )
 
     # Define a termination condition that stops the task once the summarizer
@@ -211,17 +220,44 @@ async def _run_data_discovery_with_workbench(
         print(f"Error during data source identification: {e}")
         return f"An error occurred during data source identification: {e}"
 
+
 # Example usage
 if __name__ == "__main__":
-
     # Set up argument parser
-    parser = argparse.ArgumentParser(description='Given a threat hunting technique dossier and a hypothesis, determine what relevant data is present on the Splunk server.')
-    parser.add_argument('-e', '--environment', help='Path to specific .env file to use')
-    parser.add_argument('-r', '--research', help='Path to the research document (markdown file)', required=True)
-    parser.add_argument('-y', '--hypothesis', help='The hunting hypothesis', required=True)
-    parser.add_argument('-a', '--able_info', help='The Actor, Behavior, Location and Evidence (ABLE) information', required=False, default=None)
-    parser.add_argument('-c', '--local_context', help='Additional local context to consider', required=False, default=None)
-    parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output', default=False)
+    parser = argparse.ArgumentParser(
+        description="Given a threat hunting technique dossier and a hypothesis, determine what relevant data is present on the Splunk server."
+    )
+    parser.add_argument("-e", "--environment", help="Path to specific .env file to use")
+    parser.add_argument(
+        "-r",
+        "--research",
+        help="Path to the research document (markdown file)",
+        required=True,
+    )
+    parser.add_argument(
+        "-y", "--hypothesis", help="The hunting hypothesis", required=True
+    )
+    parser.add_argument(
+        "-a",
+        "--able_info",
+        help="The Actor, Behavior, Location and Evidence (ABLE) information",
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
+        "-c",
+        "--local_context",
+        help="Additional local context to consider",
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose output",
+        default=False,
+    )
     args = parser.parse_args()
 
     # Load environment variables
@@ -242,7 +278,7 @@ if __name__ == "__main__":
 
     # Read the contents of the research document
     try:
-        with open(args.research, 'r', encoding='utf-8') as file:
+        with open(args.research, "r", encoding="utf-8") as file:
             research_data = file.read()
     except FileNotFoundError:
         print(f"Error: Research document '{args.research}' not found")
@@ -255,7 +291,7 @@ if __name__ == "__main__":
     able_info = None
     if args.able_info:
         try:
-            with open(args.able_info, 'r', encoding='utf-8') as file:
+            with open(args.able_info, "r", encoding="utf-8") as file:
                 able_info = file.read()
         except FileNotFoundError:
             print(f"Error: ABLE information file '{args.able_info}' not found")
@@ -268,7 +304,7 @@ if __name__ == "__main__":
     local_context = None
     if args.local_context:
         try:
-            with open(args.local_context, 'r', encoding='utf-8') as file:
+            with open(args.local_context, "r", encoding="utf-8") as file:
                 local_context = file.read()
         except FileNotFoundError:
             print(f"Error: Local context file '{args.local_context}' not found")
@@ -282,31 +318,40 @@ if __name__ == "__main__":
         # Run the hypothesizer asynchronously
         data_sources = asyncio.run(
             identify_data_sources(
-                hypothesis=args.hypothesis, 
-                research_document=research_data, 
+                hypothesis=args.hypothesis,
+                research_document=research_data,
                 able_info=able_info,
                 local_context=local_context,
                 verbose=args.verbose,
-                previous_run=messages
+                previous_run=messages,
             )
         )
 
         # Find the final message from the "critic" agent using next() and a generator expression
         data_sources_message = next(
-            (message.content for message in reversed(data_sources.messages) if message.source == "Data_Discovery_Agent"),
-            None  # Default value if no "critic" message is found
+            (
+                message.content
+                for message in reversed(data_sources.messages)
+                if message.source == "Data_Discovery_Agent"
+            ),
+            None,  # Default value if no "critic" message is found
         )
 
         # Display the data sources and ask for user feedback
         print(data_sources_message)
-        feedback = input("Please provide your feedback on the data sources (or press Enter to approve it): ")   
+        feedback = input(
+            "Please provide your feedback on the data sources (or press Enter to approve it): "
+        )
 
         if feedback.strip():
             # If feedback is provided, add it to the messages and loop back to
             # the data discovery team for further refinement
             messages = [
-                TextMessage(content=f"The current data sources draft is: {data_sources_message}\n", source="user"),
-                TextMessage(content=f"User feedback: {feedback}\n", source="user")
+                TextMessage(
+                    content=f"The current data sources draft is: {data_sources_message}\n",
+                    source="user",
+                ),
+                TextMessage(content=f"User feedback: {feedback}\n", source="user"),
             ]
         else:
             break
