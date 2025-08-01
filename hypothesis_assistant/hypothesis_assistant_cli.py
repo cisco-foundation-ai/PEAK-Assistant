@@ -78,8 +78,7 @@ async def hypothesizer(
         return "An error occurred while generating hypotheses."
 
 
-# Example usage
-if __name__ == "__main__":
+def main():
     # Set up argument parser
     parser = argparse.ArgumentParser(
         description="Given a threat hunting technique dossier, generate potential hypotheses for the hunter."
@@ -157,3 +156,7 @@ if __name__ == "__main__":
         )
     )
     print(hypotheses)
+
+
+if __name__ == "__main__":
+    main()

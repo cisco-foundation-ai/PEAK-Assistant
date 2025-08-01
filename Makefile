@@ -4,17 +4,17 @@ checks:  ruff mypy
 .PHONY: ruff
 ruff:
 	@if command -v uv >/dev/null 2>&1; then \
-		uv run ruff check able_assistant data_assistant hypothesis_assistant planning_assistant research_assistant UI utils peak_mcp tests; \
+		uv run ruff check .; \
 	else \
-		ruff check able_assistant data_assistant hypothesis_assistant planning_assistant research_assistant UI utils peak_mcp tests; \
+		ruff check .; \
 	fi
 
 .PHONY: mypy
 mypy:
 	@if command -v uv >/dev/null 2>&1; then \
-		uv run mypy able_assistant data_assistant hypothesis_assistant planning_assistant research_assistant UI utils peak_mcp tests; \
+		uv run mypy .; \
 	else \
-		mypy able_assistant data_assistant hypothesis_assistant planning_assistant research_assistant UI utils peak_mcp tests; \
+		mypy .; \
 	fi
 
 .PHONY: coverage

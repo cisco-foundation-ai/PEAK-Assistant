@@ -48,7 +48,7 @@ python research_assistant/research_assistant_cli.py -t "Kerberoasting" -f markdo
 
 ---
 
-### 2. `hypothesis_assistant_cli.py`
+### 2. hypothesis-assistant
 **Purpose:** Suggest testable threat hunting hypotheses based on user input and a research document.
 
 **Arguments:**
@@ -60,7 +60,7 @@ python research_assistant/research_assistant_cli.py -t "Kerberoasting" -f markdo
 
 **Example:**
 ```bash
-python hypothesis_assistant/hypothesis_assistant_cli.py -r kerberoasting.md -u "Focus on use for lateral movement." -c context.txt
+hypothesis-assistant -r kerberoasting.md -u "Focus on use for lateral movement." -c context.txt
 ```
 
 **Notes:**
@@ -69,7 +69,7 @@ Use the `-c` option to provide local context from a file that contains organizat
 
 ---
 
-### 3. `hypothesis_refiner_cli.py`
+### 3. hypothesis-refiner
 **Purpose:** Refine and improve a threat hunting hypothesis using automated and/or human-in-the-loop feedback.
 
 **Arguments:**
@@ -83,7 +83,7 @@ Use the `-c` option to provide local context from a file that contains organizat
 
 **Example:**
 ```bash
-python hypothesis_assistant/hypothesis_refiner_cli.py -y "threat actors are using kerberoasting for lateral movement by requesting user tickets and then using them shortly after" -r kerberoasting.md -a -c context.txt
+hypothesis-refiner -y "threat actors are using kerberoasting for lateral movement by requesting user tickets and then using them shortly after" -r kerberoasting.md -a -c context.txt
 ```
 
 **Notes:**
@@ -97,7 +97,7 @@ If you prefer a completely automated refinement experience, use the `-a` option,
 
 ---
 
-### 4. `able_assistant_cli.py`
+### 4. able-assistant
 **Purpose:** Generate a PEAK ABLE table (Actor, Behavior, Location, Evidence) for a given hypothesis and research document.
 
 **Arguments:**
@@ -109,12 +109,14 @@ If you prefer a completely automated refinement experience, use the `-a` option,
 
 **Example:**
 ```bash
-python able_assistant/able_assistant_cli.py -r kerberoasting.md -y "Adversaries seeking lateral movement via Kerberoasting will request Kerberos service tickets (TGS) for user-based SPNs associated with privileged or lateral-movement-enabled service accounts, followed shortly by successful authentication or remote access events (e.g., SMB, RDP, WinRM) using those accounts from previously unseen endpoints." -c context.txt
+able-assistant -r kerberoasting.md \
+   -y "Adversaries seeking lateral movement via Kerberoasting will request Kerberos service tickets (TGS) for user-based SPNs associated with privileged or lateral-movement-enabled service accounts, followed shortly by successful authentication or remote access events (e.g., SMB, RDP, WinRM) using those accounts from previously unseen endpoints." \
+   -c context.txt
 ```
 
 ---
 
-### 5. `data_asssistant_cli.py`
+### 5. data-assistant
 **Purpose:** Identify relevant Splunk indices and data sources for testing a threat hunting hypothesis.
 
 **Arguments:**
@@ -128,7 +130,7 @@ python able_assistant/able_assistant_cli.py -r kerberoasting.md -y "Adversaries 
 
 **Example:**
 ```bash
-python data_assistant/data_asssistant_cli.py -r kerberoasting.md -y "Adversaries seeking lateral movement via Kerberoasting will request Kerberos service tickets" -a able_table.md -c context.txt -v
+data-assistant -r kerberoasting.md -y "Adversaries seeking lateral movement via Kerberoasting will request Kerberos service tickets" -a able_table.md -c context.txt -v
 ```
 
 **Notes:**
@@ -182,7 +184,8 @@ cd PEAK-Assistant
 Create a `.env` file in the project root with the following variables:
 
 #### Required for All Tools:
-```
+
+```shell
 AZURE_OPENAI_API_KEY=your-azure-openai-api-key
 AZURE_OPENAI_ENDPOINT=https://your-azure-endpoint.openai.azure.com/
 AZURE_OPENAI_DEPLOYMENT=your-deployment-name
@@ -191,12 +194,14 @@ AZURE_OPENAI_API_VERSION=2023-05-15
 ```
 
 #### Required for Research Assistant:
-```
+
+```shell
 TAVILY_API_KEY=your-tavily-api-key
 ```
 
 #### Required for Data Assistant:
-```
+
+```shell
 SPLUNK_SERVER_URL=https://your-splunk-server:8089
 SPLUNK_MCP_USER=your-splunk-username
 SPLUNK_MCP_PASSWD=your-splunk-password
@@ -214,6 +219,7 @@ The data assistant requires a Model Context Protocol (MCP) server to interact wi
 - `SPLUNK_MCP_ARGS`: Arguments to pass to the MCP server command (can be multiple arguments separated by spaces)
 
 Example configuration:
+
 ```bash
 # Use a version of python3 that has the MCP module in it, such as the one
 # that the PEAK-Assistant app is using
@@ -229,6 +235,7 @@ environments), adjust accordingly.
 1. Install [pyenv](https://github.com/pyenv/pyenv) if not already installed. Configure
    your shell integration as per their instructions.
 2. Install Python 3.13.2:
+
    ```bash
    pyenv install 3.13.2
    ```
@@ -239,12 +246,15 @@ environments), adjust accordingly.
    ```
 
 ### 4. Install Required Python Modules
+
 Install dependencies using pip:
+
 ```bash
-pip install -r requirements.txt
+pip install -e .
 ```
 
 ### 5. SSL Certificates (Web Interface Only)
+
 If you plan to use the web interface, you'll need SSL certificates. The Flask app expects `cert.pem` and `key.pem` files in the `UI/` directory.
 
 For development, you can create self-signed certificates:
@@ -252,6 +262,8 @@ For development, you can create self-signed certificates:
 cd UI
 openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
 ```
+
+Or use `generate_certificates.sh`
 
 ## Quick Start
 

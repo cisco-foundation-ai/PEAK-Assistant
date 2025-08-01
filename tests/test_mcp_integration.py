@@ -11,8 +11,14 @@ import sys
 import tempfile
 import json
 
+
+
+
 # Add the project root to Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+
+from research_assistant import researcher
 
 from utils.mcp_config import (
     MCPConfigManager,
@@ -155,7 +161,6 @@ async def test_research_integration():
 
     # Import research function
     try:
-        from research_assistant.research_assistant_cli import researcher
 
         print("✓ Research assistant module imported successfully")
 
@@ -181,7 +186,7 @@ async def test_data_discovery_integration():
     print("\n=== Testing Data Discovery Tool MCP Integration ===")
 
     try:
-        from data_assistant.data_asssistant_cli import identify_data_sources
+        from data_assistant import identify_data_sources
 
         print("✓ Data assistant module imported successfully")
 

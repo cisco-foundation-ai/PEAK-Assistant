@@ -3,6 +3,7 @@
 import os
 import sys
 import argparse
+from typing import List
 from dotenv import load_dotenv
 import asyncio
 
@@ -11,6 +12,7 @@ from autogen_agentchat.agents import AssistantAgent
 from autogen_agentchat.conditions import TextMentionTermination
 from autogen_agentchat.teams import RoundRobinGroupChat
 from autogen_agentchat.ui import Console
+from autogen_agentchat.base import TaskResult
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from utils import find_dotenv_file
@@ -24,7 +26,7 @@ async def refiner(
     research_document: str,
     verbose: bool = False,
     previous_run: list = list(),
-) -> str:
+) -> TaskResult:
     """
     Threat hunting hypothesis refiner agent that combines user input, a markdown document, and its own prompt
     to generate output using an OpenAI model on Azure.
@@ -134,11 +136,17 @@ async def refiner(
         return result  # Use the correct attribute to access the generated content
     except Exception as e:
         print(f"Error while refining hypotheses: {e}")
-        return "An error occurred while refining hypotheses."
+        return TaskResult(
+            messages=[
+                TextMessage(
+                    content=f"Error while refining hypotheses: {e}",
+                    source="system",
+                )
+            ]
+        )
 
 
-# Example usage
-if __name__ == "__main__":
+def main() -> None:
     # Set up argument parser
     parser = argparse.ArgumentParser(
         description="Given a threat hunting technique dossier, generate potential hypotheses for the hunter."
@@ -223,14 +231,14 @@ if __name__ == "__main__":
             print(f"Error reading local context: {e}")
             exit(1)
 
-    messages = list()
+    messages: List[TextMessage] = list()
     current_hypothesis = args.hypothesis
     while True:
         # Run the hypothesizer asynchronously
-        messages = asyncio.run(
+        response = asyncio.run(
             refiner(
                 hypothesis=current_hypothesis,
-                local_context=local_context,
+                local_context=local_context or "",
                 research_document=research_data,
                 verbose=args.verbose,
                 previous_run=messages,
@@ -240,11 +248,11 @@ if __name__ == "__main__":
         # Find the final message from the "critic" agent using next() and a generator expression
         refined_hypothesis_message = next(
             (
-                message.content
-                for message in reversed(messages.messages)
-                if message.source == "critic"
+                getattr(message, "content")
+                for message in reversed(response.messages)
+                if hasattr(message, "content") and message.source == "critic"
             ),
-            None,  # Default value if no "critic" message is found
+            "something went wrong",  # Default value if no "critic" message is found
         )
 
         # Remove the trailing "YYY-HYPOTHESIS-ACCEPTED-YYY" string
@@ -253,15 +261,30 @@ if __name__ == "__main__":
         ).strip()
 
         # Print the refined hypothesis and ask for user feedback
-        print(current_hypothesis)
+        print(f"Hypothesis:\n\n{current_hypothesis}")
         feedback = input(
             "Please provide your feedback on the refined hypothesis (or press Enter to approve it): "
         )
 
-        if feedback.strip():
-            # If feedback is provided, add it to the messages and loop back to the refiner
-            messages = [
-                TextMessage(content=f"User feedback: {feedback}\n", source="user")
-            ]
+        if not args.automated:
+            feedback = input(
+                "Please provide your feedback on the refined hypothesis (or press Enter to approve it): "
+            )
+
+            if feedback.strip():
+                # If feedback is provided, add it to the messages and loop back to the refiner
+                messages.append(
+                    TextMessage(content=f"User feedback: {feedback}\n", source="user")
+                )
+            else:
+                break
         else:
-            break
+            # In automated mode, just print the refined hypothesis and exit
+            # print("Automated mode: No user feedback will be collected.")
+            if "YYY-HYPOTHESIS-ACCEPTED-YYY" in refined_hypothesis_message:
+                print("Automated mode: Hypothesis refinement completed.")
+                break
+
+
+if __name__ == "__main__":
+    main()

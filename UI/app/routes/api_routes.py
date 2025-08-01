@@ -7,6 +7,15 @@ import logging
 from flask import Blueprint, request, jsonify, session
 from autogen_agentchat.messages import TextMessage, UserMessage
 
+from research_assistant import researcher as async_researcher
+
+from able_assistant import able_table as async_able_table
+
+# Import data discovery function
+from data_assistant import (
+    identify_data_sources as async_identify_data_sources,
+)
+
 from ..utils.decorators import async_action, handle_async_api_errors
 from ..utils.helpers import (
     extract_report_md,
@@ -38,8 +47,6 @@ async def research():
     local_context = get_session_value("local_context", INITIAL_LOCAL_CONTEXT)
 
     # Import the researcher function and TextMessage
-    from research_assistant.research_assistant_cli import researcher as async_researcher
-    from autogen_agentchat.messages import TextMessage
 
     previous_run = None
     if previous_report and feedback:
@@ -200,6 +207,8 @@ async def refine():
 async def able_table():
     """Generate ABLE (Adversary Behavior Learning Exercise) table"""
     data = request.json
+    if not data:
+        return jsonify({"success": False, "error": "No data provided"}), 400
 
     # Get hypothesis, falling back through the session states
     hypothesis = (
@@ -219,10 +228,9 @@ async def able_table():
     local_context = get_session_value("local_context", INITIAL_LOCAL_CONTEXT)
 
     # Import necessary modules
-    from able_assistant.able_assistant_cli import able_table
 
     # Construct the message history for feedback
-    previous_run = None
+    previous_run = []
     if feedback and current_able_table:
         previous_run = [
             UserMessage(
@@ -233,7 +241,7 @@ async def able_table():
         ]
 
     # Call the able_table function from the CLI module
-    able_md = await able_table(
+    able_md = await async_able_table(
         hypothesis=hypothesis,
         research_document=report_md,
         local_context=local_context,
@@ -297,11 +305,6 @@ async def data_discovery():
         messages.append(
             TextMessage(content=f"User feedback: {feedback}\n", source="user")
         )
-
-    # Import data discovery function
-    from data_assistant.data_asssistant_cli import (
-        identify_data_sources as async_identify_data_sources,
-    )
 
     result = await async_identify_data_sources(
         hypothesis=hypothesis,
@@ -391,7 +394,7 @@ async def hunt_plan():
         )
 
     # Import hunt planning function
-    from planning_assistant.planning_assistant_cli import (
+    from planning_assistant import (
         plan_hunt as async_hunt_planner,
     )
 

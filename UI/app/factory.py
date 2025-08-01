@@ -7,11 +7,11 @@ import sys
 import logging
 import warnings
 from flask import Flask
-from flask_session import Session
+from flask_session import Session # type: ignore[import-untyped]
 from flask_sqlalchemy import SQLAlchemy
 
 from .config import config
-from .utils import load_env_defaults
+from utils import load_env_defaults
 
 # Initialize extensions
 db = SQLAlchemy()
