@@ -24,7 +24,11 @@ git clone https://github.com/splunk/PEAK-Assistant
 cd PEAK-Assistant
 ```
 
-**I strongly recommend you use a python virtualenv to run this app.**
+**I strongly recommend you use a python virtualenv to run this app.** If you are using `pyenv`, you can do something like the following to create a new virtualenv called `peak-assistant` and automatically switch to it whenever you enter the `PEAK-Assistant` directory.
+```bash
+pyenv virtualenv 3.13.2 peak-assistant
+pyenv local peak-assistant
+```
 
 Inside your virtualenv, install the entire Assistant repo as a Python module:
 ```bash

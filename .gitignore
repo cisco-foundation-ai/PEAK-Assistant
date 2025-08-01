@@ -177,7 +177,6 @@ cython_debug/
 # PEAK-Assistant specific things
 .env
 *.pdf 
-*.md
 *.pem
 *.json
 *.log 
