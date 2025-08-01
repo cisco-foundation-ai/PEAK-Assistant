@@ -19,9 +19,11 @@ The PEAK-Assistant includes a Flask-based web interface that provides an intuiti
 - **Hunt Planning**: Combine all phases into a comprehensive hunt plan
 
 ### Running the Web Interface
+
+
 ```bash
-cd UI
-python app.py
+pip install .
+peak-assistant
 ```
 
 By default, the application will run on `https://127.0.0.1:8000/` (note HTTPS - you'll need SSL certificates).
@@ -30,7 +32,7 @@ For more details on the web interface, see [UI/README.md](UI/README.md).
 
 ## Tools and CLI Scripts
 
-### 1. `research_assistant_cli.py`
+### research-assistant
 **Purpose:** Generate a comprehensive threat hunting research report for a given technique, using automated research and summarization agents.
 
 **Arguments:**
@@ -43,12 +45,12 @@ For more details on the web interface, see [UI/README.md](UI/README.md).
 
 **Example:**
 ```bash
-python research_assistant/research_assistant_cli.py -t "Kerberoasting" -f markdown -c context.txt
+research-assistant -t "Kerberoasting" -f markdown -c context.txt
 ```
 
 ---
 
-### 2. hypothesis-assistant
+### hypothesis-assistant
 **Purpose:** Suggest testable threat hunting hypotheses based on user input and a research document.
 
 **Arguments:**
@@ -69,7 +71,7 @@ Use the `-c` option to provide local context from a file that contains organizat
 
 ---
 
-### 3. hypothesis-refiner
+### hypothesis-refiner
 **Purpose:** Refine and improve a threat hunting hypothesis using automated and/or human-in-the-loop feedback.
 
 **Arguments:**
@@ -97,7 +99,7 @@ If you prefer a completely automated refinement experience, use the `-a` option,
 
 ---
 
-### 4. able-assistant
+### able-assistant
 **Purpose:** Generate a PEAK ABLE table (Actor, Behavior, Location, Evidence) for a given hypothesis and research document.
 
 **Arguments:**
@@ -116,7 +118,7 @@ able-assistant -r kerberoasting.md \
 
 ---
 
-### 5. data-assistant
+### data-assistant
 **Purpose:** Identify relevant Splunk indices and data sources for testing a threat hunting hypothesis.
 
 **Arguments:**
@@ -151,7 +153,7 @@ All CLI tools support a `-c` or `--local_context` parameter that allows you to p
 
 Create a `context.txt` file in your project directory with relevant information. For example:
 
-```
+```markdown
 # Organization Context
 Organization: ACME Corporation
 Environment: Mixed Windows/Linux environment with cloud infrastructure
@@ -181,6 +183,7 @@ cd PEAK-Assistant
 ```
 
 ### 2. Environment Variables
+
 Create a `.env` file in the project root with the following variables:
 
 #### Required for All Tools:
@@ -192,6 +195,15 @@ AZURE_OPENAI_DEPLOYMENT=your-deployment-name
 AZURE_OPENAI_MODEL=gpt-4
 AZURE_OPENAI_API_VERSION=2023-05-15
 ```
+
+## If you want to use specific model details for the reasoning model, you can set:
+
+```shell
+AZURE_OPENAI_REASONING_DEPLOYMENT=your-deployment-name
+AZURE_OPENAI_REASONING_MODEL=gpt-4
+```
+
+It'll fall back to the above variables otherwise.
 
 #### Required for Research Assistant:
 
@@ -239,6 +251,7 @@ environments), adjust accordingly.
    ```bash
    pyenv install 3.13.2
    ```
+
 3. Create and activate a virtual environment:
    ```bash
    pyenv virtualenv 3.13.2 peak-assistant
@@ -257,13 +270,7 @@ pip install -e .
 
 If you plan to use the web interface, you'll need SSL certificates. The Flask app expects `cert.pem` and `key.pem` files in the `UI/` directory.
 
-For development, you can create self-signed certificates:
-```bash
-cd UI
-openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
-```
-
-Or use `generate_certificates.sh`
+For development, you can create self-signed certificates by running `generate_certificates.sh` and filling in the prompts.
 
 ## Quick Start
 
@@ -271,14 +278,14 @@ Or use `generate_certificates.sh`
 
 1. Complete the installation steps above
 2. Create SSL certificates for the web interface:
+
    ```bash
-   cd UI
-   openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
+   ./generate_certificates.sh
    ```
+
 3. Start the web interface:
    ```bash
-   cd UI
-   python app.py
+   peak-assistant
    ```
 4. Open your browser to `https://127.0.0.1:8000/`
 5. Follow the guided workflow through each phase
@@ -287,22 +294,22 @@ Or use `generate_certificates.sh`
 
 1. Generate a research report:
    ```bash
-   python research_assistant/research_assistant_cli.py -t "Kerberoasting" -f markdown
+   research-assistant -t "Kerberoasting" -f markdown
    ```
 
 2. Generate hypotheses from the research:
    ```bash
-   python hypothesis_assistant/hypothesis_assistant_cli.py -r kerberoasting.md
+   hypothesis-assistant -r kerberoasting.md
    ```
 
 3. Refine a hypothesis:
    ```bash
-   python hypothesis_assistant/hypothesis_refiner_cli.py -y "Your hypothesis here" -r kerberoasting.md -a
+   hypothesis-refiner -y "Your hypothesis here" -r kerberoasting.md -a
    ```
 
 4. Create an ABLE table:
    ```bash
-   python able_assistant/able_assistant_cli.py -r kerberoasting.md -y "Your refined hypothesis"
+   able-assistant -r kerberoasting.md -y "Your refined hypothesis"
    ```
 
 ## Workflow
@@ -324,16 +331,15 @@ See `requirements.txt` for the full list of required Python modules.
 
 ```
 PEAK-Assistant/
-├── README.md                    # This file
-├── requirements.txt             # Python dependencies
-├── .env                        # Environment variables (create this)
-├── context.txt                 # Local context file (optional, ignored by git)
-├── research_assistant/         # Research report generation
-├── hypothesis_assistant/       # Hypothesis generation and refinement
+├── README.md                  # This file
+├── pyproject.toml             # Python project definition
+├── .env                       # Environment variables (create this)
+├── context.txt                # Local context file (optional, ignored by git)
+├── research_assistant/        # Research report generation
+├── hypothesis_assistant/      # Hypothesis generation and refinement
 ├── able_assistant/            # ABLE table creation
 ├── data_assistant/            # Splunk data source discovery
 └── UI/                        # Flask web interface
-    ├── app.py                 # Main Flask application
     ├── context.txt            # UI-specific context file (optional)
     ├── cert.pem & key.pem     # SSL certificates (create these)
     └── templates/             # HTML templates
@@ -342,7 +348,7 @@ PEAK-Assistant/
 ## Notes
 
 - All generated files (PDF reports, markdown files) are automatically ignored by Git to prevent repository bloat
-- Context files (`context.txt`) are ignored by Git to protect sensitive organizational information
+- Context file (`context.txt`) is ignored by Git to protect sensitive organizational information
 - The assistant is designed to work with Azure OpenAI and requires proper API credentials
 - Some features (research, data discovery) require additional API keys and services
 - The web interface provides a more user-friendly experience while CLI tools are better for automation
@@ -361,7 +367,7 @@ PEAK-Assistant/
 ### Getting Help:
 
 - Check the web interface's built-in help page for detailed usage instructions
-- Review the CLI tool help with `python <tool_name> --help`
+- Review the CLI tool help with `<tool_name> --help`
 - Examine error messages in the debug page of the web interface
 
 ## Contributing
