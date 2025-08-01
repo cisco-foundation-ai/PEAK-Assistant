@@ -333,10 +333,12 @@ async def researcher(
     # Set up MCP servers for research
     mcp_client_manager = get_client_manager()
     connected_servers_external = await setup_mcp_servers(
-        mcp_server_group_external, user_id=user_id
+        mcp_server_group_external, 
+        user_id=user_id
     )
     connected_servers_internal = await setup_mcp_servers(
-        mcp_server_group_internal, user_id=user_id
+        mcp_server_group_internal, 
+        user_id=user_id
     )
 
     # Get workbenches only from the external research server group
@@ -360,48 +362,48 @@ async def researcher(
             group_workbenches_internal.append(workbench)
 
     if not group_workbenches_internal:
-        error_msg = f"No MCP workbenches available for internal research group '{mcp_server_group_internal}'. Check your MCP configuration."
+        error_msg = f"No MCP workbenches available for internal research group '{mcp_server_group_internal}'. Skipping local research."
         if verbose:
             print(error_msg)
-        raise RuntimeError(error_msg)
 
-    # Create search agent with MCP workbench (MCP-only)
-    external_search_agent = AssistantAgent(
-        "external_search_agent",
-        description="Performs searches and analyzes information using external research tools (i.e. web search)",
-        model_client=az_model_client,
-        workbench=group_workbenches_external,
-        system_message=search_system_prompt,
-    )
+    participants = [
+        AssistantAgent(
+            "external_search_agent",
+            description="Performs searches and analyzes information using external research tools (i.e. web search)",
+            model_client=az_model_client,
+            workbench=group_workbenches_external,
+            system_message=search_system_prompt,
+        ),
+        AssistantAgent(
+            "research_critic",
+            description="Evaluates progress, ensures completeness, and suggests new research avenues.",
+            model_client=az_model_reasoning_client,
+            system_message=research_critic_system_prompt,
+        ),
+        AssistantAgent(
+            "summarizer_agent",
+            description="Provides a detailed markdown summary of the research as a report to the user.",
+            model_client=az_model_client,
+            system_message=summarizer_system_prompt,
+        ),
+        AssistantAgent(
+            "summary_critic",
+            description="Evaluates the summary and ensures it meets the user's needs.",
+            model_client=az_model_reasoning_client,
+            system_message=summary_critic_system_prompt,
+        )        
+    ]
 
-    internal_search_agent = AssistantAgent(
-        "internal_search_agent",
-        description="Performs searches and analyzes information using local information sources (e.g., wikis, ticket systems, etc)",
-        model_client=az_model_client,
-        workbench=group_workbenches_internal,
-        system_message=search_system_prompt,
-    )
-
-    research_critic_agent = AssistantAgent(
-        "research_critic",
-        description="Evaluates progress, ensures completeness, and suggests new research avenues.",
-        model_client=az_model_reasoning_client,
-        system_message=research_critic_system_prompt,
-    )
-
-    summarizer_agent = AssistantAgent(
-        "summarizer_agent",
-        description="Provides a detailed markdown summary of the research as a report to the user.",
-        model_client=az_model_client,
-        system_message=summarizer_system_prompt,
-    )
-
-    summary_critic_agent = AssistantAgent(
-        "summary_critic",
-        description="Evaluates the summary and ensures it meets the user's needs.",
-        model_client=az_model_reasoning_client,
-        system_message=summary_critic_system_prompt,
-    )
+    if group_workbenches_internal:
+        participants.append(
+            AssistantAgent(
+                "internal_search_agent",
+                description="Performs searches and analyzes information using local information sources (e.g., wikis, ticket systems, etc)",
+                model_client=az_model_client,
+                workbench=group_workbenches_internal,
+                system_message=search_system_prompt,
+            )
+        )
 
     # Define a termination condition that stops the task once the report
     # has been approved
@@ -409,13 +411,7 @@ async def researcher(
 
     # Create a team
     team = SelectorGroupChat(
-        participants=[
-            external_search_agent,
-            internal_search_agent,
-            research_critic_agent,
-            summarizer_agent,
-            summary_critic_agent,
-        ],
+        participants=participants,
         model_client=az_model_client,
         termination_condition=text_termination,
         selector_prompt=selector_prompt,
