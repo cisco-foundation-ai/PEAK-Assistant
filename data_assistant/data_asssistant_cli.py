@@ -21,12 +21,12 @@ from utils.mcp_config import get_client_manager, setup_mcp_servers
 
 
 async def identify_data_sources(
-    hypothesis: str = None,
-    research_document: str = None,
-    able_info: str = None,
-    local_context: str = None,
+    hypothesis: str,
+    research_document: str,
+    able_info: str,
+    local_context: str,
     verbose: bool = False,
-    previous_run: list = None,
+    previous_run: list = list(),
     mcp_server_group: str = "data_discovery",
 ) -> str:
     """
