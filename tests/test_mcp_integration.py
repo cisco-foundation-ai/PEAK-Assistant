@@ -11,6 +11,7 @@ import sys
 import tempfile
 import json
 
+import inspect
 
 # Add the project root to Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -153,7 +154,7 @@ async def test_client_manager() -> None:
         os.unlink(temp_config_file)
 
 
-async def test_research_integration() -> None:
+async def test_research_integration() -> bool:
     """Test research tool MCP integration"""
     print("\n=== Testing Research Tool MCP Integration ===")
 
@@ -178,7 +179,7 @@ async def test_research_integration() -> None:
     return True
 
 
-async def test_data_discovery_integration() -> None:
+async def test_data_discovery_integration() -> bool:
     """Test data discovery tool MCP integration"""
     print("\n=== Testing Data Discovery Tool MCP Integration ===")
 
@@ -188,7 +189,6 @@ async def test_data_discovery_integration() -> None:
         print("✓ Data assistant module imported successfully")
 
         # Test that function accepts mcp_server_group parameter
-        import inspect
 
         sig = inspect.signature(identify_data_sources)
         assert "mcp_server_group" in sig.parameters
@@ -435,7 +435,7 @@ async def test_oauth_token_manager() -> None:
     print("✓ Token expiry detection working")
 
 
-async def test_flask_integration() -> None:
+async def test_flask_integration() -> bool:
     """Test Flask integration components"""
     print("\n=== Testing Flask Integration ===")
 
@@ -496,7 +496,7 @@ async def test_flask_integration() -> None:
     return True
 
 
-async def test_pkce_generation() -> None:
+async def test_pkce_generation() -> bool:
     """Test PKCE code generation"""
     print("\n=== Testing PKCE Generation ===")
 

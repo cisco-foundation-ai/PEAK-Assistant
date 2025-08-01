@@ -12,7 +12,7 @@ async def able_table(
     hypothesis: str,
     research_document: str,
     local_context: str,
-    previous_run: list = list(),
+    previous_run: list[SystemMessage | UserMessage] = list(),
 ) -> str:
     """
     Generate a PEAK ABLE table based on the given hypothesis and research document.

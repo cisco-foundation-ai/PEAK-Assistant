@@ -40,3 +40,4 @@ coverage-html: coverage
 	else \
 		coverage html; \
 	fi	
+	open htmlcov/index.html || echo "Open htmlcov/index.html in your browser to view the coverage report."

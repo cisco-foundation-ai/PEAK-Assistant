@@ -3,6 +3,7 @@
 import os
 import sys
 import argparse
+from typing import List
 from dotenv import load_dotenv
 import asyncio
 
@@ -79,7 +80,7 @@ def main() -> None:
         exit(1)
 
     # Read the contents of the ABLE information if provided
-    able_info = None
+    able_info = ""
     if args.able_info:
         try:
             with open(args.able_info, "r", encoding="utf-8") as file:
@@ -92,7 +93,7 @@ def main() -> None:
             exit(1)
 
     # Read the contents of the local context if provided
-    local_context = None
+    local_context = ""
     if args.local_context:
         try:
             with open(args.local_context, "r", encoding="utf-8") as file:
@@ -104,7 +105,7 @@ def main() -> None:
             print(f"Error reading local context: {e}")
             exit(1)
 
-    messages = list()
+    messages: List[TextMessage] = list()
     while True:
         # Run the hypothesizer asynchronously
         data_sources = asyncio.run(
@@ -121,9 +122,10 @@ def main() -> None:
         # Find the final message from the "critic" agent using next() and a generator expression
         data_sources_message = next(
             (
-                message.content
+                getattr(message, "content", None)
                 for message in reversed(data_sources.messages)
-                if message.source == "Data_Discovery_Agent"
+                if hasattr(message, "content")
+                and message.source == "Data_Discovery_Agent"
             ),
             None,  # Default value if no "critic" message is found
         )

@@ -3,6 +3,7 @@
 import os
 import sys
 import argparse
+from typing import List
 from dotenv import load_dotenv
 import asyncio
 
@@ -12,6 +13,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from utils import find_dotenv_file
 
 from . import plan_hunt
+
 
 def main() -> None:
     # Set up argument parser
@@ -124,16 +126,16 @@ def main() -> None:
             print(f"Error reading local context: {e}")
             exit(1)
 
-    messages = list()
+    messages: List[TextMessage] = list()
     while True:
         # Run the hypothesizer asynchronously
         data_sources = asyncio.run(
             plan_hunt(
                 hypothesis=args.hypothesis,
                 research_document=research_data,
-                able_info=able_info,
-                data_discovery=data_discovery,
-                local_context=local_context,
+                able_info=able_info or "",
+                data_discovery=data_discovery or "",
+                local_context=local_context or "",
                 verbose=args.verbose,
                 previous_run=messages,
             )
@@ -142,14 +144,14 @@ def main() -> None:
         # Find the final message from the "hunt_planner" agent using next() and a generator expression
         hunt_plan = next(
             (
-                message.content
+                getattr(message, "content", None)
                 for message in reversed(data_sources.messages)
-                if message.source == "hunt_planner"
+                if message.source == "hunt_planner" and hasattr(message, "content")
             ),
-            None,  # Default value if no "hunt_planner" message is found
+            "no plan was generated",  # Default value if no "hunt_planner" message is found
         )
 
-        print(hunt_plan)
+        print(f"Hunt plan:\n{'*' * 50}\n{hunt_plan}\n{'*' * 50}")
         feedback = input(
             "Please provide your feedback on the plan (or press Enter to approve it): "
         )

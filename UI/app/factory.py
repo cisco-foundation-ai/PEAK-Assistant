@@ -6,9 +6,13 @@ import os
 import sys
 import logging
 import warnings
+from pathlib import Path
+
 from flask import Flask
-from flask_session import Session # type: ignore[import-untyped]
+from flask_session import Session  # type: ignore[import-untyped]
 from flask_sqlalchemy import SQLAlchemy
+
+from utils.authlib_oauth import get_oauth_manager
 
 from .config import config
 from utils import load_env_defaults
@@ -21,15 +25,17 @@ session_manager = Session()
 INITIAL_LOCAL_CONTEXT = None
 
 
-def load_initial_context():
+def load_initial_context() -> None:
     """Load initial local context from context.txt file"""
     global INITIAL_LOCAL_CONTEXT
-    context_file_path = os.path.join(os.path.dirname(__file__), "..", "context.txt")
 
-    if os.path.exists(context_file_path):
+    context_file_path = Path(__file__).parent.parent.parent.joinpath("context.txt")
+
+    if context_file_path.exists():
         try:
-            with open(context_file_path, "r", encoding="utf-8") as f:
-                INITIAL_LOCAL_CONTEXT = f.read()
+            INITIAL_LOCAL_CONTEXT = context_file_path.read_text(
+                encoding="utf-8"
+            ).strip()
             print(f"Successfully loaded initial context from {context_file_path}")
         except Exception as e:
             print(f"Warning: Could not load context file: {e}")
@@ -39,14 +45,14 @@ def load_initial_context():
         INITIAL_LOCAL_CONTEXT = ""
 
 
-def configure_session(app):
+def configure_session(app: Flask) -> None:
     """Configure the Flask session for robust cross-site handling."""
     app.config["SESSION_COOKIE_SAMESITE"] = "None"
     app.config["SESSION_COOKIE_SECURE"] = True
     app.config["SESSION_COOKIE_PATH"] = "/"
 
 
-def create_app(config_name="default"):
+def create_app(config_name: str = "default") -> Flask:
     # Configure logging to show INFO messages
     logging.basicConfig(
         level=logging.INFO,
@@ -90,7 +96,7 @@ def create_app(config_name="default"):
     # Initialize OAuth manager for MCP server authentication
     from utils.authlib_oauth import init_oauth_manager
 
-    _oauth_manager = init_oauth_manager(app)
+    _oauth_manager = init_oauth_manager(app, get_oauth_manager())
 
     # Suppress asyncio event loop closure warnings from background HTTP cleanup
     logging.getLogger("httpx").setLevel(logging.ERROR)

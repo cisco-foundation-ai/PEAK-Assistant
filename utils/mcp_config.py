@@ -61,11 +61,11 @@ class AuthConfig:
 @dataclass
 class MCPServerConfig:
     name: str
+    url: str
     transport: TransportType = TransportType.STDIO
     command: Optional[str] = None
     args: Optional[List[str]] = None
     env: Optional[Dict[str, str]] = None
-    url: Optional[str] = None
     auth: Optional[AuthConfig] = None
     description: Optional[str] = None
     timeout: int = 30
@@ -1373,7 +1373,7 @@ class MCPClientManager:
 
         logger.info(f"Disconnected from server: {server_name}")
 
-    async def disconnect_all(self):
+    async def disconnect_all(self) -> None:
         """Disconnect from all servers with error isolation"""
         server_names = list(self.workbenches.keys())
 

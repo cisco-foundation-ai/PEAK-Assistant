@@ -138,8 +138,8 @@ async def test_manual_config_precedence() -> None:
 
     try:
         # Get effective URLs - should use manual config despite discovery being enabled
-        token_url = await token_manager.get_effective_token_url()
-        auth_url = await token_manager.get_effective_authorization_url()
+        token_url = await token_manager.get_effective_token_url() or ""
+        auth_url = await token_manager.get_effective_authorization_url() or ""
 
         if (
             "manual-override.example.com" in token_url
@@ -179,8 +179,8 @@ async def test_discovery_disabled() -> None:
             print("✅ Discovery correctly skipped when disabled")
 
         # Should use manual configuration only
-        token_url = await token_manager.get_effective_token_url()
-        auth_url = await token_manager.get_effective_authorization_url()
+        token_url = await token_manager.get_effective_token_url() or ""
+        auth_url = await token_manager.get_effective_authorization_url() or ""
 
         if "manual.example.com" in token_url and "manual.example.com" in auth_url:
             print("✅ Manual configuration used when discovery disabled")

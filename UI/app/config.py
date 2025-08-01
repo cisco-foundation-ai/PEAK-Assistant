@@ -6,6 +6,8 @@ import os
 import tempfile
 from datetime import timedelta
 
+from flask import Flask
+
 
 class Config:
     """Base configuration class"""
@@ -14,8 +16,7 @@ class Config:
 
     # Session configuration
     SESSION_TYPE = "sqlalchemy"
-    SESSION_PERMANENT = False
-    SESSION_USE_SIGNER = True
+    SESSION_PERMANENT = True
     SESSION_KEY_PREFIX = "peak_assistant_"
     PERMANENT_SESSION_LIFETIME = timedelta(hours=24)
 
@@ -36,7 +37,7 @@ class Config:
     # MCP configuration now handled by mcp_servers.json configuration file
 
     @staticmethod
-    def init_app(app):
+    def init_app(app: Flask) -> None:
         """Initialize application with configuration"""
         # Create upload folder if it doesn't exist
         os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
@@ -56,8 +57,8 @@ class ProductionConfig(Config):
     DEBUG = False
     SSL_DISABLE = False
 
-    @classmethod
-    def init_app(cls, app):
+    @staticmethod
+    def init_app(app: Flask) -> None:
         Config.init_app(app)
 
         # Production-specific initialization

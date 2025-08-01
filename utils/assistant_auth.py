@@ -3,15 +3,16 @@ PEAK Assistant Authentication Manager
 """
 
 import os
+from typing import Optional
 
 
 class PEAKAssistantAuthManager:
     """Manages PEAK Assistant authentication."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._api_key = os.getenv("AZURE_OPENAI_API_KEY")
 
-    def ensure_configured(self):
+    def ensure_configured(self) -> bool:
         """
         Ensure all required authentication environment variables are set,
         else raise exception
@@ -27,7 +28,7 @@ class PEAKAssistantAuthManager:
         else:
             return True
 
-    async def get_auth_params(self) -> dict:
+    async def get_auth_params(self) -> dict[str, Optional[str]]:
         """
         Get authentication parameters for API requests
 
