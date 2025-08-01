@@ -262,9 +262,6 @@ def main() -> None:
 
         # Print the refined hypothesis and ask for user feedback
         print(f"Hypothesis:\n\n{current_hypothesis}")
-        feedback = input(
-            "Please provide your feedback on the refined hypothesis (or press Enter to approve it): "
-        )
 
         if not args.automated:
             feedback = input(
@@ -279,10 +276,10 @@ def main() -> None:
             else:
                 break
         else:
-            # In automated mode, just print the refined hypothesis and exit
-            # print("Automated mode: No user feedback will be collected.")
             if "YYY-HYPOTHESIS-ACCEPTED-YYY" in refined_hypothesis_message:
-                print("Automated mode: Hypothesis refinement completed.")
+                print(
+                    "Automated mode: Hypothesis refinement completed.", file=sys.stderr
+                )
                 break
 
 
