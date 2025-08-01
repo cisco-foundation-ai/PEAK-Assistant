@@ -84,24 +84,31 @@ async def research():
 @handle_async_api_errors
 async def hypothesize():
     """Generate threat hunting hypotheses"""
-    data = request.json
-    if not data:
-        return jsonify({"success": False, "error": "No data provided"}), 400
-    report_md = data.get("report_md") or get_session_value("report_md", "")
-    _retry_count = int(data.get("retry_count", 3))
-    # verbose_mode is ignored for hypothesizer, as it is not supported
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info("=== HYPOTHESIS GENERATION DEBUG START ===")
+    
+    # Get research report from session (no request data needed)
+    report_md = get_session_value("report_md", "")
+    logger.info(f"report_md length: {len(report_md) if report_md else 0}")
 
     if not report_md:
+        logger.error("No research report available - this should be the 400 cause")
         return jsonify({"success": False, "error": "No research report available"}), 400
 
     local_context = get_session_value(
         "local-context", ""
     )  # Get local context from session
+    logger.info(f"local_context length: {len(local_context) if local_context else 0}")
 
     # Import hypothesizer
     from hypothesis_assistant.hypothesis_assistant_cli import (
         hypothesizer as async_hypothesizer,
     )
+    
+    logger.info("About to call async_hypothesizer")
+    logger.info(f"Parameters - user_input: None, research_document length: {len(report_md)}, local_context length: {len(local_context)}")
 
     hypos = await async_hypothesizer(
         user_input=None,  # No specific user input for auto-generation
