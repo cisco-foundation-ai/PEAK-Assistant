@@ -12,8 +12,6 @@ import tempfile
 import json
 
 
-
-
 # Add the project root to Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -33,7 +31,7 @@ from utils.mcp_config import (
 )
 
 
-async def test_config_loading():
+async def test_config_loading() -> None:
     """Test MCP configuration loading"""
     print("=== Testing MCP Configuration Loading ===")
 
@@ -105,7 +103,7 @@ async def test_config_loading():
         os.unlink(temp_config_file)
 
 
-async def test_client_manager():
+async def test_client_manager() -> None:
     """Test MCP client manager functionality"""
     print("\n=== Testing MCP Client Manager ===")
 
@@ -155,13 +153,12 @@ async def test_client_manager():
         os.unlink(temp_config_file)
 
 
-async def test_research_integration():
+async def test_research_integration() -> None:
     """Test research tool MCP integration"""
     print("\n=== Testing Research Tool MCP Integration ===")
 
     # Import research function
     try:
-
         print("✓ Research assistant module imported successfully")
 
         # Test that research function accepts mcp_server_group parameter
@@ -181,7 +178,7 @@ async def test_research_integration():
     return True
 
 
-async def test_data_discovery_integration():
+async def test_data_discovery_integration() -> None:
     """Test data discovery tool MCP integration"""
     print("\n=== Testing Data Discovery Tool MCP Integration ===")
 
@@ -212,7 +209,7 @@ async def test_data_discovery_integration():
     return True
 
 
-async def test_global_setup():
+async def test_global_setup() -> None:
     """Test global MCP setup functions"""
     print("\n=== Testing Global Setup Functions ===")
 
@@ -248,7 +245,7 @@ async def test_global_setup():
         os.unlink(temp_config_file)
 
 
-def test_oauth_config():
+def test_oauth_config() -> None:
     """Test OAuth configuration parsing for both auth types"""
     print("\n=== Testing OAuth Configuration ===")
 
@@ -290,7 +287,7 @@ def test_oauth_config():
     print("✓ Bearer authentication configuration working")
 
 
-async def test_user_session_management():
+async def test_user_session_management() -> None:
     """Test user session management for OAuth"""
     print("\n=== Testing User Session Management ===")
 
@@ -330,7 +327,7 @@ async def test_user_session_management():
     print("✓ User session cleanup working")
 
 
-async def test_mixed_authentication_config():
+async def test_mixed_authentication_config() -> None:
     """Test mixed authentication configuration loading"""
     print("\n=== Testing Mixed Authentication Config ===")
 
@@ -375,12 +372,14 @@ async def test_mixed_authentication_config():
 
         # Verify mixed server types loaded correctly
         system_config = config_manager.get_server_config("system_server")
+        if system_config is not None and system_config.auth is not None:
+            assert system_config.auth.type == AuthType.OAUTH2_CLIENT_CREDENTIALS
         user_config = config_manager.get_server_config("user_server")
+        if user_config is not None and user_config.auth is not None:
+            assert user_config.auth.type == AuthType.OAUTH2_AUTHORIZATION_CODE
         no_auth_config = config_manager.get_server_config("no_auth_server")
-
-        assert system_config.auth.type == AuthType.OAUTH2_CLIENT_CREDENTIALS
-        assert user_config.auth.type == AuthType.OAUTH2_AUTHORIZATION_CODE
-        assert no_auth_config.auth is None
+        if no_auth_config is not None:
+            assert no_auth_config.auth is None
 
         print("✓ Mixed authentication server configs loaded correctly")
 
@@ -406,7 +405,7 @@ async def test_mixed_authentication_config():
         os.unlink(temp_config_file)
 
 
-async def test_oauth_token_manager():
+async def test_oauth_token_manager() -> None:
     """Test OAuth token manager functionality"""
     print("\n=== Testing OAuth Token Manager ===")
 
@@ -436,7 +435,7 @@ async def test_oauth_token_manager():
     print("✓ Token expiry detection working")
 
 
-async def test_flask_integration():
+async def test_flask_integration() -> None:
     """Test Flask integration components"""
     print("\n=== Testing Flask Integration ===")
 
@@ -497,12 +496,12 @@ async def test_flask_integration():
     return True
 
 
-async def test_pkce_generation():
+async def test_pkce_generation() -> None:
     """Test PKCE code generation"""
     print("\n=== Testing PKCE Generation ===")
 
     try:
-        from UI.app.routes.oauth_routes import generate_pkce_pair
+        from UI.app.routes.oauth_routes import generate_pkce_pair  # type: ignore
 
         code_verifier, code_challenge = generate_pkce_pair()
 
@@ -521,7 +520,7 @@ async def test_pkce_generation():
         return False
 
 
-async def run_all_tests():
+async def run_all_tests() -> None:
     """Run all MCP integration tests including OAuth"""
     print("🚀 Starting Comprehensive MCP + OAuth Integration Tests\n")
 

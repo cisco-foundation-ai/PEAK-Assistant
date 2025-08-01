@@ -25,7 +25,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def test_zero_config_oauth_servers_array():
+async def test_zero_config_oauth_servers_array() -> None:
     """Test the new servers array format with automatic OAuth discovery"""
     print("\n=== Testing Zero-Config OAuth with Servers Array ===")
 
@@ -89,7 +89,7 @@ async def test_zero_config_oauth_servers_array():
         Path(temp_config_file).unlink(missing_ok=True)
 
 
-async def test_mixed_config_formats():
+async def test_mixed_config_formats() -> None:
     """Test that both mcpServers object and servers array formats work together"""
     print("\n=== Testing Mixed Configuration Formats ===")
 
@@ -150,7 +150,7 @@ async def test_mixed_config_formats():
         Path(temp_config_file).unlink(missing_ok=True)
 
 
-async def test_oauth_discovery_with_real_server():
+async def test_oauth_discovery_with_real_server() -> None:
     """Test OAuth discovery with a real server running on localhost:8788"""
     print("\n=== Testing OAuth Discovery with Real Server ===")
 
@@ -204,7 +204,7 @@ async def test_oauth_discovery_with_real_server():
         Path(temp_config_file).unlink(missing_ok=True)
 
 
-async def test_configuration_comparison():
+async def test_configuration_comparison() -> None:
     """Compare the old vs new configuration approaches"""
     print("\n=== Configuration Approach Comparison ===")
 

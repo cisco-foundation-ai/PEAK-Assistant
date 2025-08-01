@@ -20,7 +20,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def test_minimal_config():
+async def test_minimal_config() -> None:
     """Test minimal OAuth configuration with auto-discovery and auto-redirect URI"""
     print("\n=== Testing Minimal OAuth Configuration ===")
 
@@ -102,7 +102,7 @@ async def test_minimal_config():
         print(f"⚠️  Discovery test failed with error: {e}")
 
 
-async def test_minimal_config_with_manual_fallback():
+async def test_minimal_config_with_manual_fallback() -> None:
     """Test minimal config with manual URLs as fallback when discovery fails"""
     print("\n=== Testing Minimal Config with Manual Fallback ===")
 
@@ -156,7 +156,7 @@ async def test_minimal_config_with_manual_fallback():
         print(f"❌ Manual fallback test failed: {e}")
 
 
-async def test_configuration_field_count():
+async def test_configuration_field_count() -> None:
     """Compare old vs new configuration field counts"""
     print("\n=== Configuration Simplification Summary ===")
 

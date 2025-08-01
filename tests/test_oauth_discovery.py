@@ -25,7 +25,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def test_github_oauth_discovery():
+async def test_github_oauth_discovery() -> None:
     """Test OAuth discovery using GitHub's well-known endpoint"""
     print("\n=== Testing GitHub OAuth Discovery ===")
 
@@ -73,7 +73,7 @@ async def test_github_oauth_discovery():
         print(f"❌ Error during GitHub discovery: {e}")
 
 
-async def test_fallback_to_manual_config():
+async def test_fallback_to_manual_config() -> None:
     """Test fallback to manual configuration when discovery fails"""
     print("\n=== Testing Fallback to Manual Configuration ===")
 
@@ -116,7 +116,7 @@ async def test_fallback_to_manual_config():
         print(f"❌ Error during fallback test: {e}")
 
 
-async def test_manual_config_precedence():
+async def test_manual_config_precedence() -> None:
     """Test that manual configuration takes precedence over discovery"""
     print("\n=== Testing Manual Config Precedence ===")
 
@@ -155,7 +155,7 @@ async def test_manual_config_precedence():
         print(f"❌ Error during precedence test: {e}")
 
 
-async def test_discovery_disabled():
+async def test_discovery_disabled() -> None:
     """Test behavior when discovery is disabled"""
     print("\n=== Testing Discovery Disabled ===")
 
@@ -191,7 +191,7 @@ async def test_discovery_disabled():
         print(f"❌ Error during discovery disabled test: {e}")
 
 
-async def test_client_credentials_discovery():
+async def test_client_credentials_discovery() -> None:
     """Test OAuth discovery with client credentials flow"""
     print("\n=== Testing Client Credentials Discovery ===")
 
