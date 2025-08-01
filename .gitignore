@@ -129,6 +129,7 @@ celerybeat.pid
 
 # Environments
 .env
+.envrc
 .venv
 env/
 venv/
@@ -176,8 +177,8 @@ cython_debug/
 # PEAK-Assistant specific things
 .env
 *.pdf 
-*.md
 *.pem
 *.json
 *.log 
 context.txt
+.DS_Store

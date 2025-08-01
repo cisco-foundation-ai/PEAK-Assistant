@@ -3,7 +3,7 @@
    ========================================================================== */
 .sidebar {
     min-height: 100vh;
-    background-color: var(--light-color);
+    background-color: var(--sidebar-bg);
     border-right: 1px solid var(--border-color);
     padding: var(--spacing-lg);
 }
@@ -32,12 +32,12 @@
 .phase-title {
     font-size: var(--font-size-xl);
     font-weight: 600;
-    color: var(--dark-color);
+    color: var(--text-color);
     margin: 0;
 }
 
 .phase-description {
-    color: var(--secondary-color);
+    color: var(--text-muted);
     margin-bottom: var(--spacing-lg);
     font-size: var(--font-size-sm);
     line-height: 1.4;
