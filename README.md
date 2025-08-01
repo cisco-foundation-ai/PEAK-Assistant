@@ -21,6 +21,7 @@ The PEAK Assistant offers the following features:
 Clone the [GitHub repo] to a directory on your local system:
 ```bash
 git clone https://github.com/splunk/PEAK-Assistant
+cd PEAK-Assistant
 ```
 
 **I strongly recommend you use a python virtualenv to run this app.**
@@ -30,11 +31,17 @@ Inside your virtualenv, install the required Python modules:
 pip install -r requirements.txt
 ```
 
-## Web App Configuration
-Once that's done, you'll need to generate the SSL certificate and private key. The files must be named `cert.pem` and `key.pem`, and reside in the `UI` directory of the repository:
+## Generate TLS Certificate
+Once that's done, you'll need to generate the TLS certificate and private key. The files must be named `cert.pem` and `key.pem`, and reside in the `UI` directory of the repository. You can do this manually like so:
+
 ```bash
-cd PEAK-Assistant
-openssl req -x509 -newkey rsa:2048 -keyout UI/key.pem -out UI/cert.pem -days 365 -nodes -subj "/C=US/ST=CA/L=My Town/O=PEAK Assistant/OU=Threat Hunting Team/CN=localhost"
+openssl req -x509 -newkey rsa:2048 -keyout UI/key.pem -out UI/cert.pem -days 365 -nodes -subj "/CN=localhost"
+```
+
+If you prefer, you can use the `generate_certificates.sh` utility to do this for you. Just run the script and follow the prompts.
+
+```bash
+./generate_certificates.sh
 ```
 
 ## MCP Server Configuration
