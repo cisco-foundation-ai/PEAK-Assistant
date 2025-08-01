@@ -2,62 +2,57 @@
 
 import os
 import sys
-import asyncio
-import httpx 
-import uuid 
+import uuid
 
 from dotenv import load_dotenv
-from pathlib import Path
 
 from mcp import types
-from mcp.server.fastmcp import FastMCP 
+from mcp.server.fastmcp import FastMCP
+from pydantic.networks import AnyUrl
+from utils import find_dotenv_file
 
 # Add the parent directory to sys.path so we can import our modules
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from research_assistant.research_assistant_cli import researcher as async_researcher
-from hypothesis_assistant.hypothesis_assistant_cli import hypothesizer as async_hypothesizer
+from research_assistant import researcher as async_researcher
+from hypothesis_assistant.hypothesis_assistant_cli import (
+    hypothesizer as async_hypothesizer,
+)
 from hypothesis_assistant.hypothesis_refiner_cli import refiner as async_refiner
-from able_assistant.able_assistant_cli import able_table as async_able_table
-from data_assistant.data_asssistant_cli import identify_data_sources as async_identify_data_sources
-from planning_assistant.planning_assistant_cli import plan_hunt as async_plan_hunt
+from able_assistant import able_table as async_able_table
+from data_assistant import (
+    identify_data_sources as async_identify_data_sources,
+)
+from planning_assistant import plan_hunt as async_plan_hunt
 
 mcp = FastMCP("peak-assistant")
 
-def find_dotenv_file():
-    """Search for a .env file in current directory and parent directories"""
-    current_dir = Path.cwd()
-    while current_dir != current_dir.parent:  # Stop at root directory
-        env_path = current_dir / '.env'
-        if env_path.exists():
-            return str(env_path)
-        current_dir = current_dir.parent
-    return None  # No .env file found
 
-def embeddable_object(data: str, content_type: str = "text/markdown") -> types.EmbeddedResource:
+def embeddable_object(
+    data: str, content_type: str = "text/markdown"
+) -> types.EmbeddedResource:
     """
     Create an embeddable resource from the provided data. This "encourages" the LLM chat interface
     to display the results to the user as an Artifact rather than digest and summarize it.
     """
-    uri = f"report://{uuid.uuid4()}.md"
     resource = types.TextResourceContents(
-        uri=uri,
-        text=data,
-        mimeType=content_type
+        uri=AnyUrl(f"report://{uuid.uuid4()}.md"), text=data, mimeType=content_type
     )
     return types.EmbeddedResource(
         type="resource",
         resource=resource,
-        annotations={"audience": ["user"]}
+        annotations=types.Annotations(audience=["user"]),
     )
+
 
 ################################################################################
 # Prompts
 ################################################################################
 
+
 @mcp.prompt(name="peak-begin")
 def peak_begin_prompt() -> str:
-    prompt = f"""
+    prompt = """
         In this chat session, we are going to collaboratively plan a threat hunt using the PEAK Assistant
         MCP server. Although the user may steer this workflow in any direction at any time, the expected
         sequence is:
@@ -92,17 +87,19 @@ def peak_begin_prompt() -> str:
     """
     return prompt
 
+
 @mcp.prompt(name="peak-research")
 def research_prompt(technique: str) -> str:
     prompt = f"""       
         Please research the following threat hunting topic and display the resulting markdown report as an artifact: {technique}
     """
 
-    return prompt 
+    return prompt
+
 
 @mcp.prompt(name="peak-hypothesize")
 def hypothesizer_prompt() -> str:
-    prompt = f"""
+    prompt = """
         You are a cybersecurity threat hunter acting as a threat hunting assistant.
         Your job is to carefully read the provided research report and the 
         information about the local computing environment (the "local context") and 
@@ -113,9 +110,13 @@ def hypothesizer_prompt() -> str:
 
     return prompt
 
-@mcp.prompt(name="peak-refine-hypothesis", description="Given a threat hunting hypothesis provided by the user, provide suggest improvements to the user.")
+
+@mcp.prompt(
+    name="peak-refine-hypothesis",
+    description="Given a threat hunting hypothesis provided by the user, provide suggest improvements to the user.",
+)
 async def refine_hypothesis_prompt() -> str:
-    prompt = f"""
+    prompt = """
         You are a cybersecurity threat hunter acting as a threat hunting assistant.
         Your job is to carefully read the threat hunting hypothesis and 
         generate a list of improvements or suggestions to make the hypothesis 
@@ -126,9 +127,10 @@ async def refine_hypothesis_prompt() -> str:
 
     return prompt
 
+
 @mcp.prompt(name="peak-able-table", description="Create the PEAK ABLE table.")
 async def able_table_prompt() -> str:
-    prompt = f"""
+    prompt = """
         You are a cybersecurity threat hunter acting as a threat hunting assistant.
         Your job is to carefully read the provided threat hunting research, hypothesis 
         and local context to create the "Actor, Behavior, Location, and Evidence" (ABLE)
@@ -137,9 +139,13 @@ async def able_table_prompt() -> str:
 
     return prompt
 
-@mcp.prompt(name="peak-data-discovery", description="Identify the data sources needed to test the hypothesis.")
+
+@mcp.prompt(
+    name="peak-data-discovery",
+    description="Identify the data sources needed to test the hypothesis.",
+)
 async def data_discovery_prompt() -> str:
-    prompt = f"""
+    prompt = """
         You are a cybersecurity threat hunter acting as a threat hunting assistant.
         Your job is to carefully read the provided threat hunting research, hypothesis, 
         ABLE table, and local context and then use the PEAK assistant's data discovery tool 
@@ -149,9 +155,10 @@ async def data_discovery_prompt() -> str:
 
     return prompt
 
+
 @mcp.prompt(name="peak-plan-hunt", description="Produce a comprehensive hunting plan.")
 async def plan_hunt_prompt() -> str:
-    prompt = f"""
+    prompt = """
         You are a cybersecurity threat hunter acting as a threat hunting assistant.
         Your job is to carefully read the provided threat hunting research, hypothesis, 
         ABLE table, data discovery results, and local context and then use the PEAK 
@@ -161,18 +168,20 @@ async def plan_hunt_prompt() -> str:
 
     return prompt
 
+
 ################################################################################
 # Tools
 ################################################################################
 
-@mcp.tool(name="peak-researcher", description="Generate a comprehensive cybersecurity threat hunting report for a specified technique or behavior.")
-async def researcher(
-    technique: str = None, 
-    local_context: str = None
-) -> types.EmbeddedResource:
+
+@mcp.tool(
+    name="peak-researcher",
+    description="Generate a comprehensive cybersecurity threat hunting report for a specified technique or behavior.",
+)
+async def researcher(technique: str, local_context: str) -> types.EmbeddedResource:
     """
-    Orchestrates a multi-agent, multi-stage research workflow to generate a 
-    comprehensive cybersecurity threat hunting report for a specified 
+    Orchestrates a multi-agent, multi-stage research workflow to generate a
+    comprehensive cybersecurity threat hunting report for a specified
     technique or behavior. Always display this report as an artifact.
 
     Args:
@@ -183,20 +192,30 @@ async def researcher(
             contents of the local context file, not a summary.
 
     Returns:
-        types.EmbeddedResource: An embeddable resource containing the research report, or an error 
-             message if the process fails. 
+        types.EmbeddedResource: An embeddable resource containing the research report, or an error
+             message if the process fails.
     """
     result = await async_researcher(technique, local_context)
 
     report = next(
-        (message.content for message in reversed(result.messages) if message.source == "summarizer"),
-        None
+        (
+            getattr(message, "content")
+            for message in reversed(result.messages)
+            if message.source == "summarizer" and hasattr(message, "content")
+        ),
+        "",
     )
 
     return embeddable_object(data=report)
 
-@mcp.tool(name="peak-hypothesizer", description="Generate a list of threat hunting hypotheses based on the provided research document and local computing environment context.")
-async def hypothesizer(research_document: str = None, local_context: str = None) -> str:
+
+@mcp.tool(
+    name="peak-hypothesizer",
+    description="Generate a list of threat hunting hypotheses based on the provided research document and local computing environment context.",
+)
+async def hypothesizer(
+    research_document: str, local_context: str
+) -> types.EmbeddedResource:
     """
     Return a list of threat hunting hypotheses based on the provided research document
     and local computing environment context. Always display this as an artifact.
@@ -204,19 +223,25 @@ async def hypothesizer(research_document: str = None, local_context: str = None)
     Args:
         research_document (str): The exact contents of the research report.
         local_context (str, optional): Additional context or constraints to guide the research
-            (e.g., environment, use case). This should be the exact contents of the local context file, 
+            (e.g., environment, use case). This should be the exact contents of the local context file,
             not a summary.
 
     Returns:
         str: A Markdown document containing the list of threat hunting hypotheses, or an error message if the process fails.
     """
-
-    result = await async_hypothesizer(research_document, local_context)
+    user_input = ""
+    result = await async_hypothesizer(user_input, research_document, local_context)
 
     return embeddable_object(data=result)
 
-@mcp.tool(name="peak-hypothesis-refiner", description="Given a threat hunting hypothesis provided by the user, provide suggest improvements to the user.")
-async def hypothesis_refiner(hypothesis: str = None, research_document: str = None, local_context: str = None) -> str:
+
+@mcp.tool(
+    name="peak-hypothesis-refiner",
+    description="Given a threat hunting hypothesis provided by the user, provide suggest improvements to the user.",
+)
+async def hypothesis_refiner(
+    hypothesis: str, research_document: str, local_context: str
+) -> types.EmbeddedResource:
     """
     Given a threat hunting hypothesis provided by the user, provide suggest improvements to the user.
     Always display this as an artifact
@@ -225,28 +250,39 @@ async def hypothesis_refiner(hypothesis: str = None, research_document: str = No
         hypothesis (str): A threat hunting hypothesis provided by the user.
         research_document (str, optional): The exact contents of the research report.
         local_context (str, optional): Additional context or constraints to guide the research
-            (e.g., environment, use case). This should be the exact contents of the local context file, 
+            (e.g., environment, use case). This should be the exact contents of the local context file,
             not a summary.
 
     Returns:
         str: A string containing the revised hypothesis.
     """
 
-    result = await async_refiner(hypothesis=hypothesis, 
-                                research_document=research_document, 
-                                local_context=local_context)
-
-    refined_hypothesis_message = next(
-        (message.content for message in reversed(result.messages) if message.source == "critic"),
-        None
+    result = await async_refiner(
+        hypothesis=hypothesis,
+        research_document=research_document,
+        local_context=local_context,
     )
 
-    refined_hypothesis = refined_hypothesis_message.replace("YYY-HYPOTHESIS-ACCEPTED-YYY", "").strip()
+    refined_hypothesis_message = next(
+        (
+            getattr(message, "content", "")
+            for message in reversed(result.messages)
+            if hasattr(message, "content") and message.source == "critic"
+        ),
+        "",
+    )
+
+    refined_hypothesis = refined_hypothesis_message.replace(
+        "YYY-HYPOTHESIS-ACCEPTED-YYY", ""
+    ).strip()
 
     return embeddable_object(data=refined_hypothesis)
 
+
 @mcp.tool(name="peak-able-table", description="Create the PEAK ABLE table.")
-async def able_table(hypothesis: str = None, research_document: str = None, local_context: str = None) -> str:
+async def able_table(
+    hypothesis: str, research_document: str, local_context: str
+) -> types.EmbeddedResource:
     """
     Create the PEAK ABLE table based on the provided hypothesis, research document, and local context.
     Always display this as an artifact.
@@ -255,7 +291,7 @@ async def able_table(hypothesis: str = None, research_document: str = None, loca
         hypothesis (str): A threat hunting hypothesis provided by the user.
         research_document (str, optional): The exact contents of the research report.
         local_context (str, optional): Additional context or constraints to guide the research
-            (e.g., environment, use case). This should be the exact contents of the local context file, 
+            (e.g., environment, use case). This should be the exact contents of the local context file,
             not a summary.
 
     Returns:
@@ -265,26 +301,30 @@ async def able_table(hypothesis: str = None, research_document: str = None, loca
     result = await async_able_table(
         hypothesis=hypothesis,
         research_document=research_document,
-        local_context=local_context
+        local_context=local_context,
     )
 
     return embeddable_object(data=result)
 
-@mcp.tool(name="peak-data-discovery", description="Query the Splunk server to identify indices, sourctypes and key fields relevant to the hunt.")
+
+@mcp.tool(
+    name="peak-data-discovery",
+    description="Query the Splunk server to identify indices, sourctypes and key fields relevant to the hunt.",
+)
 async def data_discovery(
-    hypothesis: str = None, 
-    research_document: str = None, 
-    able_info: str = None, 
-    local_context: str = None,
-    mcp_command: str = None,
-    mcp_args: str = None,
-    mcp_username: str = None,
-    mcp_password: str = None,
-    mcp_splunk_url: str = None
-) -> str:
+    hypothesis: str,
+    research_document: str,
+    able_info: str,
+    local_context: str,
+    mcp_command: str,
+    mcp_args: str,
+    mcp_username: str,
+    mcp_password: str,
+    mcp_splunk_url: str,
+) -> types.EmbeddedResource:
     """
-    Given the provided threat hunting hypothesis, research report, ABLE table and 
-    local context, query the Splunk server to try to identify indices, sourctypes 
+    Given the provided threat hunting hypothesis, research report, ABLE table and
+    local context, query the Splunk server to try to identify indices, sourctypes
     and key fields relevant to the hunt. Always display this as an artifact.
 
     Args:
@@ -292,7 +332,7 @@ async def data_discovery(
         research_document (str): The exact contents of the research report.
         able_info (str, optional): The exact contents of the ABLE table.
         local_context (str, optional): Additional context or constraints to guide the research
-            (e.g., environment, use case). This should be the exact contents of the local context file, 
+            (e.g., environment, use case). This should be the exact contents of the local context file,
             not a summary.
         mcp_command (str): The command to use to start the local MCP server for querying Splunk.
         mcp_args (str): The arguments to pass to the MCP server command.
@@ -301,39 +341,37 @@ async def data_discovery(
         mcp_splunk_url (str): The URL of the Splunk server.
 
     Returns:
-        str: A Markdown document containing the indices, sourctypes and key fields 
+        str: A Markdown document containing the indices, sourctypes and key fields
              relevant to the hunt, or an error message if the process fails.
     """
-
-    mcp_command = os.getenv("SPLUNK_MCP_COMMAND", None)
-    mcp_args = os.getenv("SPLUNK_MCP_ARGS", None)
-
     result = await async_identify_data_sources(
         hypothesis=hypothesis,
         research_document=research_document,
         able_info=able_info,
         local_context=local_context,
-        mcp_command=mcp_command,
-        mcp_args=mcp_args
     )
 
     data_source_report = next(
-        (message.content for message in reversed(result.messages) if message.source == "Data_Discovery_Agent"),
-        result.messages[-1].content
+        (
+            getattr(message, "content", None)
+            for message in reversed(result.messages)
+            if hasattr(message, "content") and message.source == "Data_Discovery_Agent"
+        ),
+        getattr(result.messages[-1], "content", None),
     )
+    return embeddable_object(data=data_source_report or "No data sources found.")
 
-    return embeddable_object(data=data_source_report)
 
 @mcp.tool(name="peak-hunt-planner", description="Produce a comprehensive hunting plan")
 async def plan_hunt(
-    hypothesis: str = None,
-    research_document: str = None,
-    able_info: str = None,
-    data_discovery: str = None,
-    local_context: str = None
-) -> str:
+    hypothesis: str,
+    research_document: str,
+    able_info: str,
+    data_discovery: str,
+    local_context: str,
+) -> types.EmbeddedResource:
     """
-    Produce a comprehensive hunting plan based on the provided hypothesis, research document, ABLE table, 
+    Produce a comprehensive hunting plan based on the provided hypothesis, research document, ABLE table,
     data discovery report, and local context. Always display this as an artifact.
 
     Args:
@@ -342,7 +380,7 @@ async def plan_hunt(
         able_info (str): The exact contents of the ABLE table.
         data_discovery (str): The exact contents of the data discovery report.
         local_context (str): Additional context or constraints to guide the research
-            (e.g., environment, use case). This should be the exact contents of the local context file, 
+            (e.g., environment, use case). This should be the exact contents of the local context file,
             not a summary.
 
     Returns:
@@ -354,19 +392,26 @@ async def plan_hunt(
         research_document=research_document,
         able_info=able_info,
         data_discovery=data_discovery,
-        local_context=local_context
+        local_context=local_context,
     )
 
     hunt_plan = next(
-        (message.content for message in reversed(result.messages) if message.source == "hunt_planner"),
-        None
+        (
+            getattr(message, "content", None)
+            for message in reversed(result.messages)
+            if message.source == "hunt_planner" and hasattr(message, "content")
+        ),
+        None,
     )
 
-    return embeddable_object(data=hunt_plan)
+    return embeddable_object(data=hunt_plan or "No hunt plan generated.")
+
 
 #### MAIN ####
-
-if __name__ == "__main__":
+def main() -> None:
     load_dotenv(find_dotenv_file())
     mcp.run(transport="stdio")
-#    mcp.run(transport="streamable-http")
+
+
+if __name__ == "__main__":
+    main()

@@ -129,6 +129,7 @@ celerybeat.pid
 
 # Environments
 .env
+.envrc
 .venv
 env/
 venv/
@@ -181,3 +182,4 @@ cython_debug/
 *.json
 *.log 
 context.txt
+.DS_Store

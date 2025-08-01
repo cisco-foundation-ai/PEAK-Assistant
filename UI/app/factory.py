@@ -10,7 +10,7 @@ from flask_session import Session
 from flask_sqlalchemy import SQLAlchemy
 
 from .config import config
-from .utils.helpers import load_env_defaults
+from utils import load_env_defaults
 
 # Initialize extensions
 db = SQLAlchemy()
