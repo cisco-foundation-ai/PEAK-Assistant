@@ -9,7 +9,7 @@ from typing import Optional, Dict
 from flask import Flask, session
 from authlib.integrations.flask_client import OAuth, FlaskOAuth2App
 from authlib.oauth2.rfc6749 import OAuth2Token
-from .mcp_config import MCPConfigManager, AuthType, AuthConfig
+from .mcp_config import MCPConfigManager, AuthType, AuthConfig, get_config_manager
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ class AuthlibOAuthManager:
         if app:
             self.init_app(app)
 
-    def init_app(self, app: Flask):
+    def init_app(self, app: Flask) -> None:
         """Initialize the OAuth manager with Flask app"""
         self.oauth.init_app(app)
 
@@ -38,13 +38,17 @@ class AuthlibOAuthManager:
         if self.config_manager:
             self._configure_oauth_clients()
 
-    def _configure_oauth_clients(self):
+    def _configure_oauth_clients(self) -> None:
         """Configure OAuth clients from MCP server configurations"""
-        servers = self.config_manager.get_all_servers()
+        if self.config_manager is not None:
+            servers = self.config_manager.get_all_servers()
 
-        for server_name, config in servers.items():
-            if config.auth and config.auth.type == AuthType.OAUTH2_AUTHORIZATION_CODE:
-                self._register_oauth_client(server_name, config.auth, config.url)
+            for server_name, config in servers.items():
+                if (
+                    config.auth
+                    and config.auth.type == AuthType.OAUTH2_AUTHORIZATION_CODE
+                ):
+                    self._register_oauth_client(server_name, config.auth, config.url)
 
     def update_token(
         self,
@@ -52,7 +56,7 @@ class AuthlibOAuthManager:
         token: dict,
         refresh_token: Optional[str] = None,
         access_token: Optional[str] = None,
-    ):
+    ) -> None:
         """Global callback for automatic token updates from Authlib"""
         if refresh_token:
             token["refresh_token"] = refresh_token
@@ -92,11 +96,11 @@ class AuthlibOAuthManager:
         self,
         server_name: str,
         auth_config: AuthConfig,
-        server_url: Optional[str] = None,
-    ):
+        server_url: str,
+    ) -> None:
         """Register an OAuth client with Authlib"""
         try:
-            client_kwargs = {}
+            client_kwargs: Dict[str, Optional[str]] = {}
 
             # Add scope if specified
             if auth_config.scope:
@@ -116,6 +120,7 @@ class AuthlibOAuthManager:
                 }
             )
 
+            discovery_url = None
             # Configure discovery or manual endpoints
             if auth_config.discovery_url or (
                 auth_config.enable_discovery and server_url
@@ -132,7 +137,7 @@ class AuthlibOAuthManager:
                         f"Registering OAuth client for {server_name} with discovery: {metadata_url}"
                     )
 
-                    self.clients[server_name] = self.oauth.register(
+                    self.clients[server_name] = self.oauth.register(  # type: ignore
                         override=True,
                         name=server_name,
                         client_id=auth_config.client_id,
@@ -154,7 +159,7 @@ class AuthlibOAuthManager:
                     logger.error(f"Missing OAuth endpoints for {server_name}")
                     return
 
-                self.clients[server_name] = self.oauth.register(
+                self.clients[server_name] = self.oauth.register(  # type: ignore
                     override=True,
                     name=server_name,
                     client_id=auth_config.client_id,
@@ -289,8 +294,10 @@ class AuthlibOAuthManager:
                 return False
 
             # Get client credentials (try dynamic credentials first, then static)
-            client_id = token.get("_dynamic_client_id") or client.client_id
-            client_secret = token.get("_dynamic_client_secret") or client.client_secret
+            client_id = token.get("_dynamic_client_id", str(client.client_id))
+            client_secret = token.get(
+                "_dynamic_client_secret", str(client.client_secret)
+            )
 
             if not client_id or not client_secret:
                 logger.warning(
@@ -306,7 +313,7 @@ class AuthlibOAuthManager:
             )
 
             # Get token endpoint (try dynamic token URL first, then client metadata)
-            token_endpoint = token.get("_dynamic_token_url")
+            token_endpoint = str(token.get("_dynamic_token_url", ""))
             if not token_endpoint:
                 if hasattr(client, "server_metadata") and client.server_metadata:
                     token_endpoint = client.server_metadata.get("token_endpoint")
@@ -336,7 +343,7 @@ class AuthlibOAuthManager:
                 return False
 
             # Try HTTP Basic auth first
-            auth = HTTPBasicAuth(client_id, client_secret)
+            auth = HTTPBasicAuth(str(client_id), str(client_secret))
             data = {"grant_type": "refresh_token", "refresh_token": refresh_token}
 
             logger.info(
@@ -690,29 +697,17 @@ class AuthlibOAuthManager:
         return {"Authorization": f"Bearer {token['access_token']}"}
 
 
-# Global OAuth manager instance
-oauth_manager = None
-
-
 def get_oauth_manager() -> AuthlibOAuthManager:
     """Get global OAuth manager instance"""
-    global oauth_manager
-    if oauth_manager is None:
-        from .mcp_config import get_config_manager
 
-        config_manager = get_config_manager()
-        oauth_manager = AuthlibOAuthManager(config_manager=config_manager)
+    config_manager = get_config_manager()
+    oauth_manager = AuthlibOAuthManager(config_manager=config_manager)
     return oauth_manager
 
 
-def init_oauth_manager(app: Flask) -> AuthlibOAuthManager:
+def init_oauth_manager(
+    app: Flask, oauth_manager: AuthlibOAuthManager
+) -> AuthlibOAuthManager:
     """Initialize OAuth manager with Flask app"""
-    global oauth_manager
-    if oauth_manager is None:
-        from .mcp_config import get_config_manager
-
-        config_manager = get_config_manager()
-        oauth_manager = AuthlibOAuthManager(app, config_manager)
-    else:
-        oauth_manager.init_app(app)
+    oauth_manager.init_app(app)
     return oauth_manager

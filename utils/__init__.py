@@ -1,9 +1,10 @@
 from pathlib import Path
+from typing import Optional
 
 from dotenv import load_dotenv
 
 
-def find_dotenv_file():
+def find_dotenv_file() -> Optional[str]:
     """Search for a .env file in current directory and parent directories"""
     current_dir = Path.cwd()
     while current_dir != current_dir.parent:  # Stop at root directory
@@ -14,7 +15,7 @@ def find_dotenv_file():
     return None  # No .env file found
 
 
-def load_env_defaults():
+def load_env_defaults() -> None:
     """Load environment variables from .env file"""
     dotenv_path = find_dotenv_file()
     if dotenv_path:

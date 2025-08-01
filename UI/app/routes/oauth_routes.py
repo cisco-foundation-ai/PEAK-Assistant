@@ -9,7 +9,17 @@ import sys
 import secrets
 import logging
 import asyncio
-from flask import Blueprint, request, redirect, url_for, session, jsonify, flash
+from typing import Tuple
+from flask import (
+    Blueprint,
+    Response,
+    request,
+    redirect,
+    url_for,
+    session,
+    jsonify,
+    flash,
+)
 from functools import wraps
 from authlib.integrations.requests_client import OAuth2Session
 
@@ -21,6 +31,8 @@ from utils.authlib_oauth import get_oauth_manager
 logger = logging.getLogger(__name__)
 
 oauth_bp = Blueprint("oauth", __name__, url_prefix="/oauth")
+
+OAUTH_MANAGER = get_oauth_manager()
 
 
 def require_session(f):
@@ -138,6 +150,11 @@ def initiate_oauth(server_name):
             # Reload config to ensure we have the new client_id for the next steps
             config = config_manager.get_server_config(server_name)
             # Store dynamic credentials and token endpoint in session to survive the redirect
+            if config is None or config.auth is None:
+                flash(
+                    f"Failed to retrieve OAuth configuration for {server_name}", "error"
+                )
+                return redirect(url_for("pages.index"))
             session["dynamic_oauth_credentials"] = {
                 "client_id": config.auth.client_id,
                 "client_secret": config.auth.client_secret,
@@ -285,10 +302,10 @@ def logout_all():
     """Logout user from all MCP servers"""
     try:
         user_id = session["user_id"]
-        oauth_manager = get_oauth_manager()
+        OAUTH_MANAGER = get_oauth_manager()
 
         # Clear all OAuth tokens for this user
-        oauth_manager.clear_user_tokens(user_id)
+        OAUTH_MANAGER.clear_user_session(user_id)
 
         # Clear Flask session
         session.clear()
@@ -377,6 +394,10 @@ def servers_status():
                         f"[Server Status] {server_name}: Not authenticated (no valid token)"
                     )
 
+            transport = getattr(config, "transport", "unknown")
+            if hasattr(transport, "value"):
+                transport = getattr(transport, "value")
+
             server_info = {
                 "name": server_name,
                 "description": config.description or "No description available",
@@ -390,9 +411,7 @@ def servers_status():
                 )
                 if requires_auth
                 else None,
-                "transport": getattr(config, "transport", "unknown").value
-                if hasattr(getattr(config, "transport", "unknown"), "value")
-                else str(getattr(config, "transport", "unknown")),
+                "transport": transport,
             }
             all_servers.append(server_info)
 
@@ -433,7 +452,7 @@ def disconnect_server(server_name):
             return jsonify({"error": f"Server '{server_name}' not found"}), 404
 
         # Remove stored OAuth tokens for this user and server
-        oauth_manager.clear_token(server_name, user_id)
+        oauth_manager.clear_user_session(user_id)
 
         logger.info(
             f"Successfully disconnected server {server_name} for user {user_id}"
@@ -453,7 +472,7 @@ def disconnect_server(server_name):
 
 @oauth_bp.route("/test-connection/<server_name>")
 @require_session
-async def test_mcp_connection(server_name):
+async def test_mcp_connection(server_name) -> Tuple[Response, int] | Response:
     """Test connection to an MCP server"""
     try:
         user_id = session["user_id"]

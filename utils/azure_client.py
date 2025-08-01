@@ -2,6 +2,7 @@
 Azure OpenAI Client Factory with optional custom authentication
 """
 
+import logging
 import os
 from autogen_ext.models.openai import AzureOpenAIChatCompletionClient
 from .assistant_auth import PEAKAssistantAuthManager
@@ -42,9 +43,22 @@ class PEAKAssistantAzureOpenAIClient:
                 "model": os.getenv("AZURE_OPENAI_MODEL"),
             }
         elif model_type == "reasoning":
+            if "AZURE_OPENAI_REASONING_DEPLOYMENT" not in os.environ:
+                logging.debug(
+                    "Falling back to AZURE_OPENAI_DEPLOYMENT env var for reasoning model."
+                )
+            if "AZURE_OPENAI_REASONING_MODEL" not in os.environ:
+                logging.debug(
+                    "Falling back to the AZURE_OPENAI_MODEL env var for reasoning model."
+                )
             params = {
-                "azure_deployment": os.getenv("AZURE_OPENAI_REASONING_DEPLOYMENT"),
-                "model": os.getenv("AZURE_OPENAI_REASONING_MODEL"),
+                "azure_deployment": os.getenv(
+                    "AZURE_OPENAI_REASONING_DEPLOYMENT",
+                    os.getenv("AZURE_OPENAI_DEPLOYMENT"),
+                ),
+                "model": os.getenv(
+                    "AZURE_OPENAI_REASONING_MODEL", os.getenv("AZURE_OPENAI_MODEL")
+                ),
             }
         else:
             raise ValueError(
@@ -66,4 +80,4 @@ class PEAKAssistantAzureOpenAIClient:
         if auth_params:
             params.update(auth_params)
 
-        return AzureOpenAIChatCompletionClient(**params)
+        return AzureOpenAIChatCompletionClient(**params)  # type: ignore[arg-type]

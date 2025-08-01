@@ -5,17 +5,18 @@ import argparse
 import asyncio
 import re
 import sys
+from typing import List
 from dotenv import load_dotenv
 
 from autogen_agentchat.messages import TextMessage
 from markdown_pdf import MarkdownPdf, Section
 
 
-
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from utils import find_dotenv_file
 
 from . import researcher
+
 
 def generate_unique_filename(title, extension):
     """Generate a unique filename based on the title and extension."""
@@ -101,13 +102,13 @@ def main() -> None:
             print(f"Error reading local context: {e}")
             exit(1)
 
-    messages = list()
+    messages: List[TextMessage] = list()
     while True:
         # Run the researcher asynchronously
         task_result = asyncio.run(
             researcher(
                 technique=args.technique,
-                local_context=local_context,
+                local_context=local_context or "",
                 verbose=args.verbose,
                 previous_run=messages,
             )
@@ -116,15 +117,19 @@ def main() -> None:
         # Find the final message from the "summarizer_agent" using next() and a generator expression
         report = next(
             (
-                message.content
+                getattr(message, "content", None)
                 for message in reversed(task_result.messages)
-                if message.source == "summarizer_agent"
+                if message.source == "summarizer_agent" and hasattr(message, "content")
             ),
-            None,  # Default value if no "summarizer_agent" message is found
+            "no report generated",  # Default value if no "summarizer_agent" message is found
         )
 
+        if not report:
+            print("No report generated. Please check the input and try again.")
+            return
+
         # Display the report and ask for user feedback
-        print(report)
+        print(f"Report:\n{report}\n")
         feedback = input(
             "Please provide your feedback on the report (or press Enter to approve it): "
         )
@@ -152,6 +157,9 @@ def main() -> None:
         extension = ".pdf"
     elif args.format == "markdown":
         extension = ".md"
+    else:
+        print(f"Error: Unsupported format '{args.format}'")
+        return
 
     filename = generate_unique_filename(title, extension)
 

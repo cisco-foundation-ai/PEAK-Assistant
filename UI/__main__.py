@@ -15,19 +15,21 @@ def main() -> None:
     failed = False
     for file in context:
         if not os.path.exists(file):
-            print(f"Warning: SSL file {file} not found.")
-            context = None
+            app.logger.error(f"Warning: SSL file {file} not found.")
             failed = True
 
     if failed:
         return
 
-    print(
+    app.logger.info(
         "Note: You may see 'Task exception was never retrieved' errors related to HTTP client cleanup."
     )
-    print("These are harmless and don't affect the application functionality.")
-    print("")
-    print("Starting PEAK Assistant with modular architecture...")
+    app.logger.info(
+        "These are harmless and don't affect the application functionality."
+    )
+    app.logger.info(
+        "Starting PEAK Assistant with modular architecture... accessible on https://localhost:8000"
+    )
 
     # Run the application
     app.run(debug=True, port=8000, ssl_context=context)

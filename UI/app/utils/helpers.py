@@ -2,11 +2,17 @@
 Helper utility functions for PEAK Assistant
 """
 
+import logging
+from typing import Callable, Awaitable
+
 import asyncio
+from typing import Optional
 from flask import session
 
 
-async def retry_api_call(func, *args, max_retries=3, **kwargs):
+async def retry_api_call[T](
+    func: Callable[..., Awaitable[T]], max_retries: int = 3, *args, **kwargs
+) -> Optional[T]:
     """Retry an API call with exponential backoff on specific errors"""
     retry_delay = 2  # Start with 2 seconds
     last_exception = None
@@ -33,8 +39,6 @@ async def retry_api_call(func, *args, max_retries=3, **kwargs):
 
 def extract_report_md(messages):
     """Try to extract the research report markdown from agent output"""
-    import logging
-
     logger = logging.getLogger(__name__)
 
     report_md = None
@@ -170,29 +174,29 @@ def extract_accepted_hypothesis(task_result):
 # ==============================================================================
 
 
-def get_session_value(key, default=None):
+def get_session_value(key, default=None) -> Optional[str]:
     """Safely get a value from the session."""
     return session.get(key, default)
 
 
-def set_session_value(key, value):
+def set_session_value(key, value) -> None:
     """Set a value in the session."""
     session[key] = value
 
 
-def clear_session_key(key):
+def clear_session_key(key) -> None:
     """Remove a specific key from the session."""
     session.pop(key, None)
 
 
-def get_all_session_data():
+def get_all_session_data() -> dict[str, Optional[str]]:
     """Get a dictionary of all session data, excluding internal keys."""
     if not session:
         return {}
     return {k: v for k, v in session.items() if not k.startswith("_")}
 
 
-def clear_all_session_data():
+def clear_all_session_data() -> None:
     """Clear all data from the session."""
     # Preserve OAuth tokens while clearing the rest of the session
     oauth_tokens = session.get("oauth_tokens")
