@@ -33,7 +33,7 @@ coverage-report:
 	fi
 
 .PHONY: coverage-html
-coverage-html:
+coverage-html: coverage
 
 	@if command -v uv >/dev/null 2>&1; then \
 		uv run coverage html; \
