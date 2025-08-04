@@ -72,7 +72,12 @@
             Use AI agents to combine your research, hypothesis, ABLE table, and data sources into a comprehensive hunt plan.
         </p>
 
-
+        <!-- Comprehensive Prerequisites Warning -->
+        <div id="missing-prerequisites-warning" class="prerequisite-warning" style="display: none;">
+            <h5><i class="bi bi-exclamation-triangle-fill me-2"></i>Missing Prerequisites</h5>
+            <p class="mb-1">Complete the following phases first:</p>
+            <ul id="missing-items-list" class="prerequisite-list"></ul>
+        </div>
 
     </div><!-- End of hunt-top-section -->
     
@@ -111,22 +116,76 @@ class HuntPlanManager {
         this.contentContainer = document.getElementById('plan-content');
         this.downloadContainer = document.getElementById('plan-actions-container');
         this.sessionStorageKey = 'hunt_plan_md';
+        this.missingPrerequisitesWarning = document.getElementById('missing-prerequisites-warning');
+        this.missingItemsList = document.getElementById('missing-items-list');
         
         // Set up event listeners
         document.getElementById('generate-btn').addEventListener('click', () => this.handleGenerate());
         document.getElementById('send-feedback-btn').addEventListener('click', () => this.handleFeedback());
         
-        // Initialize the existing data if it exists
-        const existingData = sessionStorage.getItem(this.sessionStorageKey);
-        if (existingData) {
-            this.updateContent(existingData);
-            document.getElementById('plan-container').style.display = 'block';
-        }
+        // Check prerequisites first, then initialize existing data
+        this.checkPrerequisites();
     }
 
-
-
-
+    checkPrerequisites() {
+        // Check server-side session data for all prerequisites
+        fetch('/api/debug-info')
+            .then(r => r.json())
+            .then(data => {
+                const missingItems = [];
+                
+                // Check for research report
+                if (!data?.session_data?.report_md) {
+                    missingItems.push('<li><a href="/research" class="alert-link">Research Report</a> - Generate a comprehensive research report first</li>');
+                }
+                
+                // Check for hypothesis
+                const hypothesis = sessionStorage.getItem('refined_hypothesis') || sessionStorage.getItem('hypothesis');
+                if (!hypothesis || !hypothesis.trim()) {
+                    missingItems.push('<li><a href="/hypothesis" class="alert-link">Hypothesis</a> - Create a hypothesis to guide the hunt</li>');
+                }
+                
+                // Check for ABLE table
+                const ableTable = sessionStorage.getItem('able_table_md');
+                if (!ableTable || !ableTable.trim()) {
+                    missingItems.push('<li><a href="/able-table" class="alert-link">ABLE Table</a> - Generate an ABLE table for threat analysis</li>');
+                }
+                
+                // Check for data discovery
+                const dataDiscovery = sessionStorage.getItem('data_sources_md');
+                if (!dataDiscovery || !dataDiscovery.trim()) {
+                    missingItems.push('<li><a href="/data-discovery" class="alert-link">Data Discovery</a> - Identify relevant data sources</li>');
+                }
+                
+                if (missingItems.length > 0) {
+                    this.missingItemsList.innerHTML = missingItems.join('');
+                    this.missingPrerequisitesWarning.style.display = 'block';
+                    // Hide the main content and generate button when prerequisites are missing
+                    document.getElementById('plan-container').style.display = 'none';
+                    document.getElementById('generate-btn').disabled = true;
+                    document.getElementById('generate-btn').classList.add('btn-disabled-warning');
+                } else {
+                    this.missingPrerequisitesWarning.style.display = 'none';
+                    document.getElementById('plan-container').style.display = 'block';
+                    document.getElementById('generate-btn').disabled = false;
+                    document.getElementById('generate-btn').classList.remove('btn-disabled-warning');
+                    
+                    // Prerequisites met, initialize existing data if it exists
+                    const existingData = sessionStorage.getItem(this.sessionStorageKey);
+                    if (existingData) {
+                        this.updateContent(existingData);
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Failed to check prerequisites:', error);
+                // On error, assume prerequisites are not met
+                this.missingPrerequisitesWarning.style.display = 'block';
+                document.getElementById('plan-container').style.display = 'none';
+                document.getElementById('generate-btn').disabled = true;
+                document.getElementById('generate-btn').classList.add('btn-disabled-warning');
+            });
+    }
 
     updateContent(markdown) {
         ContentRenderer.renderMarkdown(markdown, this.contentContainer);

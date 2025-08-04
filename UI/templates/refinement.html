@@ -24,6 +24,13 @@
         Review the current hypothesis. Provide feedback to the AI assistant to refine it.
     </p>
 
+    <!-- Comprehensive Prerequisites Warning -->
+    <div id="missing-prerequisites-warning" class="prerequisite-warning" style="display: none;">
+        <h5><i class="bi bi-exclamation-triangle-fill me-2"></i>Missing Prerequisites</h5>
+        <p class="mb-1">Complete the following phases first:</p>
+        <ul id="missing-items-list" class="prerequisite-list"></ul>
+    </div>
+
     <!-- Main Content Area: Use flex-grow-1 to take up available space -->
     <div class="flex-grow-1" style="overflow-y: auto;">
         <!-- Hypothesis Display Area (always visible) -->
@@ -35,12 +42,6 @@
                 No hypothesis available. Please generate one on the previous page.
             </div>
         </div>
-    </div>
-
-    <!-- Warning for Missing Hypothesis -->
-    <div id="no-hypothesis-warning" class="prerequisite-warning p-4 rounded-3 m-3" style="display: none;">
-        <h5 class="mb-1"><i class="bi bi-exclamation-triangle-fill me-2"></i>Missing Hypothesis</h5>
-        <p class="mb-0">No hypothesis found. Please <a href="{{ url_for('pages.hypothesis_page') }}" class="alert-link">create a hypothesis</a> first.</p>
     </div>
 
     <!-- Feedback Input Area: Stays at the bottom (always visible) -->
@@ -61,7 +62,8 @@ class RefinementManager {
     constructor() {
         this.hypothesisContent = document.getElementById('hypothesis-content');
         this.feedbackInput = document.getElementById('feedback-input');
-        this.noHypothesisWarning = document.getElementById('no-hypothesis-warning');
+        this.missingPrerequisitesWarning = document.getElementById('missing-prerequisites-warning');
+        this.missingItemsList = document.getElementById('missing-items-list');
 
         this.setupEventListeners();
         this.loadInitialData();
@@ -74,11 +76,51 @@ class RefinementManager {
     }
 
     loadInitialData() {
-        // Prioritize loading the refined hypothesis, fall back to the original
-        const hypothesis = sessionStorage.getItem('refined_hypothesis') || sessionStorage.getItem('hypothesis');
-        this.displayHypothesis(hypothesis);
+        // Check prerequisites (now async and handles loading internally)
+        this.checkPrerequisites();
+    }
 
-
+    checkPrerequisites() {
+        // Check server-side session data like the hypothesis page does
+        fetch('/api/debug-info')
+            .then(r => r.json())
+            .then(data => {
+                const missingItems = [];
+                
+                // Check for research report (same as hypothesis page)
+                if (!data?.session_data?.report_md) {
+                    missingItems.push('<li><a href="/research" class="alert-link">Research Report</a> - Generate a comprehensive research report first</li>');
+                }
+                
+                // Check for hypothesis
+                const hypothesis = sessionStorage.getItem('refined_hypothesis') || sessionStorage.getItem('hypothesis');
+                if (!hypothesis || !hypothesis.trim()) {
+                    missingItems.push('<li><a href="/hypothesis" class="alert-link">Hypothesis</a> - Create a hypothesis to refine</li>');
+                }
+                
+                if (missingItems.length > 0) {
+                    this.missingItemsList.innerHTML = missingItems.join('');
+                    this.missingPrerequisitesWarning.style.display = 'block';
+                    // Hide the main content when prerequisites are missing
+                    document.querySelector('.flex-grow-1').style.display = 'none';
+                    document.getElementById('feedback-container').style.display = 'none';
+                } else {
+                    this.missingPrerequisitesWarning.style.display = 'none';
+                    document.querySelector('.flex-grow-1').style.display = 'block';
+                    document.getElementById('feedback-container').style.display = 'block';
+                    
+                    // Prerequisites met, load the hypothesis
+                    const hypothesis = sessionStorage.getItem('refined_hypothesis') || sessionStorage.getItem('hypothesis');
+                    this.displayHypothesis(hypothesis);
+                }
+            })
+            .catch(error => {
+                console.error('Failed to check prerequisites:', error);
+                // On error, assume prerequisites are not met
+                this.missingPrerequisitesWarning.style.display = 'block';
+                document.querySelector('.flex-grow-1').style.display = 'none';
+                document.getElementById('feedback-container').style.display = 'none';
+            });
     }
 
     displayHypothesis(hypothesis) {
@@ -86,7 +128,6 @@ class RefinementManager {
         const noHypothesisPlaceholder = document.getElementById('no-hypothesis-placeholder');
 
         if (isHypothesisPresent) {
-            this.noHypothesisWarning.style.display = 'none';
             this.hypothesisContent.style.display = 'block';
             noHypothesisPlaceholder.style.display = 'none';
 
@@ -95,7 +136,6 @@ class RefinementManager {
             // Always save the latest version as the refined_hypothesis
             sessionStorage.setItem('refined_hypothesis', hypothesis);
         } else {
-            this.noHypothesisWarning.style.display = 'none';
             this.hypothesisContent.style.display = 'none';
             noHypothesisPlaceholder.style.display = 'block';
         }

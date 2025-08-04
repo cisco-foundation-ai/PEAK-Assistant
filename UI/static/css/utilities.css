@@ -32,15 +32,16 @@
    COMPACT PREREQUISITE SYSTEM
    ========================================================================== */
 .prerequisite-warning {
-    background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
-    border: 1px solid var(--warning-color);
+    background: var(--warning-bg);
+    border: 1px solid var(--warning-border);
     border-radius: var(--border-radius);
     padding: var(--spacing-md);
     margin-bottom: var(--spacing-md);
+    color: var(--warning-text);
 }
 
 .prerequisite-warning h5 {
-    color: #856404;
+    color: var(--warning-text);
     margin-bottom: var(--spacing-sm);
     font-size: var(--font-size-base);
 }
