@@ -249,6 +249,53 @@ body {
     color: var(--text-color) !important;
 }
 
+/* ==========================================================================
+   THEME-AWARE TOAST STYLING
+   ========================================================================== */
+
+/* Error Toast */
+#error-toast .toast-header {
+    background-color: var(--error-bg) !important;
+    color: var(--error-text) !important;
+    border-bottom: 1px solid var(--error-bg) !important;
+}
+
+#error-toast .toast-body {
+    background-color: var(--card-bg) !important;
+    color: var(--text-color) !important;
+    border: 1px solid var(--error-bg) !important;
+    border-top: none !important;
+}
+
+#error-toast .btn-link {
+    color: var(--error-bg) !important;
+}
+
+/* Close button styling for error toast */
+[data-theme="light"] #error-toast .btn-close {
+    filter: none;
+}
+
+[data-theme="dark"] #error-toast .btn-close {
+    filter: brightness(0) invert(1);
+}
+
+/* Success Toast */
+#success-toast-container {
+    background-color: var(--success-bg) !important;
+    color: var(--success-text) !important;
+    border: 1px solid var(--success-bg) !important;
+}
+
+/* Close button styling for success toast */
+[data-theme="light"] #success-toast-container .btn-close {
+    filter: none;
+}
+
+[data-theme="dark"] #success-toast-container .btn-close {
+    filter: brightness(0) invert(1);
+}
+
 /* Loading indicator */
 #loading-indicator {
     background-color: rgba(0, 0, 0, 0.5);
