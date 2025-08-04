@@ -48,6 +48,9 @@
     --input-bg: #ffffff;
     --input-border: #ced4da;
     --navbar-bg: #f8f9fa;
+    --warning-bg: #fff3cd;
+    --warning-border: #ffeaa7;
+    --warning-text: #856404;
 }
 
 /* Auto theme based on system preference - only when no manual theme is set */
@@ -66,6 +69,9 @@
         --shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.3);
         --shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.4);
         --shadow-lg: 0 0.5rem 1rem rgba(0, 0, 0, 0.5);
+        --warning-bg: #664d03;
+        --warning-border: #997404;
+        --warning-text: #ffecb5;
     }
 }
 
@@ -81,6 +87,9 @@
     --input-border: #ced4da;
     --navbar-bg: #f8f9fa;
     --border-color: #dee2e6;
+    --warning-bg: #fff3cd;
+    --warning-border: #ffeaa7;
+    --warning-text: #856404;
 }
 
 /* Manual dark mode */
@@ -98,4 +107,7 @@
     --shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.3);
     --shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.4);
     --shadow-lg: 0 0.5rem 1rem rgba(0, 0, 0, 0.5);
+    --warning-bg: #664d03;
+    --warning-border: #997404;
+    --warning-text: #ffecb5;
 }
