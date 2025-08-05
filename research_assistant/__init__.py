@@ -25,7 +25,7 @@ async def researcher(
     mcp_server_group_external: str = "research-external",
     mcp_server_group_internal: str = "research-internal",
     user_id: Optional[str] = None,
-    msg_preprocess_callback = None
+    msg_preprocess_callback = None,
     msg_preprocess_kwargs = None,
     msg_postprocess_callback = None,
     msg_postprocess_kwargs = None
