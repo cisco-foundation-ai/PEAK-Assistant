@@ -180,5 +180,5 @@ cython_debug/
 *.pem
 *.json
 *.log 
-context.txt
+*.txt
 .DS_Store
