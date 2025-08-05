@@ -18,6 +18,10 @@ async def identify_data_sources(
     verbose: bool = False,
     previous_run: list = list(),
     mcp_server_group: str = "data_discovery",
+    msg_preprocess_callback = None,
+    msg_preprocess_kwargs = None,
+    msg_postprocess_callback = None,
+    msg_postprocess_kwargs = None    
 ) -> TaskResult:
     """
     Data agent that consumes a hunting research report and a hypothesis, then
@@ -162,6 +166,10 @@ async def identify_data_sources(
         az_model_reasoning_client,
         verbose,
         previous_run,
+        msg_preprocess_callback,
+        msg_preprocess_kwargs,
+        msg_postprocess_callback,
+        msg_postprocess_kwargs
     )
 
 
@@ -174,6 +182,10 @@ async def _run_data_discovery_with_workbench(
     az_model_reasoning_client,
     verbose,
     previous_run,
+    msg_preprocess_callback,
+    msg_preprocess_kwargs,
+    msg_postprocess_callback,
+    msg_postprocess_kwargs
 ) -> TaskResult:
     """Helper function to run data discovery with a given MCP workbench"""
 
@@ -201,11 +213,20 @@ async def _run_data_discovery_with_workbench(
         termination_condition=text_termination,
     )
 
+    # Preprocess the messages
+    if msg_preprocess_callback:
+        messages = msg_preprocess_callback(msgs=messages, **(msg_preprocess_kwargs or {}))
+
     try:
         if verbose:
             result = await Console(team.run_stream(task=messages))
         else:
             result = await team.run(task=messages)
+
+        # Postprocess the result
+        if msg_postprocess_callback: 
+            result = msg_postprocess_callback(result=result, **(msg_postprocess_kwargs or {}))  
+
         return result
     except Exception as e:
         print(f"Error during data source identification: {e}")

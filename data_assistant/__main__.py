@@ -12,7 +12,7 @@ from autogen_agentchat.messages import TextMessage
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from data_assistant import identify_data_sources
 from utils import find_dotenv_file
-
+from utils.agent_callbacks import preprocess_messages_logging, postprocess_messages_logging
 
 def main() -> None:
     # Set up argument parser
@@ -116,6 +116,10 @@ def main() -> None:
                 local_context=local_context,
                 verbose=args.verbose,
                 previous_run=messages,
+                msg_preprocess_callback=preprocess_messages_logging,
+                msg_preprocess_kwargs={"agent_id": "data-discovery"},
+                msg_postprocess_callback=postprocess_messages_logging,
+                msg_postprocess_kwargs={"agent_id": "data-discovery"},
             )
         )
 

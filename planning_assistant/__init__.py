@@ -21,6 +21,10 @@ async def plan_hunt(
     local_context: str,
     verbose: bool = False,
     previous_run: list = list(),
+    msg_preprocess_callback = None,
+    msg_preprocess_kwargs = None,
+    msg_postprocess_callback = None,
+    msg_postprocess_kwargs = None    
 ) -> TaskResult:
     """
     Agent that consumes data produced by all the other PEAK Prepare-phase agents and
@@ -217,11 +221,20 @@ async def plan_hunt(
         termination_condition=text_termination,
     )
 
+    # Preprocess the messages
+    if msg_preprocess_callback:
+        messages = msg_preprocess_callback(msgs=messages, **(msg_preprocess_kwargs or {}))
+
     try:
         if verbose:
             result = await Console(team.run_stream(task=messages), output_stats=True)
         else:
             result = await team.run(task=messages)
+
+        # Postprocess the result
+        if msg_postprocess_callback: 
+            result = msg_postprocess_callback(result=result, **(msg_postprocess_kwargs or {}))  
+
         return result
     except Exception as e:
         print(f"Error during hunt planning: {e}")

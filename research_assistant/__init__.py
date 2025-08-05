@@ -25,6 +25,10 @@ async def researcher(
     mcp_server_group_external: str = "research-external",
     mcp_server_group_internal: str = "research-internal",
     user_id: Optional[str] = None,
+    msg_preprocess_callback = None
+    msg_preprocess_kwargs = None,
+    msg_postprocess_callback = None,
+    msg_postprocess_kwargs = None
 ) -> TaskResult:
     """
     Orchestrates a multi-agent, multi-stage research workflow to generate a
@@ -153,10 +157,10 @@ async def researcher(
         Format the output as a simple Markdown report. Be sure to include these sections:
         - A brief descriptive title. This should just be the name of the technique, 
           if there is one in common use. Otherwise, make up something short. (e.g., 
-          "Kerberoasting", "Lateral Movement via SMB", "Credential Dumping")
+          "Kerberoasting", "Lateral Movement via SMB", "Credential Dumping from Memory")
         - The relevant MITRE ATT&CK ids & URLs. If there are multiple ATT&CK ids, list 
           them in the order they are most commonly used in the attack lifecycle.
-        - A brief description of why this technique is used. Call this section "Overview".
+        - A description of why this technique is used. Call this section "Overview".
         - A description of any known threat actors that use this technique, and how they 
           use it. If there are multiple threat actors, list them in the order they are
           most commonly associated with this technique. If this technique is in wide 
@@ -184,16 +188,18 @@ async def researcher(
           fields, if you can find one. Prefer pages from official documentation 
           for that data, but if they are not available, select the most comprehensive 
           and understandable page you can find. Call this section "Typical Datasets".
-        - A brief list of published threat hunt methodologies for this technique. For each, 
+        - A list of published threat hunt methodologies for this technique. For each, 
           include a short description of exactly what their looking for and how they 
           look for it. Call this section "Published Hunts".
         - A summary of any local information about previous times you have hunted this
-          technique, or previous times the technique has been found in incidents. 
-          Begin this section with a table listing each of the relevant local items,
-          a summary of each, and any key information that would be helpful to a 
-          threat hunter, including any relevant log entries, code, detection rules,
-          or security incidents opened. Call this section "Previous Hunting Information".
-        - A brief list of tools threat actors commonly use to perform this technique. 
+          topic or it has been found in security incidents. Begin with a table that groups 
+          each item that pertains to the same hunt together (e.g., all tickets and all wiki 
+          pages for the same hunt), summarizes the data used, data analysis technique(s), 
+          and key findings for each hunt. Column headings should be "Hunt", "Summary", and 
+          "Key Findings". Concentrate on hunts that focus on the current topic or that
+          feature the topic in some way. Be sure to include links to all relevant sources. 
+          Call this section "Previous Hunting Information".
+        - A list of tools threat actors commonly use to perform this technique. 
           Call this section "Commonly-Used Tools".
         - A numbered list of references to all the sourcesq you consulted, including a 
           sentence summarizing the notable information or reason why hunters
@@ -232,7 +238,12 @@ async def researcher(
         the summary research report provided by the summarizer agent. Your goal is to 
         ensure that the report is complete, accurate, and provides everything necessary
         for a threat hunter to begin planning their hunt for this technique.
-    
+
+        If the user has provided feedback (marked with "User Feedback:"), focus on the 
+        specific feedback provided and use it to improve the report. If the user has not
+        provided feedback, continue to improve the report until it is complete and 
+        accurate.
+
         Ensure the report answers ALL of the following questions (not necessarily
         in this order):
         1. What is the short, commonly-accepted name for the technique (not just 
@@ -429,12 +440,20 @@ async def researcher(
     if previous_run:
         messages = messages + previous_run
 
+    # Preprocess the messages
+    if msg_preprocess_callback:
+        messages = msg_preprocess_callback(msgs=messages, **(msg_preprocess_kwargs or {}))
+
     try:
         # Run the team asynchronously
         if verbose:
             result = await Console(team.run_stream(task=messages), output_stats=True)
         else:
             result = await team.run(task=messages)
+
+        # Postprocess the result
+        if msg_postprocess_callback: 
+            result = msg_postprocess_callback(result=result, **(msg_postprocess_kwargs or {}))
 
         return result
     except (openai.RateLimitError, openai.APIError) as e:

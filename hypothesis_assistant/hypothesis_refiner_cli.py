@@ -18,7 +18,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from utils import find_dotenv_file
 from utils.assistant_auth import PEAKAssistantAuthManager
 from utils.azure_client import PEAKAssistantAzureOpenAIClient
-
+from utils.agent_callbacks import preprocess_messages_logging, postprocess_messages_logging
 
 async def refiner(
     hypothesis: str,
@@ -26,6 +26,10 @@ async def refiner(
     research_document: str,
     verbose: bool = False,
     previous_run: list = list(),
+    msg_preprocess_callback = None,
+    msg_preprocess_kwargs = None,
+    msg_postprocess_callback = None,
+    msg_postprocess_kwargs = None
 ) -> TaskResult:
     """
     Threat hunting hypothesis refiner agent that combines user input, a markdown document, and its own prompt
@@ -125,12 +129,20 @@ async def refiner(
     if previous_run:
         messages = messages + previous_run
 
+    # Preprocess the messages
+    if msg_preprocess_callback:
+        messages = msg_preprocess_callback(msgs=messages, **(msg_preprocess_kwargs or {}))
+
     try:
         # Run the team asynchronously
         if verbose:
             result = await Console(team.run_stream(task=messages), output_stats=True)
         else:
             result = await team.run(task=messages)
+
+        # Postprocess the result
+        if msg_postprocess_callback: 
+            result = msg_postprocess_callback(result=result, **(msg_postprocess_kwargs or {}))  
 
         # Access the content from the CreateResult object
         return result  # Use the correct attribute to access the generated content
@@ -242,6 +254,10 @@ def main() -> None:
                 research_document=research_data,
                 verbose=args.verbose,
                 previous_run=messages,
+                msg_preprocess_callback=preprocess_messages_logging,
+                msg_preprocess_kwargs={"agent_id": "hypothesis-refiner"},
+                msg_postprocess_callback=postprocess_messages_logging,
+                msg_postprocess_kwargs={"agent_id": "hypothesis-refiner"},
             )
         )
 
