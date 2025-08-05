@@ -25,6 +25,9 @@ from ..utils.helpers import (
     clear_session_key,
 )
 
+# Import callback functions for message tracing
+from utils.agent_callbacks import preprocess_messages_logging, postprocess_messages_logging
+
 # Create API blueprint
 api_bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -61,6 +64,23 @@ async def research():
 
     # Get authenticated user context for OAuth-enabled MCP servers
     user_id = session.get("user_id")
+    
+    # Check if callback tracing is enabled
+    callback_tracing_enabled = session.get("callback_tracing_enabled", False)
+    logging.info(f"Callback tracing enabled: {callback_tracing_enabled}")
+    
+    # Prepare callback parameters
+    callback_kwargs = {}
+    if callback_tracing_enabled:
+        logging.info("Adding callback functions to researcher call")
+        callback_kwargs.update({
+            "msg_preprocess_callback": preprocess_messages_logging,
+            "msg_preprocess_kwargs": {"agent_id": "researcher"},
+            "msg_postprocess_callback": postprocess_messages_logging,
+            "msg_postprocess_kwargs": {"agent_id": "researcher"},
+        })
+    else:
+        logging.info("No callback functions added - tracing disabled")
 
     # Run the researcher with user context
     result = await async_researcher(
@@ -69,6 +89,7 @@ async def research():
         verbose=verbose_mode,
         previous_run=previous_run,
         user_id=user_id,
+        **callback_kwargs
     )
 
     # Extract the report markdown
@@ -191,6 +212,19 @@ async def refine():
 
     # Log the hypothesis being sent to the refiner for debugging
     logging.warning(f"Calling async_refiner with hypothesis: {hypothesis[:100]}...")
+    
+    # Check if callback tracing is enabled
+    callback_tracing_enabled = session.get("callback_tracing_enabled", False)
+    
+    # Prepare callback parameters
+    callback_kwargs = {}
+    if callback_tracing_enabled:
+        callback_kwargs.update({
+            "msg_preprocess_callback": preprocess_messages_logging,
+            "msg_preprocess_kwargs": {"agent_id": "refiner"},
+            "msg_postprocess_callback": postprocess_messages_logging,
+            "msg_postprocess_kwargs": {"agent_id": "refiner"},
+        })
 
     # Explicitly pass keyword arguments to the refiner function
     result = await async_refiner(
@@ -198,6 +232,7 @@ async def refine():
         local_context=local_context,
         research_document=research_report,
         previous_run=previous_run,
+        **callback_kwargs
     )
 
     # Extract the refined hypothesis
@@ -313,6 +348,19 @@ async def data_discovery():
             TextMessage(content=f"User feedback: {feedback}\n", source="user")
         )
 
+    # Check if callback tracing is enabled
+    callback_tracing_enabled = session.get("callback_tracing_enabled", False)
+    
+    # Prepare callback parameters
+    callback_kwargs = {}
+    if callback_tracing_enabled:
+        callback_kwargs.update({
+            "msg_preprocess_callback": preprocess_messages_logging,
+            "msg_preprocess_kwargs": {"agent_id": "data_discovery"},
+            "msg_postprocess_callback": postprocess_messages_logging,
+            "msg_postprocess_kwargs": {"agent_id": "data_discovery"},
+        })
+    
     result = await async_identify_data_sources(
         hypothesis=hypothesis,
         research_document=report_md,
@@ -320,6 +368,7 @@ async def data_discovery():
         local_context=local_context,  # Pass local context to the function
         verbose=verbose_mode,
         previous_run=messages,
+        **callback_kwargs
         # Note: max_retries parameter removed as it's not supported by this function
     )
     # Extract the final message from the "Data_Discovery_Agent" similar to CLI version
@@ -404,6 +453,19 @@ async def hunt_plan():
     from planning_assistant import (
         plan_hunt as async_hunt_planner,
     )
+    
+    # Check if callback tracing is enabled
+    callback_tracing_enabled = session.get("callback_tracing_enabled", False)
+    
+    # Prepare callback parameters
+    callback_kwargs = {}
+    if callback_tracing_enabled:
+        callback_kwargs.update({
+            "msg_preprocess_callback": preprocess_messages_logging,
+            "msg_preprocess_kwargs": {"agent_id": "hunt_planner"},
+            "msg_postprocess_callback": postprocess_messages_logging,
+            "msg_postprocess_kwargs": {"agent_id": "hunt_planner"},
+        })
 
     result = await async_hunt_planner(
         hypothesis=hypothesis,
@@ -413,6 +475,7 @@ async def hunt_plan():
         local_context=local_context,
         verbose=verbose_mode,
         previous_run=messages,
+        **callback_kwargs
         # Note: max_retries parameter removed as it's not supported by this function
     )
 

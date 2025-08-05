@@ -27,6 +27,12 @@
                     </div>
                 </div>
                 <div class="mb-3">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="callback-tracing-page">
+                        <label class="form-check-label" for="callback-tracing-page">Message callback tracing</label>
+                    </div>
+                </div>
+                <div class="mb-3">
                     <label for="retry-count-page" class="form-label form-label-sm">API Retries:</label>
                     <input type="number" class="form-control form-control-sm" id="retry-count-page" value="3" min="0" max="10">
                 </div>
@@ -87,6 +93,14 @@ function loadDebugData() {
     .then(data => {
         document.getElementById('session-data').textContent = JSON.stringify(data.session_data, null, 2);
         document.getElementById('env-vars').textContent = JSON.stringify(data.environment, null, 2);
+        
+        // Update callback tracing checkbox from session data
+        const callbackTracingPage = document.getElementById('callback-tracing-page');
+        if (callbackTracingPage && data.callback_tracing_enabled !== undefined) {
+            callbackTracingPage.checked = data.callback_tracing_enabled;
+            // Also update localStorage to keep it in sync
+            localStorage.setItem('callbackTracing', data.callback_tracing_enabled);
+        }
     })
     .catch(error => {
         document.getElementById('session-data').textContent = 'Error loading session data: ' + error.message;
@@ -157,6 +171,7 @@ document.getElementById('clear-session-btn').addEventListener('click', function(
 document.addEventListener('DOMContentLoaded', function () {
     const debugModePage = document.getElementById('debug-mode-page');
     const retryCountPage = document.getElementById('retry-count-page');
+    const callbackTracingPage = document.getElementById('callback-tracing-page');
     const debugModeSidebar = document.getElementById('debug-mode'); // Assuming this ID still exists or is managed elsewhere
     const retryCountSidebar = document.getElementById('retry-count'); // Assuming this ID still exists or is managed elsewhere
 
@@ -173,6 +188,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // Initialize page controls from localStorage or defaults
     let currentDebugState = localStorage.getItem('debugMode') === 'true';
     let currentRetryCount = localStorage.getItem('retryCount') || '3';
+    let currentCallbackTracingState = localStorage.getItem('callbackTracing') === 'true';
 
     if (debugModePage) {
         debugModePage.checked = currentDebugState;
@@ -191,6 +207,29 @@ document.addEventListener('DOMContentLoaded', function () {
             localStorage.setItem('retryCount', currentRetryCount);
             updateSidebarControls(currentDebugState, currentRetryCount);
             // Add any fetch/API call here if settings need to be saved server-side
+        });
+    }
+
+    if (callbackTracingPage) {
+        callbackTracingPage.checked = currentCallbackTracingState;
+        callbackTracingPage.addEventListener('change', function () {
+            currentCallbackTracingState = this.checked;
+            localStorage.setItem('callbackTracing', currentCallbackTracingState);
+            // Save callback tracing state to session via API
+            fetch('/api/set-callback-tracing', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: currentCallbackTracingState })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    console.error('Failed to save callback tracing state:', data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error saving callback tracing state:', error);
+            });
         });
     }
     

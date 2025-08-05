@@ -5,7 +5,7 @@ Page rendering routes for PEAK Assistant UI
 import os
 import sys
 import logging
-from flask import Blueprint, render_template, jsonify, request
+from flask import Blueprint, render_template, jsonify, request, session
 from ..utils.helpers import (
     get_session_value,
     clear_all_session_data,
@@ -106,8 +106,22 @@ def debug_info():
             "environment": env_vars,
             "system_info": sys_info,
             "session_data": get_all_session_data(),
+            "callback_tracing_enabled": session.get("callback_tracing_enabled", False),
         }
     )
+
+
+@page_bp.route("/api/set-callback-tracing", methods=["POST"])
+def set_callback_tracing():
+    """Set callback tracing state in session"""
+    data = request.get_json()
+    if not data:
+        return jsonify({"success": False, "error": "No data provided"}), 400
+    
+    enabled = data.get("enabled", False)
+    session["callback_tracing_enabled"] = enabled
+    
+    return jsonify({"success": True, "enabled": enabled})
 
 
 @page_bp.route("/api/prerequisite-check", methods=["GET"])
