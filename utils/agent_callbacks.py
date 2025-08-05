@@ -10,7 +10,6 @@ def preprocess_messages_logging(
     agent_id: str = "[UNIDENTIFIED]",
     logfile: str = "msgs.txt"
 ) -> list[TextMessage]:
-    print(f"[CALLBACK DEBUG] preprocess_messages_logging called for agent_id: {agent_id}")
     with open(logfile, 'a') as f:
         for msg in msgs:
             log_msg = f"""
@@ -23,7 +22,6 @@ Content:{msg.content[:50]}
 -----------END TextMessage------------------------------
 """
             f.write(log_msg)
-    print(f"[CALLBACK DEBUG] preprocess_messages_logging completed for {len(msgs)} messages")
     return msgs
 
 def postprocess_messages_logging(
@@ -31,7 +29,6 @@ def postprocess_messages_logging(
     agent_id: str = "[UNIDENTIFIED]",
     logfile: str = "results.txt"
 ) -> TaskResult:
-    print(f"[CALLBACK DEBUG] postprocess_messages_logging called for agent_id: {agent_id}")
 
     prompt_tokens = 0
     completion_tokens = 0
@@ -74,5 +71,4 @@ Total tokens: {prompt_tokens + completion_tokens}
 """
         f.write(summary_msg)
     
-    print(f"[CALLBACK DEBUG] postprocess_messages_logging completed for agent_id: {agent_id}")
     return result

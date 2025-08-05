@@ -67,20 +67,16 @@ async def research():
     
     # Check if callback tracing is enabled
     callback_tracing_enabled = session.get("callback_tracing_enabled", False)
-    logging.info(f"Callback tracing enabled: {callback_tracing_enabled}")
     
     # Prepare callback parameters
     callback_kwargs = {}
     if callback_tracing_enabled:
-        logging.info("Adding callback functions to researcher call")
         callback_kwargs.update({
             "msg_preprocess_callback": preprocess_messages_logging,
             "msg_preprocess_kwargs": {"agent_id": "researcher"},
             "msg_postprocess_callback": postprocess_messages_logging,
             "msg_postprocess_kwargs": {"agent_id": "researcher"},
         })
-    else:
-        logging.info("No callback functions added - tracing disabled")
 
     # Run the researcher with user context
     result = await async_researcher(
