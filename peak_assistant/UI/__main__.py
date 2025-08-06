@@ -1,15 +1,20 @@
 import os
+import click
 from .app import app
 
 
-def main() -> None:
+@click.command()
+@click.option("--cert-dir", default="./", help="Directory to find SSL certificates.")
+@click.option("--host", default="localhost", help="Host to run the application on.")
+@click.option("--port", default=8000, help="Port to run the application on.")
+def main(cert_dir: str = "./", host: str = "localhost", port: int = 8000) -> None:
     # Create templates directory if it doesn't exist
     os.makedirs(os.path.join(os.path.dirname(__file__), "templates"), exist_ok=True)
 
     # TLS/SSL context: expects cert.pem and key.pem in the UI directory
     context = (
-        os.path.join(os.path.dirname(__file__), "cert.pem"),
-        os.path.join(os.path.dirname(__file__), "key.pem"),
+        os.path.join(cert_dir, "cert.pem"),
+        os.path.join(cert_dir, "key.pem"),
     )
 
     failed = False
@@ -20,7 +25,6 @@ def main() -> None:
 
     if failed:
         return
-
     app.logger.info(
         "Note: You may see 'Task exception was never retrieved' errors related to HTTP client cleanup."
     )
@@ -32,7 +36,7 @@ def main() -> None:
     )
 
     # Run the application
-    app.run(debug=True, port=8000, ssl_context=context)
+    app.run(debug=True, host=host, port=port, ssl_context=context)
 
 
 if __name__ == "__main__":

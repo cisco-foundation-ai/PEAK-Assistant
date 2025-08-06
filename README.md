@@ -36,10 +36,10 @@ pip install -e .
 ```
 
 ## Generate TLS Certificate
-Once that's done, you'll need to generate the TLS certificate and private key. The files must be named `cert.pem` and `key.pem`, and reside in the `UI` directory of the repository. You can do this manually like so:
+Once that's done, you'll need to generate the TLS certificate and private key. The files must be named `cert.pem` and `key.pem`, and reside in the local directory (or a directory specified by `--cert-dir` on startup). You can do this manually like so:
 
 ```bash
-openssl req -x509 -newkey rsa:2048 -keyout UI/key.pem -out UI/cert.pem -days 365 -nodes -subj "/CN=localhost"
+openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 365 -nodes -subj "/CN=localhost"
 ```
 
 If you prefer, you can use the `generate_certificates.sh` utility to do this for you. Just run the script and follow the prompts.

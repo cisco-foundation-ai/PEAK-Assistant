@@ -24,6 +24,7 @@ dependencies = [
     "aiohttp>=3.12.15",
     "httpx>=0.28.1",
     "authlib>=1.6.1",
+    "click>=8.2.1",
 ]
 
 [dependency-groups]
@@ -46,14 +47,14 @@ build-backend = "hatchling.build"
 packages = ["peak_assistant"]
 
 [project.scripts]
-able-assistant = "able_assistant.__main__:main"
-data-assistant = "data_assistant.__main__:main"
-hypothesis-assistant = "hypothesis_assistant.hypothesis_assistant_cli:main"
-hypothesis-refiner = "hypothesis_assistant.hypothesis_refiner_cli:main"
-planning-assistant = "planning_assistant.__main__:main"
-peak-mcp = "peak_mcp.__main__:main"
-peak-assistant = "UI.__main__:main"
-research-assistant = "research_assistant.__main__:main"
+able-assistant = "peak_assistant.able_assistant.__main__:main"
+data-assistant = "peak_assistant.data_assistant.__main__:main"
+hypothesis-assistant = "peak_assistant.hypothesis_assistant.hypothesis_assistant_cli:main"
+hypothesis-refiner = "peak_assistant.hypothesis_assistant.hypothesis_refiner_cli:main"
+planning-assistant = "peak_assistant.planning_assistant.__main__:main"
+peak-mcp = "peak_assistant.peak_mcp.__main__:main"
+peak-assistant = "peak_assistant.UI.__main__:main"
+research-assistant = "peak_assistant.research_assistant.__main__:main"
 
 
 [tool.pytest.ini_options]
