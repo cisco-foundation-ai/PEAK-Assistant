@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import os
-import sys
 import argparse
 from typing import List
 from dotenv import load_dotenv
@@ -9,9 +8,11 @@ import asyncio
 
 from autogen_agentchat.messages import TextMessage
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from utils import find_dotenv_file
-from utils.agent_callbacks import preprocess_messages_logging, postprocess_messages_logging
+from ..utils import find_dotenv_file
+from ..utils.agent_callbacks import (
+    preprocess_messages_logging,
+    postprocess_messages_logging,
+)
 
 from . import plan_hunt
 

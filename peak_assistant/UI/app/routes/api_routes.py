@@ -7,15 +7,26 @@ import logging
 from flask import Blueprint, request, jsonify, session
 from autogen_agentchat.messages import TextMessage, UserMessage
 
-from research_assistant import researcher as async_researcher
 
-from able_assistant import able_table as async_able_table
+from peak_assistant.research_assistant import researcher as async_researcher
 
+from peak_assistant.able_assistant import able_table as async_able_table
+
+from peak_assistant.hypothesis_assistant.hypothesis_refiner_cli import refiner as async_refiner
 # Import data discovery function
-from data_assistant import (
+from peak_assistant.data_assistant import (
     identify_data_sources as async_identify_data_sources,
 )
 
+# Import hypothesizer
+from peak_assistant.hypothesis_assistant.hypothesis_assistant_cli import (
+    hypothesizer as async_hypothesizer,
+)
+
+# Import hunt planning function
+from peak_assistant.planning_assistant import (
+    plan_hunt as async_hunt_planner,
+)
 from ..utils.decorators import async_action, handle_async_api_errors
 from ..utils.helpers import (
     extract_report_md,
@@ -26,7 +37,7 @@ from ..utils.helpers import (
 )
 
 # Import callback functions for message tracing
-from utils.agent_callbacks import preprocess_messages_logging, postprocess_messages_logging
+from peak_assistant.utils.agent_callbacks import preprocess_messages_logging, postprocess_messages_logging
 
 # Create API blueprint
 api_bp = Blueprint("api", __name__, url_prefix="/api")
@@ -119,10 +130,6 @@ async def hypothesize():
     )  # Get local context from session
     logger.info(f"local_context length: {len(local_context) if local_context else 0}")
 
-    # Import hypothesizer
-    from hypothesis_assistant.hypothesis_assistant_cli import (
-        hypothesizer as async_hypothesizer,
-    )
     
     logger.info("About to call async_hypothesizer")
     logger.info(f"Parameters - user_input: None, research_document length: {len(report_md)}, local_context length: {len(local_context)}")
@@ -192,8 +199,6 @@ async def refine():
     # Get local context from session
     local_context = get_session_value("local_context", INITIAL_LOCAL_CONTEXT)
 
-    from autogen_agentchat.messages import TextMessage
-    from hypothesis_assistant.hypothesis_refiner_cli import refiner as async_refiner
 
     previous_run = None
     if feedback:
@@ -264,8 +269,6 @@ async def able_table():
     current_able_table = data.get("current_able_table")
     report_md = get_session_value("report_md", "")
     local_context = get_session_value("local_context", INITIAL_LOCAL_CONTEXT)
-
-    # Import necessary modules
 
     # Construct the message history for feedback
     previous_run = []
@@ -445,10 +448,6 @@ async def hunt_plan():
             TextMessage(content=f"User feedback: {feedback}\n", source="user")
         )
 
-    # Import hunt planning function
-    from planning_assistant import (
-        plan_hunt as async_hunt_planner,
-    )
     
     # Check if callback tracing is enabled
     callback_tracing_enabled = session.get("callback_tracing_enabled", False)

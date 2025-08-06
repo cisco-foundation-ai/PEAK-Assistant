@@ -6,11 +6,15 @@ import sys
 import logging
 import warnings
 from flask import Flask
-from flask_session import Session
+from flask_session import Session # type: ignore[import-untyped]
 from flask_sqlalchemy import SQLAlchemy
 
 from .config import config
-from utils import load_env_defaults
+from peak_assistant.utils import load_env_defaults
+
+
+# Initialize OAuth manager for MCP server authentication
+from peak_assistant.utils.authlib_oauth import init_oauth_manager
 
 # Initialize extensions
 db = SQLAlchemy()
@@ -84,8 +88,6 @@ def create_app(config_name='default'):
     if parent_dir not in sys.path:
         sys.path.append(parent_dir)
     
-    # Initialize OAuth manager for MCP server authentication
-    from utils.authlib_oauth import init_oauth_manager
     oauth_manager = init_oauth_manager(app)
     
     # Suppress asyncio event loop closure warnings from background HTTP cleanup

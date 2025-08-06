@@ -7,7 +7,7 @@ import httpx
 import atexit
 import weakref
 from pathlib import Path
-from typing import Dict, List, Optional, Union, Any
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from enum import Enum
 import logging
@@ -15,9 +15,6 @@ from urllib.parse import urljoin
 from dotenv import load_dotenv
 
 from autogen_ext.tools.mcp import McpWorkbench, StdioServerParams
-from mcp.client.session import ClientSession
-from mcp.client.stdio import stdio_client
-from mcp.client.sse import sse_client
 
 logger = logging.getLogger(__name__)
 

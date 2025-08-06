@@ -1,4 +1,4 @@
-from able_assistant import able_table
+from peak_assistant.able_assistant import able_table
 
 
 async def test_able_table() -> None:

@@ -117,10 +117,10 @@ def set_callback_tracing():
     data = request.get_json()
     if not data:
         return jsonify({"success": False, "error": "No data provided"}), 400
-    
+
     enabled = data.get("enabled", False)
     session["callback_tracing_enabled"] = enabled
-    
+
     return jsonify({"success": True, "enabled": enabled})
 
 

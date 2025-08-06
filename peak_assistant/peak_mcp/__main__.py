@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-import os
-import sys
 import uuid
 
 from dotenv import load_dotenv
@@ -9,21 +7,18 @@ from dotenv import load_dotenv
 from mcp import types
 from mcp.server.fastmcp import FastMCP
 from pydantic.networks import AnyUrl
-from utils import find_dotenv_file
+from ..utils import find_dotenv_file
 
-# Add the parent directory to sys.path so we can import our modules
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-from research_assistant import researcher as async_researcher
-from hypothesis_assistant.hypothesis_assistant_cli import (
+from ..research_assistant import researcher as async_researcher
+from ..hypothesis_assistant.hypothesis_assistant_cli import (
     hypothesizer as async_hypothesizer,
 )
-from hypothesis_assistant.hypothesis_refiner_cli import refiner as async_refiner
-from able_assistant import able_table as async_able_table
-from data_assistant import (
+from ..hypothesis_assistant.hypothesis_refiner_cli import refiner as async_refiner
+from ..able_assistant import able_table as async_able_table
+from ..data_assistant import (
     identify_data_sources as async_identify_data_sources,
 )
-from planning_assistant import plan_hunt as async_plan_hunt
+from ..planning_assistant import plan_hunt as async_plan_hunt
 
 mcp = FastMCP("peak-assistant")
 

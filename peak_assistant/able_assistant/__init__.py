@@ -5,8 +5,8 @@ from typing import List
 from autogen_core.models import UserMessage, SystemMessage
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from utils.assistant_auth import PEAKAssistantAuthManager
-from utils.azure_client import PEAKAssistantAzureOpenAIClient
+from peak_assistant.utils.assistant_auth import PEAKAssistantAuthManager
+from peak_assistant.utils.azure_client import PEAKAssistantAzureOpenAIClient
 
 
 async def able_table(

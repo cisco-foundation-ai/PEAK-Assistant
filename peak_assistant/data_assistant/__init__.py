@@ -5,9 +5,9 @@ from autogen_agentchat.teams import RoundRobinGroupChat
 from autogen_agentchat.ui import Console
 from autogen_agentchat.conditions import TextMentionTermination
 
-from utils.assistant_auth import PEAKAssistantAuthManager
-from utils.azure_client import PEAKAssistantAzureOpenAIClient
-from utils.mcp_config import get_client_manager, setup_mcp_servers
+from peak_assistant.utils.assistant_auth import PEAKAssistantAuthManager
+from peak_assistant.utils.azure_client import PEAKAssistantAzureOpenAIClient
+from peak_assistant.utils.mcp_config import get_client_manager, setup_mcp_servers
 
 
 async def identify_data_sources(
@@ -18,10 +18,10 @@ async def identify_data_sources(
     verbose: bool = False,
     previous_run: list = list(),
     mcp_server_group: str = "data_discovery",
-    msg_preprocess_callback = None,
-    msg_preprocess_kwargs = None,
-    msg_postprocess_callback = None,
-    msg_postprocess_kwargs = None    
+    msg_preprocess_callback=None,
+    msg_preprocess_kwargs=None,
+    msg_postprocess_callback=None,
+    msg_postprocess_kwargs=None,
 ) -> TaskResult:
     """
     Data agent that consumes a hunting research report and a hypothesis, then
@@ -169,7 +169,7 @@ async def identify_data_sources(
         msg_preprocess_callback,
         msg_preprocess_kwargs,
         msg_postprocess_callback,
-        msg_postprocess_kwargs
+        msg_postprocess_kwargs,
     )
 
 
@@ -185,7 +185,7 @@ async def _run_data_discovery_with_workbench(
     msg_preprocess_callback,
     msg_preprocess_kwargs,
     msg_postprocess_callback,
-    msg_postprocess_kwargs
+    msg_postprocess_kwargs,
 ) -> TaskResult:
     """Helper function to run data discovery with a given MCP workbench"""
 
@@ -215,7 +215,9 @@ async def _run_data_discovery_with_workbench(
 
     # Preprocess the messages
     if msg_preprocess_callback:
-        messages = msg_preprocess_callback(msgs=messages, **(msg_preprocess_kwargs or {}))
+        messages = msg_preprocess_callback(
+            msgs=messages, **(msg_preprocess_kwargs or {})
+        )
 
     try:
         if verbose:
@@ -224,8 +226,10 @@ async def _run_data_discovery_with_workbench(
             result = await team.run(task=messages)
 
         # Postprocess the result
-        if msg_postprocess_callback: 
-            result = msg_postprocess_callback(result=result, **(msg_postprocess_kwargs or {}))  
+        if msg_postprocess_callback:
+            result = msg_postprocess_callback(
+                result=result, **(msg_postprocess_kwargs or {})
+            )
 
         return result
     except Exception as e:

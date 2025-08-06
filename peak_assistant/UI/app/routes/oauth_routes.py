@@ -4,8 +4,6 @@ Authlib-based OAuth authentication routes for PEAK Assistant
 Handles user authentication flows for MCP servers using Authlib
 """
 
-import os
-import sys
 import secrets
 import logging
 import asyncio
@@ -23,10 +21,12 @@ from flask import (
 from functools import wraps
 from authlib.integrations.requests_client import OAuth2Session
 
-# Add parent directory to path for importing utils
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
-from utils.mcp_config import get_config_manager, get_client_manager, AuthType
-from utils.authlib_oauth import get_oauth_manager
+from peak_assistant.utils.mcp_config import (
+    get_config_manager,
+    get_client_manager,
+    AuthType,
+)
+from peak_assistant.utils.authlib_oauth import get_oauth_manager
 
 logger = logging.getLogger(__name__)
 

@@ -9,8 +9,8 @@ from autogen_agentchat.conditions import TextMentionTermination
 from autogen_agentchat.base import TaskResult
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from utils.assistant_auth import PEAKAssistantAuthManager
-from utils.azure_client import PEAKAssistantAzureOpenAIClient
+from peak_assistant.utils.assistant_auth import PEAKAssistantAuthManager
+from peak_assistant.utils.azure_client import PEAKAssistantAzureOpenAIClient
 
 
 async def plan_hunt(
@@ -21,10 +21,10 @@ async def plan_hunt(
     local_context: str,
     verbose: bool = False,
     previous_run: list = list(),
-    msg_preprocess_callback = None,
-    msg_preprocess_kwargs = None,
-    msg_postprocess_callback = None,
-    msg_postprocess_kwargs = None    
+    msg_preprocess_callback=None,
+    msg_preprocess_kwargs=None,
+    msg_postprocess_callback=None,
+    msg_postprocess_kwargs=None,
 ) -> TaskResult:
     """
     Agent that consumes data produced by all the other PEAK Prepare-phase agents and
@@ -223,7 +223,9 @@ async def plan_hunt(
 
     # Preprocess the messages
     if msg_preprocess_callback:
-        messages = msg_preprocess_callback(msgs=messages, **(msg_preprocess_kwargs or {}))
+        messages = msg_preprocess_callback(
+            msgs=messages, **(msg_preprocess_kwargs or {})
+        )
 
     try:
         if verbose:
@@ -232,8 +234,10 @@ async def plan_hunt(
             result = await team.run(task=messages)
 
         # Postprocess the result
-        if msg_postprocess_callback: 
-            result = msg_postprocess_callback(result=result, **(msg_postprocess_kwargs or {}))  
+        if msg_postprocess_callback:
+            result = msg_postprocess_callback(
+                result=result, **(msg_postprocess_kwargs or {})
+            )
 
         return result
     except Exception as e:

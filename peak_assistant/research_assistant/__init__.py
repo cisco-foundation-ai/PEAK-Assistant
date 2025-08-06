@@ -1,13 +1,11 @@
-
-
 from typing import Optional
 
 import traceback
 import openai
 
-from utils.assistant_auth import PEAKAssistantAuthManager
-from utils.azure_client import PEAKAssistantAzureOpenAIClient
-from utils.mcp_config import get_client_manager, setup_mcp_servers
+from peak_assistant.utils.assistant_auth import PEAKAssistantAuthManager
+from peak_assistant.utils.azure_client import PEAKAssistantAzureOpenAIClient
+from peak_assistant.utils.mcp_config import get_client_manager, setup_mcp_servers
 
 
 from autogen_agentchat.messages import TextMessage
@@ -17,6 +15,7 @@ from autogen_agentchat.teams import SelectorGroupChat
 from autogen_agentchat.ui import Console
 from autogen_agentchat.base import TaskResult
 
+
 async def researcher(
     technique: str,
     local_context: str,
@@ -25,10 +24,10 @@ async def researcher(
     mcp_server_group_external: str = "research-external",
     mcp_server_group_internal: str = "research-internal",
     user_id: Optional[str] = None,
-    msg_preprocess_callback = None,
-    msg_preprocess_kwargs = None,
-    msg_postprocess_callback = None,
-    msg_postprocess_kwargs = None
+    msg_preprocess_callback=None,
+    msg_preprocess_kwargs=None,
+    msg_postprocess_callback=None,
+    msg_postprocess_kwargs=None,
 ) -> TaskResult:
     """
     Orchestrates a multi-agent, multi-stage research workflow to generate a
@@ -344,12 +343,10 @@ async def researcher(
     # Set up MCP servers for research
     mcp_client_manager = get_client_manager()
     connected_servers_external = await setup_mcp_servers(
-        mcp_server_group_external, 
-        user_id=user_id
+        mcp_server_group_external, user_id=user_id
     )
     connected_servers_internal = await setup_mcp_servers(
-        mcp_server_group_internal, 
-        user_id=user_id
+        mcp_server_group_internal, user_id=user_id
     )
 
     # Get workbenches only from the external research server group
@@ -402,7 +399,7 @@ async def researcher(
             description="Evaluates the summary and ensures it meets the user's needs.",
             model_client=az_model_reasoning_client,
             system_message=summary_critic_system_prompt,
-        )        
+        ),
     ]
 
     if group_workbenches_internal:
@@ -442,7 +439,9 @@ async def researcher(
 
     # Preprocess the messages
     if msg_preprocess_callback:
-        messages = msg_preprocess_callback(msgs=messages, **(msg_preprocess_kwargs or {}))
+        messages = msg_preprocess_callback(
+            msgs=messages, **(msg_preprocess_kwargs or {})
+        )
 
     try:
         # Run the team asynchronously
@@ -452,8 +451,10 @@ async def researcher(
             result = await team.run(task=messages)
 
         # Postprocess the result
-        if msg_postprocess_callback: 
-            result = msg_postprocess_callback(result=result, **(msg_postprocess_kwargs or {}))
+        if msg_postprocess_callback:
+            result = msg_postprocess_callback(
+                result=result, **(msg_postprocess_kwargs or {})
+            )
 
         return result
     except (openai.RateLimitError, openai.APIError) as e:
