@@ -4,7 +4,7 @@ API routes for PEAK Assistant - AI-powered threat hunting operations
 
 import re
 import logging
-from flask import Blueprint, request, jsonify, session
+from flask import Blueprint, request, jsonify, session, g
 from autogen_agentchat.messages import TextMessage, UserMessage
 
 
@@ -42,10 +42,6 @@ from peak_assistant.utils.agent_callbacks import preprocess_messages_logging, po
 # Create API blueprint
 api_bp = Blueprint("api", __name__, url_prefix="/api")
 
-# Global variables for initial context
-INITIAL_LOCAL_CONTEXT = None
-
-
 @api_bp.route("/research", methods=["POST"])
 @async_action
 @handle_async_api_errors
@@ -56,9 +52,6 @@ async def research():
     previous_report = data.get("previous_report")
     feedback = data.get("feedback")
     verbose_mode = data.get("verbose", False)
-
-    # Get local context from session
-    local_context = get_session_value("local_context", INITIAL_LOCAL_CONTEXT)
 
     # Import the researcher function and TextMessage
 
@@ -92,7 +85,7 @@ async def research():
     # Run the researcher with user context
     result = await async_researcher(
         technique=topic,
-        local_context=local_context,
+        local_context=g.context or "",
         verbose=verbose_mode,
         previous_run=previous_run,
         user_id=user_id,
@@ -125,19 +118,16 @@ async def hypothesize():
         logger.error("No research report available - this should be the 400 cause")
         return jsonify({"success": False, "error": "No research report available"}), 400
 
-    local_context = get_session_value(
-        "local-context", ""
-    )  # Get local context from session
-    logger.info(f"local_context length: {len(local_context) if local_context else 0}")
+    logger.info(f"local_context length: {len(g.context) if g.context else 0}")
 
     
     logger.info("About to call async_hypothesizer")
-    logger.info(f"Parameters - user_input: None, research_document length: {len(report_md)}, local_context length: {len(local_context)}")
+    logger.info(f"Parameters - user_input: None, research_document length: {len(report_md)}, local_context length: {len(g.context)}")
 
     hypos = await async_hypothesizer(
-        user_input=None,  # No specific user input for auto-generation
+        user_input="",  # No specific user input for auto-generation
         research_document=report_md,  # Pass the research report as the document
-        local_context=local_context,  # Pass local context
+        local_context=g.context,  # Pass local context
     )
 
     if isinstance(hypos, str):
@@ -161,6 +151,8 @@ async def hypothesize():
 def save_hypothesis():
     """Save a hypothesis to the session without refinement"""
     data = request.json
+    if not data:
+        return jsonify({"success": False, "error": "No data provided"}), 400
     hypothesis = data.get("hypothesis")
     if not hypothesis:
         return jsonify({"success": False, "error": "No hypothesis provided"}), 400
@@ -196,10 +188,6 @@ async def refine():
             }
         ), 400
 
-    # Get local context from session
-    local_context = get_session_value("local_context", INITIAL_LOCAL_CONTEXT)
-
-
     previous_run = None
     if feedback:
         # Construct the conversation history for refinement
@@ -230,7 +218,7 @@ async def refine():
     # Explicitly pass keyword arguments to the refiner function
     result = await async_refiner(
         hypothesis=hypothesis,
-        local_context=local_context,
+        local_context=g.context or "",
         research_document=research_report,
         previous_run=previous_run,
         **callback_kwargs
@@ -422,7 +410,6 @@ async def hunt_plan():
     current_hunt_plan = data.get("current_hunt_plan")
     _retry_count = int(data.get("retry_count", 3))
     verbose_mode = data.get("verbose_mode", False)
-    local_context = get_session_value("local_context", INITIAL_LOCAL_CONTEXT)
 
     if not report_md:
         return jsonify({"success": False, "error": "No research report available"}), 400
@@ -467,7 +454,7 @@ async def hunt_plan():
         research_document=report_md,
         able_info=able_table_md,
         data_discovery=data_sources_md,
-        local_context=local_context,
+        local_context=g.context,
         verbose=verbose_mode,
         previous_run=messages,
         **callback_kwargs

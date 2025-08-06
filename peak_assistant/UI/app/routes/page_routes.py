@@ -5,7 +5,8 @@ Page rendering routes for PEAK Assistant UI
 import os
 import sys
 import logging
-from flask import Blueprint, render_template, jsonify, request, session
+from flask import Blueprint, render_template, jsonify, request, session, g
+
 from ..utils.helpers import (
     get_session_value,
     clear_all_session_data,
@@ -69,7 +70,7 @@ def help_page():
 @page_bp.route("/debug")
 def debug_page():
     """Debug information page"""
-    return render_template("debug.html")
+    return render_template("debug.html", context={"context":g.context})
 
 
 @page_bp.route("/api/debug-info", methods=["GET", "POST"])

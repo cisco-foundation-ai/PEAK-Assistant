@@ -52,5 +52,6 @@ container-local:
 container-run: container-local
 	docker run --rm -it \
 		--mount "type=bind,src=$(PWD),target=/certs" \
+		--mount "type=bind,src=$(PWD)/context.txt,target=/home/peakassistant/context.txt" \
 		-p "127.0.0.1:8000:8000" \
 		ghcr.io/splunk/peak-assistant:latest
