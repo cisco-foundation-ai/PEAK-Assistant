@@ -1,4 +1,4 @@
-from utils import find_dotenv_file
+from peak_assistant.utils import find_dotenv_file
 
 
 def test_find_dotenv_file() -> None:

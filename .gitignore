@@ -182,3 +182,7 @@ cython_debug/
 *.log 
 *.txt
 .DS_Store
+
+*.md
+# re-allow README.md to be included in the repo
+!README.md

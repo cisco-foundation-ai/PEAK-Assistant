@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Session Debug Page</h2>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">Session Data</h3>
+            </div>
+            <div class="card-body">
+                <pre id="session-data" class="bg-light p-3 rounded">Loading...</pre>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">Settings</h3>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="debug-mode-page">
+                        <label class="form-check-label" for="debug-mode-page">Verbose Mode</label>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="callback-tracing-page">
+                        <label class="form-check-label" for="callback-tracing-page">Message callback tracing</label>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="retry-count-page" class="form-label form-label-sm">API Retries:</label>
+                    <input type="number" class="form-control form-control-sm" id="retry-count-page" value="3" min="0" max="10">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h3 class="card-title">Context</h3>
+    </div>
+    <div class="card-body">
+        <pre id="context" class="bg-light p-3 rounded">{{context}}</pre>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h3 class="card-title">Environment Variables</h3>
+    </div>
+    <div class="card-body">
+        <pre id="env-vars" class="bg-light p-3 rounded">Loading...</pre>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h4>Test Saving Hypothesis</h4>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label for="test-hypo-input" class="form-label">Enter a test hypothesis:</label>
+                    <textarea id="test-hypo-input" class="form-control" rows="3">This is a test hypothesis</textarea>
+                </div>
+                <button id="test-save-btn" class="btn btn-primary">Save Hypothesis</button>
+                <div id="test-result" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h4>Actions</h4>
+            </div>
+            <div class="card-body">
+                <button id="refresh-btn" class="btn btn-secondary mb-2">Refresh Session Data</button>
+                <button id="clear-session-btn" class="btn btn-danger mb-2">Clear Session</button>
+                <hr/>
+                <a href="/research" class="btn btn-outline-primary mb-2">Go to Research</a>
+                <a href="/hypothesis" class="btn btn-outline-primary mb-2">Go to Hypothesis</a>
+                <a href="/refinement" class="btn btn-outline-primary mb-2">Go to Refinement</a>
+                <a href="/able-table" class="btn btn-outline-primary mb-2">Go to ABLE Table</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block script %}
+// Load session data and environment variables
+function loadDebugData() {
+    fetch('/api/debug-info')
+    .then(response => response.json())
+    .then(data => {
+        document.getElementById('session-data').textContent = JSON.stringify(data.session_data, null, 2);
+        document.getElementById('env-vars').textContent = JSON.stringify(data.environment, null, 2);
+        
+        // Update callback tracing checkbox from session data
+        const callbackTracingPage = document.getElementById('callback-tracing-page');
+        if (callbackTracingPage && data.callback_tracing_enabled !== undefined) {
+            callbackTracingPage.checked = data.callback_tracing_enabled;
+            // Also update localStorage to keep it in sync
+            localStorage.setItem('callbackTracing', data.callback_tracing_enabled);
+        }
+    })
+    .catch(error => {
+        document.getElementById('session-data').textContent = 'Error loading session data: ' + error.message;
+        document.getElementById('env-vars').textContent = 'Error loading environment variables: ' + error.message;
+    });
+}
+
+// Initial load
+loadDebugData();
+
+// Refresh button
+document.getElementById('refresh-btn').addEventListener('click', loadDebugData);
+
+// Test saving hypothesis
+document.getElementById('test-save-btn').addEventListener('click', function() {
+    const hypothesis = document.getElementById('test-hypo-input').value.trim();
+    const resultEl = document.getElementById('test-result');
+    
+    if (!hypothesis) {
+        resultEl.innerHTML = '<div class="alert alert-warning">Please enter a hypothesis.</div>';
+        return;
+    }
+    
+    resultEl.innerHTML = '<div class="alert alert-info">Saving hypothesis...</div>';
+    
+    fetch('/api/save-hypothesis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hypothesis: hypothesis })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            resultEl.innerHTML = '<div class="alert alert-success">Hypothesis saved successfully!</div>';
+            loadDebugData(); // Refresh session data
+        } else {
+            resultEl.innerHTML = '<div class="alert alert-danger">Error: ' + data.error + '</div>';
+        }
+    })
+    .catch(error => {
+        resultEl.innerHTML = '<div class="alert alert-danger">Error: ' + error.message + '</div>';
+    });
+});
+
+// Clear session
+document.getElementById('clear-session-btn').addEventListener('click', function() {
+    if (confirm('Are you sure you want to clear the session data?')) {
+        fetch('/api/debug-info', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                loadDebugData(); // Reload all debug data, including (now empty) session
+                document.getElementById('test-result').innerHTML = 
+                    '<div class="alert alert-success">Session cleared successfully!</div>';
+            } else {
+                document.getElementById('test-result').innerHTML = 
+                    '<div class="alert alert-danger">Error clearing session: ' + data.error + '</div>';
+            }
+        })
+        .catch(error => {
+            document.getElementById('test-result').innerHTML = 
+                '<div class="alert alert-danger">Error: ' + error.message + '</div>';
+        });
+    }
+});
+
+// Event listeners for new settings on debug.html
+document.addEventListener('DOMContentLoaded', function () {
+    const debugModePage = document.getElementById('debug-mode-page');
+    const retryCountPage = document.getElementById('retry-count-page');
+    const callbackTracingPage = document.getElementById('callback-tracing-page');
+    const debugModeSidebar = document.getElementById('debug-mode'); // Assuming this ID still exists or is managed elsewhere
+    const retryCountSidebar = document.getElementById('retry-count'); // Assuming this ID still exists or is managed elsewhere
+
+    // Function to update sidebar controls if they exist
+    function updateSidebarControls(debugState, retryValue) {
+        if (debugModeSidebar) {
+            debugModeSidebar.checked = debugState;
+        }
+        if (retryCountSidebar) {
+            retryCountSidebar.value = retryValue;
+        }
+    }
+
+    // Initialize page controls from localStorage or defaults
+    let currentDebugState = localStorage.getItem('debugMode') === 'true';
+    let currentRetryCount = localStorage.getItem('retryCount') || '3';
+    let currentCallbackTracingState = localStorage.getItem('callbackTracing') === 'true';
+
+    if (debugModePage) {
+        debugModePage.checked = currentDebugState;
+        debugModePage.addEventListener('change', function () {
+            currentDebugState = this.checked;
+            localStorage.setItem('debugMode', currentDebugState);
+            updateSidebarControls(currentDebugState, currentRetryCount);
+            // Add any fetch/API call here if settings need to be saved server-side
+        });
+    }
+
+    if (retryCountPage) {
+        retryCountPage.value = currentRetryCount;
+        retryCountPage.addEventListener('change', function () {
+            currentRetryCount = this.value;
+            localStorage.setItem('retryCount', currentRetryCount);
+            updateSidebarControls(currentDebugState, currentRetryCount);
+            // Add any fetch/API call here if settings need to be saved server-side
+        });
+    }
+
+    if (callbackTracingPage) {
+        callbackTracingPage.checked = currentCallbackTracingState;
+        callbackTracingPage.addEventListener('change', function () {
+            currentCallbackTracingState = this.checked;
+            localStorage.setItem('callbackTracing', currentCallbackTracingState);
+            // Save callback tracing state to session via API
+            fetch('/api/set-callback-tracing', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: currentCallbackTracingState })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    console.error('Failed to save callback tracing state:', data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error saving callback tracing state:', error);
+            });
+        });
+    }
+    
+    // Initial sync with sidebar if elements are present
+    // updateSidebarControls(currentDebugState, currentRetryCount);
+});
+{% endblock %}

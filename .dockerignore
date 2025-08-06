@@ -1,0 +1,14 @@
+__pycache__
+htmlcov
+instance
+LICENSE
+Makefile
+tests
+
+.env
+.envrc
+# in case you're using it locally
+*.md
+# so we can include it for the build phase
+!README.md
+*.json
