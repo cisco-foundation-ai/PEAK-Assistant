@@ -3,17 +3,16 @@ from typing import Optional
 import traceback
 import openai
 
-from peak_assistant.utils.assistant_auth import PEAKAssistantAuthManager
-from peak_assistant.utils.azure_client import PEAKAssistantAzureOpenAIClient
-from peak_assistant.utils.mcp_config import get_client_manager, setup_mcp_servers
-
-
 from autogen_agentchat.messages import TextMessage
 from autogen_agentchat.agents import AssistantAgent
 from autogen_agentchat.conditions import TextMentionTermination
 from autogen_agentchat.teams import SelectorGroupChat
 from autogen_agentchat.ui import Console
 from autogen_agentchat.base import TaskResult
+
+from ..utils.assistant_auth import PEAKAssistantAuthManager
+from ..utils.azure_client import PEAKAssistantAzureOpenAIClient
+from ..utils.mcp_config import get_client_manager, setup_mcp_servers
 
 
 async def researcher(

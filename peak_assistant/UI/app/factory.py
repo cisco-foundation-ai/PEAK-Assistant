@@ -83,10 +83,6 @@ def create_app(config_name='default'):
     app.config['SESSION_SQLALCHEMY'] = db
     session_manager.init_app(app)
     
-    # Add the parent directory to sys.path for imports
-    parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
-    if parent_dir not in sys.path:
-        sys.path.append(parent_dir)
     
     oauth_manager = init_oauth_manager(app)
     

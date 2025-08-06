@@ -5,9 +5,9 @@ from autogen_agentchat.teams import RoundRobinGroupChat
 from autogen_agentchat.ui import Console
 from autogen_agentchat.conditions import TextMentionTermination
 
-from peak_assistant.utils.assistant_auth import PEAKAssistantAuthManager
-from peak_assistant.utils.azure_client import PEAKAssistantAzureOpenAIClient
-from peak_assistant.utils.mcp_config import get_client_manager, setup_mcp_servers
+from ..utils.assistant_auth import PEAKAssistantAuthManager
+from ..utils.azure_client import PEAKAssistantAzureOpenAIClient
+from ..utils.mcp_config import get_client_manager, setup_mcp_servers
 
 
 async def identify_data_sources(

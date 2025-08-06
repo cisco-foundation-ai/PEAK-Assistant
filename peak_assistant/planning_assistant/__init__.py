@@ -1,6 +1,3 @@
-import os
-import sys
-
 from autogen_agentchat.messages import TextMessage
 from autogen_agentchat.agents import AssistantAgent
 from autogen_agentchat.teams import RoundRobinGroupChat
@@ -8,9 +5,8 @@ from autogen_agentchat.ui import Console
 from autogen_agentchat.conditions import TextMentionTermination
 from autogen_agentchat.base import TaskResult
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from peak_assistant.utils.assistant_auth import PEAKAssistantAuthManager
-from peak_assistant.utils.azure_client import PEAKAssistantAzureOpenAIClient
+from ..utils.assistant_auth import PEAKAssistantAuthManager
+from ..utils.azure_client import PEAKAssistantAzureOpenAIClient
 
 
 async def plan_hunt(
