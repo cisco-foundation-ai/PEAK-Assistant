@@ -18,7 +18,7 @@ Agent ID: {agent_id}
 Timestamp: {msg.created_at}
 Source:{msg.source}
 Content length:{len(msg.content)}
-Content:{msg.content[:50]}
+Content:{msg.content}
 -----------END TextMessage------------------------------
 """
             f.write(log_msg)
@@ -42,7 +42,7 @@ Agent ID: {agent_id}
 Timestamp: {msg.created_at}
 Source:{msg.source}
 Content length:{len(msg.content)}
-Content:{msg.content[:50]}
+Content:{msg.content}
 Model usage:{msg.models_usage}
 -----------END TaskResult------------------------------
 """
