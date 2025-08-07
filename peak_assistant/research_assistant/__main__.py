@@ -74,6 +74,12 @@ def main() -> None:
     parser.add_argument(
         "-v", "--verbose", action="store_true", help="Enable verbose output"
     )
+    parser.add_argument(
+        "-s",
+        "--skip-feedback",
+        action="store_true",
+        help="Skip user feedback and automatically accept the generated report"
+    )
     args = parser.parse_args()
 
     # Load environment variables
@@ -135,8 +141,13 @@ def main() -> None:
             print("No report generated. Please check the input and try again.")
             return
 
-        # Display the report and ask for user feedback
+        # Display the report and ask for user feedback (unless skipped)
         print(f"Report:\n{report}\n")
+        
+        if args.skip_feedback:
+            print("Skipping user feedback (--skip-feedback enabled)")
+            break
+        
         feedback = input(
             "Please provide your feedback on the report (or press Enter to approve it): "
         )
