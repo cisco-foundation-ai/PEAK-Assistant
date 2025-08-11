@@ -182,7 +182,13 @@ cython_debug/
 *.log 
 *.txt
 .DS_Store
-
 *.md
+*.json
+*.jsonl
+
+# Ignore everything in the evaluation reports directory.
+# We don't commit these to the repo anyway. 
+reports/
+
 # re-allow README.md to be included in the repo
 !README.md
