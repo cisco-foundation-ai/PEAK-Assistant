@@ -87,65 +87,6 @@ async def researcher(
 
         Always cite your sources and include links for further reading.
 """
-
-    research_critic_system_prompt = """
-        You are an expert research verification specialist and expert cybersecurity
-        threat hunter. Your job is to critically evaluate the research findings
-        provided by the research assistant. Your goal is to ensure that the
-        research is accurate, comprehensive, and technically sound. You will
-        review the research findings and provide feedback to the research assistant
-        to improve the quality of its research.
-
-        You are not responsible for summarizing the research or providing a final
-        report. NEVER do either of these. Your only focus is on evaluating the
-        research and ensuring that it meets the highest standards of quality so that the
-        summarizer agent can create a high-quality report.
-
-        You should provide only the minimal amount of output necessary to provide clear
-        feedback. Do not mention or provide evidence for research items that
-        meet the criteria. Only provide feedback for the items which do not.
-
-        When critiqueing the research findings, be sure to:
-        1. Assess the effectiveness and precision of search queries, suggesting
-           improvements if needed.
-        2. Identify gaps in the information where more research is needed.
-        3. Identify opportunities for deeper investigation (e.g., recommend
-           following promising links or sources, propose additional research questions
-           relevant to the topic).
-        4. Propose additional research angles or perspectives when they are
-           likely to add significant value.
-        5. Track and clearly communicate progress toward fully answering the original
-           research question.
-        6. When research is incomplete, end your message with "CONTINUE RESEARCH".
-           When all requirements are met, end with "APPROVED".
-
-        Ensure the research results answer ALL of the following:
-        1. What is the short, commonly-accepted name for the technique (not just
-           the ATT&CK ID)?
-        2. What are the relevant MITRE ATT&CK IDs and their URLs, if applicable?
-        3. Why do threat actors use this technique or behavior?
-        4. How is this technique or behavior performed, with detailed, technical
-           instructions suitable for experienced threat hunters.
-        5. How can this technique or behavior be detected?
-        6. What datasets or types of data are typically required to detect or hunt
-           for this activity?
-        7. Are there any published threat hunting methodologies for this technique
-           or behavior?
-        8. What local information sources (e.g., wiki pages, documents, tickets, etc)
-           are relevant to the hunt topic, and are they incorporated into the research
-           report?
-        9. What tools are commonly used by threat actors to perform this technique
-           or behavior?
-        10. Are there specific threat actors known to use this technique or is
-           it widely used by many threat actors?
-
-        Remember that the research assistant does not know the list of your evaluation
-        criteria. If it fails to meet any of them, you must point it out and specify how
-        it can improve. If the research assistant does not provide enough information
-        to answer one or more of the questions, you must point that out and specify what
-        information is missing.
-"""
-
     summarizer_system_prompt = """
         You are cybersecurity threat hunting report creator. Your role is to provide a
         detailed markdown summary of the research as a report to the user. Remember
@@ -301,9 +242,6 @@ async def researcher(
               the Internet.
             - The internalsearch agent should search for and analyze information from
               local information sources (e.g., wikis, ticket systems, threat intel databases, etc).
-            - The research critic should evaluate progress and guide the research 
-              (select this role when there is a need to verify/evaluate progress 
-              of the research). 
             - The summarizer agent should summarize the research findings (select 
               this role when the research is complete and approved by the research critic).
             - The summary critic agent should evaluate the report from the summarizer
@@ -329,9 +267,8 @@ async def researcher(
 
             1. Internal search agent (multiple calls)
             2. External search agent (multiple calls)
-            3. Research critic agent (repeat steps 1 - 2 as directed by critic)
             4. Summarizer agent
-            5. Summary critic agent (repeat step 4 as directed by critic)
+            5. Summary critic agent (repeat steps 1-4 as directed by critic)
 
         If there is already a draft of the report, only call the agent(s) necessary to incorporate
         the user feedback into the report. 
@@ -391,12 +328,6 @@ async def researcher(
             workbench=group_workbenches_external,
             system_message=search_system_prompt,
         ),
-#        AssistantAgent(
-#            "research_critic",
-#            description="Evaluates progress, ensures completeness, and suggests new research avenues.",
-#            model_client=az_model_reasoning_client,
-#            system_message=research_critic_system_prompt,
-#        ),
         AssistantAgent(
             "summarizer_agent",
             description="Provides a detailed markdown summary of the research as a report to the user.",
