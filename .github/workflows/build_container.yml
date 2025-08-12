@@ -123,6 +123,7 @@ jobs:
         working-directory: /tmp/digests
         if: ${{ github.ref != 'refs/heads/main' }}
         run: |
+          echo ${GITHUB_REPOSITORY,,} - ${{env.REGISTRY_IMAGE}}
           docker buildx imagetools create --dry-run $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
 
       - name: Inspect image
