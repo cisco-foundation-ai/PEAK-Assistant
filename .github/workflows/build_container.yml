@@ -4,8 +4,6 @@ name: "Build container"
 "on":
   workflow_dispatch:
   push:
-    # branches:
-    #   - main
   pull_request:
 permissions:
   packages: write
@@ -26,7 +24,8 @@ jobs:
           # https://docs.github.com/en/actions/using-github-hosted-runners/using-github-hosted-runners/about-github-hosted-runners#standard-github-hosted-runners-for-public-repositories
           - runner: ubuntu-latest
             platform: linux/amd64
-          - runner: ubuntu-24.04-arm
+          # TODO: enable the ARM runner when the repository is public
+          - runner: ubuntu-latest
             platform: linux/arm64
     runs-on: ${{matrix.runner}}
     steps:
@@ -50,6 +49,9 @@ jobs:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        if: ${{ matrix.platform == 'linux/arm64' }}
       - name: Build and push
         id: build
         uses: docker/build-push-action@v6
