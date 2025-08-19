@@ -910,9 +910,10 @@ class MCPClientManager:
         server_params = StdioServerParams(
             command=config.command,
             args=args_list,
-            env=env
+            env=env,
+            read_timeout_seconds=float(config.timeout)
         )
-        logger.debug(f"Created StdioServerParams with command: {config.command}, args: {args_list}, env keys: {list(env.keys()) if env else 'None'}")
+        logger.debug(f"Created StdioServerParams with command: {config.command}, args: {args_list}, read_timeout_seconds: {float(config.timeout)}, env keys: {list(env.keys()) if env else 'None'}")
         
         # Create workbench
         # Fix: Pass server_params directly, not as a list
