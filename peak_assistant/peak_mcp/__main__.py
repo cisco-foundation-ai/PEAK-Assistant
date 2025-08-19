@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 import uuid
+import os
+import argparse
 
 from dotenv import load_dotenv
 
@@ -196,7 +198,7 @@ async def researcher(technique: str, local_context: str) -> types.EmbeddedResour
         (
             getattr(message, "content")
             for message in reversed(result.messages)
-            if message.source == "summarizer" and hasattr(message, "content")
+            if message.source == "summarizer_agent" and hasattr(message, "content")
         ),
         "",
     )
@@ -213,7 +215,7 @@ async def hypothesizer(
 ) -> types.EmbeddedResource:
     """
     Return a list of threat hunting hypotheses based on the provided research document
-    and local computing environment context. Always display this as an artifact.
+    and local computing environment context.
 
     Args:
         research_document (str): The exact contents of the research report.
@@ -222,11 +224,10 @@ async def hypothesizer(
             not a summary.
 
     Returns:
-        str: A Markdown document containing the list of threat hunting hypotheses, or an error message if the process fails.
+        types.EmbeddedResource: A Markdown document containing the list of threat hunting hypotheses, or an error message if the process fails.
     """
     user_input = ""
     result = await async_hypothesizer(user_input, research_document, local_context)
-
     return embeddable_object(data=result)
 
 
@@ -249,7 +250,7 @@ async def hypothesis_refiner(
             not a summary.
 
     Returns:
-        str: A string containing the revised hypothesis.
+        types.EmbeddedResource: An embeddable resource containing the revised hypothesis.
     """
 
     result = await async_refiner(
@@ -290,7 +291,7 @@ async def able_table(
             not a summary.
 
     Returns:
-        str: A Markdown document containing the ABLE table, or an error message if the process fails.
+        types.EmbeddedResource: An embeddable resource containing the ABLE table, or an error message if the process fails.
     """
 
     result = await async_able_table(
@@ -310,12 +311,7 @@ async def data_discovery(
     hypothesis: str,
     research_document: str,
     able_info: str,
-    local_context: str,
-    mcp_command: str,
-    mcp_args: str,
-    mcp_username: str,
-    mcp_password: str,
-    mcp_splunk_url: str,
+    local_context: str
 ) -> types.EmbeddedResource:
     """
     Given the provided threat hunting hypothesis, research report, ABLE table and
@@ -329,14 +325,9 @@ async def data_discovery(
         local_context (str, optional): Additional context or constraints to guide the research
             (e.g., environment, use case). This should be the exact contents of the local context file,
             not a summary.
-        mcp_command (str): The command to use to start the local MCP server for querying Splunk.
-        mcp_args (str): The arguments to pass to the MCP server command.
-        mcp_username (str): The username to use to query the Splunk server.
-        mcp_password (str): The password to use to query the Splunk server.
-        mcp_splunk_url (str): The URL of the Splunk server.
 
     Returns:
-        str: A Markdown document containing the indices, sourctypes and key fields
+        types.EmbeddedResource: An embeddable resource containing the indices, sourctypes and key fields
              relevant to the hunt, or an error message if the process fails.
     """
     result = await async_identify_data_sources(
@@ -379,7 +370,7 @@ async def plan_hunt(
             not a summary.
 
     Returns:
-        str: A Markdown document containing the hunting plan, or an error message if the process fails.
+        types.EmbeddedResource: An embeddable resource containing the hunting plan, or an error message if the process fails.
     """
 
     result = await async_plan_hunt(
@@ -404,6 +395,19 @@ async def plan_hunt(
 
 #### MAIN ####
 def main() -> None:
+    # Optional CLI to set working directory without impacting unknown args
+    parser = argparse.ArgumentParser(description="PEAK Assistant MCP Server", add_help=True)
+    parser.add_argument("-c", "--cwd", dest="cwd", default=None, help="Set the current working directory before starting the server")
+    args, _ = parser.parse_known_args()
+
+    # If provided, set the process working directory before loading .env
+    if args.cwd:
+        try:
+            os.chdir(args.cwd)
+        except Exception as e:
+            # Non-fatal: continue with existing CWD
+            print(f"Warning: failed to set working directory to '{args.cwd}': {e}", flush=True)
+
     load_dotenv(find_dotenv_file())
     mcp.run(transport="stdio")
 
