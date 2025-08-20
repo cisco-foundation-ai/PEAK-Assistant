@@ -256,7 +256,7 @@ async def able_table():
     feedback = data.get("feedback")
     current_able_table = data.get("current_able_table")
     report_md = get_session_value("report_md", "")
-    local_context = get_session_value("local_context", INITIAL_LOCAL_CONTEXT)
+    local_context = get_session_value("local_context", g.context or "")
 
     # Construct the message history for feedback
     previous_run = []
