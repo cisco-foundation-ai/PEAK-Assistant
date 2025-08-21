@@ -25,4 +25,5 @@ USER peakassistant
 ENV PATH="/home/peakassistant/.local/bin:${PATH}"
 RUN python -m pip install . && rm -rf ${HOME}/.cache
 WORKDIR /home/peakassistant
+EXPOSE 8000/tcp
 ENTRYPOINT ["/app/docker-startup.sh"]
