@@ -41,3 +41,17 @@ coverage-html: coverage
 		coverage html; \
 	fi	
 	open htmlcov/index.html || echo "Open htmlcov/index.html in your browser to view the coverage report."
+
+.PHONY: container-local
+container-local:
+	docker buildx build -t ghcr.io/splunk/peak-assistant:latest --load .
+
+
+
+.PHONY: container-run
+container-run: container-local
+	docker run --rm -it \
+		--mount "type=bind,src=$(PWD),target=/certs" \
+		--mount "type=bind,src=$(PWD)/context.txt,target=/home/peakassistant/context.txt" \
+		-p "127.0.0.1:8000:8000" \
+		ghcr.io/splunk/peak-assistant:latest
