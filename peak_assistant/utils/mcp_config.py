@@ -1,19 +1,21 @@
 #!/usr/bin/env python3
 
+import asyncio
+import concurrent.futures
 import json
 import os
-import asyncio
+from pathlib import Path
+import weakref
+
 import httpx
 import atexit
-import weakref
-from pathlib import Path
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from enum import Enum
 import logging
 from urllib.parse import urljoin
 from dotenv import load_dotenv
-
+from flask import has_app_context, url_for
 from autogen_ext.tools.mcp import McpWorkbench, StdioServerParams
 
 logger = logging.getLogger(__name__)
@@ -96,7 +98,7 @@ class OAuth2TokenManager:
             
         # Auto-generate redirect URI from Flask app configuration
         try:
-            from flask import has_app_context, current_app, url_for
+            
             if has_app_context():
                 # Generate the full URL including domain and port
                 redirect_uri = url_for('oauth.oauth_callback', _external=True)
@@ -336,7 +338,7 @@ class OAuth2TokenManager:
 class UserSessionManager:
     """Manages user-specific OAuth tokens and sessions"""
     
-    def __init__(self):
+    def __init__(self) -> None:
         # In-memory storage for user sessions (in production, use Redis/database)
         self.user_sessions: Dict[str, Dict[str, OAuth2TokenManager]] = {}
         self.user_states: Dict[str, Dict[str, str]] = {}  # For OAuth state tracking
@@ -504,7 +506,7 @@ class MCPConfigManager:
         self.user_session_manager = UserSessionManager()
         self._servers_needing_oauth_discovery: Dict[str, str] = {}  # server_name -> server_url
         
-        logger.info(f"[INIT DEBUG] About to call _load_config()")
+        logger.info("[INIT DEBUG] About to call _load_config()")
         self._load_config()
         logger.info(f"[INIT DEBUG] _load_config() completed. Loaded {len(self.servers)} servers and {len(self.server_groups)} server groups")
         
@@ -518,8 +520,6 @@ class MCPConfigManager:
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
                     # We're in an existing event loop, use separate thread approach
-                    import concurrent.futures
-                    import threading
                     
                     def run_discovery():
                         # Create a new event loop in a separate thread
@@ -584,10 +584,10 @@ class MCPConfigManager:
         if not os.path.exists(self.config_file):
             logger.error(f"[LOAD CONFIG DEBUG] MCP config file not found: {self.config_file}")
             logger.error(f"[LOAD CONFIG DEBUG] Current working directory: {os.getcwd()}")
-            logger.error(f"[LOAD CONFIG DEBUG] File existence check failed - configuration loading aborted")
+            logger.error("[LOAD CONFIG DEBUG] File existence check failed - configuration loading aborted")
             return
         
-        logger.info(f"[LOAD CONFIG DEBUG] Config file exists, attempting to read and parse JSON")
+        logger.info("[LOAD CONFIG DEBUG] Config file exists, attempting to read and parse JSON")
         try:
             with open(self.config_file, 'r') as f:
                 config_data = json.load(f)
@@ -671,7 +671,7 @@ class MCPConfigManager:
                     pass
             
             # Load server groups
-            logger.info(f"[CONFIG DEBUG] Loading server groups from config...")
+            logger.info("[CONFIG DEBUG] Loading server groups from config...")
             self.server_groups = config_data.get("serverGroups", {})
             logger.info(f"[CONFIG DEBUG] Loaded server groups: {list(self.server_groups.keys())}")
             logger.info(f"[CONFIG DEBUG] Research group contents: {self.server_groups.get('research', 'NOT FOUND')}")
@@ -961,17 +961,17 @@ class MCPClientManager:
             if config.auth.type == AuthType.BEARER:
                 if not config.auth.token:
                     logger.error(f"No token specified for bearer auth on {config.name}")
-                    return False
+                    return {}
                 headers["Authorization"] = f"Bearer {config.auth.token}"
             elif config.auth.type == AuthType.API_KEY:
                 if not config.auth.api_key or not config.auth.header_name:
                     logger.error(f"API key or header name not specified for {config.name}")
-                    return False
+                    return {}
                 headers[config.auth.header_name] = config.auth.api_key
             elif config.auth.type in [AuthType.OAUTH2_CLIENT_CREDENTIALS, AuthType.OAUTH2_AUTHORIZATION_CODE]:
                 if not user_id and config.auth.requires_user_auth:
                     logger.error(f"User ID is required for user-based OAuth on {config.name}")
-                    return False
+                    return {}
                 
                 # Use authlib OAuth manager for OAuth token handling
                 try:
@@ -984,11 +984,11 @@ class MCPClientManager:
                         headers.update(oauth_headers)
                     else:
                         logger.error(f"No valid OAuth token available for {config.name}")
-                        return False
+                        return {}
                         
                 except Exception as e:
                     logger.error(f"Failed to get OAuth headers for {config.name}: {e}")
-                    return False
+                    return {}
         
         return headers
     
@@ -1002,7 +1002,7 @@ class MCPClientManager:
 
         logger.info(f"[SSE DEBUG] Getting auth headers for {server_name}")
         headers = await self._get_auth_headers(config, user_id)
-        if headers is False:
+        if not headers:
             logger.error(f"[SSE DEBUG] Failed to get auth headers for {server_name}")
             return False
         
