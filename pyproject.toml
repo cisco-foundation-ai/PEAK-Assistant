@@ -36,6 +36,7 @@ dev = [
     "types-requests>=2.32.4.20250611",
     "coverage>=7.10.1",
     "types-authlib>=1.6.0.20250711",
+    "anthropic>=0.64.0",
 ]
 
 
