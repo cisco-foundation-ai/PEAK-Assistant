@@ -761,7 +761,7 @@ class MCPConfigManager:
                 logger.info(f"Auto-generated redirect URI for {server_name}: {redirect_uri}")
             except Exception:
                 # Fallback if Flask context not available
-                redirect_uri = f"http://localhost:5000/oauth/callback"
+                redirect_uri = "http://localhost:8000/oauth/callback"
                 logger.info(f"Using fallback redirect URI for {server_name}: {redirect_uri}")
         
         # Build registration payload with proper handling of None values
@@ -789,7 +789,7 @@ class MCPConfigManager:
 
                 
                 logger.info(f"Successfully registered client for {server_name}. Client ID: {config.auth.client_id}")
-                logger.info(f"Dynamic credentials stored in memory only - configuration file remains unchanged")
+                logger.info("Dynamic credentials stored in memory only - configuration file remains unchanged")
                 
                 # NOTE: We deliberately do NOT save to config file to keep it read-only
                 # Dynamic credentials are stored in memory only for this session
