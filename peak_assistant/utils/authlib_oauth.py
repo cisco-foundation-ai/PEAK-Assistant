@@ -236,7 +236,7 @@ class AuthlibOAuthManager:
         if "oauth_tokens" in session:
             del session["oauth_tokens"]
             session.modified = True
-            logger.info(f"[TOKEN DEBUG] Cleared all OAuth tokens from session.")
+            logger.info("[TOKEN DEBUG] Cleared all OAuth tokens from session.")
 
     def get_servers_needing_auth(self, user_id: Optional[str] = None) -> list:
         """Get list of servers that need authentication for a user"""
