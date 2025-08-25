@@ -203,7 +203,7 @@ def main() -> int:
                 print(f"[{idx}/{total}] Attempt {attempt} STDERR:\n{stderr_text}")
             sys.stdout.flush()
 
-            if ok:
+            if ok and saved is not None:
                 # Resolve saved path
                 p = Path(saved)
                 if not p.is_absolute():

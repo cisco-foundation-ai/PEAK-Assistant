@@ -78,7 +78,7 @@ def create_app(config_name="default", context_path: str = "./context.txt"):
     app.config["SESSION_SQLALCHEMY"] = db
     session_manager.init_app(app)
 
-    oauth_manager = init_oauth_manager(app)
+    oauth_manager = init_oauth_manager(app) # noqa: F841
 
     # Suppress asyncio event loop closure warnings from background HTTP cleanup
     logging.getLogger("httpx").setLevel(logging.ERROR)
