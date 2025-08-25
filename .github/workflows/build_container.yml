@@ -36,6 +36,10 @@ jobs:
           echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
       - name: Checkout
         uses: actions/checkout@v4
+      - name: lowercase repo name
+        run: |
+          echo "REPO=${GITHUB_REPOSITORY,,}" >>${GITHUB_ENV}
+          echo "REGISTRY_IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >>${GITHUB_ENV}
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v5
@@ -50,10 +54,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: lowercase repo name
-        run: |
-          echo "REPO=${GITHUB_REPOSITORY,,}" >>${GITHUB_ENV}
-          echo "REGISTRY_IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >>${GITHUB_ENV}
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
         if: ${{ matrix.platform == 'linux/arm64' }}
