@@ -44,8 +44,7 @@ coverage-html: coverage
 
 .PHONY: container-local
 container-local:
-	docker buildx build -t ghcr.io/splunk/peak-assistant:latest --load .
-
+	docker buildx build -t ghcr.io/splunk/peak-assistant:$(shell git branch --show-current) --load .
 
 
 .PHONY: container-run
@@ -54,4 +53,4 @@ container-run: container-local
 		--mount "type=bind,src=$(PWD),target=/certs" \
 		--mount "type=bind,src=$(PWD)/context.txt,target=/home/peakassistant/context.txt" \
 		-p "127.0.0.1:8000:8000" \
-		ghcr.io/splunk/peak-assistant:latest
+		ghcr.io/splunk/peak-assistant:$(shell git branch --show-current)
