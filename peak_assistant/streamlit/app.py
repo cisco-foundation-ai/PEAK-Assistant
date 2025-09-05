@@ -65,18 +65,20 @@ def peak_assistant_chat(
         }
 
     # The chat input is placed outside the columns to be full-width at the bottom.
-    if prompt := st.chat_input(input_default, **chat_extra_args):
-        if prompt.files:
-            st.session_state[document_key] += prompt.files[0].read().decode("utf-8")
+    if prompt := st.chat_input(input_default, key=doc_title, **chat_extra_args):
+        if allow_upload:
+            if prompt.files:
+                st.session_state[document_key] += prompt.files[0].read().decode("utf-8")
+            prompt = prompt.text 
 
         # Append user message to chat history and document.
-        st.session_state[chat_messages_key].append({"role": "user", "content": prompt.text})
+        st.session_state[chat_messages_key].append({"role": "user", "content": prompt})
 
         # TODO: Update the markdown document
 
         # TODO: Update this stub with output from the LLM.
         # Generate and append assistant response to chat history.
-        response = f"Echo: {prompt.text}"
+        response = f"Echo: {prompt}"
         st.session_state[chat_messages_key].append({"role": "assistant", "content": response})
 
         # Rerun to display the updated content.
@@ -93,7 +95,16 @@ st.set_page_config(layout="wide")
 
 st.sidebar.image("images/peak-logo-dark.png", width="stretch")
 
-research_tab, hypothesis_tab = st.tabs(["Research", "Hypothesis Generation"])
+research_tab, hypothesis_generation_tab, hypothesis_refinement_tab, able_tab, data_discovery_tab, hunt_plan_tab = st.tabs(
+    [
+        "Research", 
+        "Hypothesis Generation",
+        "Hypothesis Refinement",
+        "ABLE Table",
+        "Data Discovery",
+        "Hunt Plan"
+    ]
+)
 
 with research_tab:
     peak_assistant_chat(
@@ -104,11 +115,43 @@ with research_tab:
         allow_upload=True
     )
 
-with hypothesis_tab:
+# TODO: Implement something here.
+with hypothesis_generation_tab:
+    st.title("Hypothesis Generation")
+    st.markdown("The hypothesis generation assistant will help you generate a hypothesis for your hunt topic.")
+    
+
+with hypothesis_refinement_tab:
     peak_assistant_chat(
         title="Hypothesis Refinement",
         page_description="This is a hypothesis refinement assistant. Given an existing hypothesis, it will help you make it more specific and testable.",
         doc_title="Refined Hypothesis",
         input_default="Feedback",
     )
-    
+
+with able_tab:
+    peak_assistant_chat(
+        title="ABLE Table",
+        page_description="The ABLE table assistant will help you create an ABLE table for your hunt topic.",
+        doc_title="ABLE Table",
+        input_default="What would you like to hunt for?", 
+        allow_upload=True
+    )
+
+with data_discovery_tab:
+    peak_assistant_chat(
+        title="Data Discovery",
+        page_description="The data discovery assistant will help you identify potential data sources for your hunt topic.",
+        doc_title="Data Sources",
+        input_default="What would you like to hunt for?", 
+        allow_upload=True
+    )   
+
+with hunt_plan_tab:
+    peak_assistant_chat(
+        title="Hunt Plan",
+        page_description="The hunt plan assistant will help you create a hunt plan for your hunt topic.",
+        doc_title="Hunt Plan",
+        input_default="What would you like to hunt for?", 
+        allow_upload=True
+    )
