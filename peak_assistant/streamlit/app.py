@@ -2,7 +2,7 @@ import os
 import asyncio 
 import streamlit as st 
 from dotenv import load_dotenv
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Callable
 
 from autogen_agentchat.messages import TextMessage
 
@@ -19,7 +19,8 @@ def peak_assistant_chat(
     page_description: str = None,
     doc_title: str = None,
     input_default: str = "",
-    allow_upload: bool = False
+    allow_upload: bool = False,
+    agent_runner: Callable = None,
 ):
     """
     Creates a two-column UI with a chat history and a document editor.
@@ -31,6 +32,8 @@ def peak_assistant_chat(
         raise ValueError("peak_assistant_chat: Title is required for a unique session state.")
     if not doc_title:
         raise ValueError("peak_assistant_chat: Document title is required for a unique session state.")
+    if not agent_runner:
+        raise ValueError("peak_assistant_chat: Agent runner is required.")
 
     # Keys for the separate session state variables for chat and document.
     document_key = f"{doc_title}_document"
@@ -56,9 +59,6 @@ def peak_assistant_chat(
                 use_container_width=True
             )
 
-    # Create a placeholder for the spinner
-    spinner_placeholder = st.empty()
-
     # Create two columns for the main content.
     chat_col, doc_col = st.columns([1,3])
 
@@ -68,6 +68,9 @@ def peak_assistant_chat(
             for message in st.session_state[chat_messages_key]:
                 with st.chat_message(message["role"]):
                     st.markdown(message["content"])
+
+            # Create a placeholder for the spinner
+            spinner_placeholder = st.empty()
 
     with doc_col:
         # Use a container with a fixed height to make the content scrollable.
@@ -83,8 +86,8 @@ def peak_assistant_chat(
 
     # The chat input is placed outside the columns to be full-width at the bottom.
     if prompt := st.chat_input(input_default, key=doc_title, **chat_extra_args):
-        # This needs to be async so we can call the researcher
-        async def do_research(placeholder):
+        # This needs to be async so we can call the agent
+        async def do_agent(placeholder):
             if allow_upload:
                 # The 'prompt' from st.chat_input with files is an object
                 text_prompt = prompt.text
@@ -96,11 +99,11 @@ def peak_assistant_chat(
 
             # Append user message to chat history
             st.session_state[chat_messages_key].append({"role": "user", "content": text_prompt})
-
+            
             # Show the spinner in the placeholder
             with placeholder.container():
-                with st.spinner("Researching..."):
-                    await run_researcher()
+                with st.spinner("Please wait...", show_time=True):
+                    await agent_runner()
 
             # Clear the spinner and update the UI
             placeholder.empty()
@@ -113,7 +116,7 @@ def peak_assistant_chat(
             st.rerun()
 
         # Run the async function.
-        asyncio.run(do_research(spinner_placeholder))
+        asyncio.run(do_agent(spinner_placeholder))
 
 def convert_chat_history_to_text_messages(chat_history: List[Dict[str, Any]]) -> List[TextMessage]:
     """Converts a Streamlit chat history (list of dicts) to a list of TextMessage objects."""
@@ -199,7 +202,8 @@ with research_tab:
         page_description="The topic research assistant will search internal and Internet sources and compile a research report for your hunt topic.",
         doc_title="Research",
         input_default="What would you like to hunt for?", 
-        allow_upload=True
+        allow_upload=True,
+        agent_runner=run_researcher
     )
 
 # TODO: Implement something here.
@@ -208,40 +212,40 @@ with hypothesis_generation_tab:
     st.markdown("The hypothesis generation assistant will help you generate a hypothesis for your hunt topic.")
     
 
-with hypothesis_refinement_tab:
-    peak_assistant_chat(
-        title="Hypothesis Refinement",
-        page_description="This is a hypothesis refinement assistant. Given an existing hypothesis, it will help you make it more specific and testable.",
-        doc_title="Refined Hypothesis",
-        input_default="Feedback",
-    )
+#with hypothesis_refinement_tab:
+#    peak_assistant_chat(
+#        title="Hypothesis Refinement",
+#        page_description="This is a hypothesis refinement assistant. Given an existing hypothesis, it will help you make it more specific and testable.",
+#        doc_title="Refined Hypothesis",
+#        input_default="Feedback",
+#    )
 
-with able_tab:
-    peak_assistant_chat(
-        title="ABLE Table",
-        page_description="The ABLE table assistant will help you create an ABLE table for your hunt topic.",
-        doc_title="ABLE Table",
-        input_default="What would you like to hunt for?", 
-        allow_upload=True
-    )
+#with able_tab:
+#    peak_assistant_chat(
+#        title="ABLE Table",
+#        page_description="The ABLE table assistant will help you create an ABLE table for your hunt topic.",
+#        doc_title="ABLE Table",
+#        input_default="What would you like to hunt for?", 
+#        allow_upload=True
+#    )
 
-with data_discovery_tab:
-    peak_assistant_chat(
-        title="Data Discovery",
-        page_description="The data discovery assistant will help you identify potential data sources for your hunt topic.",
-        doc_title="Data Sources",
-        input_default="What would you like to hunt for?", 
-        allow_upload=True
-    )   
+#with data_discovery_tab:
+#    peak_assistant_chat(
+#        title="Data Discovery",
+#        page_description="The data discovery assistant will help you identify potential data sources for your hunt topic.",
+#        doc_title="Data Sources",
+#        input_default="What would you like to hunt for?", 
+#        allow_upload=True
+#    )   
 
-with hunt_plan_tab:
-    peak_assistant_chat(
-        title="Hunt Plan",
-        page_description="The hunt plan assistant will help you create a hunt plan for your hunt topic.",
-        doc_title="Hunt Plan",
-        input_default="What would you like to hunt for?", 
-        allow_upload=True
-    )
+#with hunt_plan_tab:
+#    peak_assistant_chat(
+#        title="Hunt Plan",
+#        page_description="The hunt plan assistant will help you create a hunt plan for your hunt topic.",
+#        doc_title="Hunt Plan",
+#        input_default="What would you like to hunt for?", 
+#        allow_upload=True
+#    )
 
 with debug_tab:
     with st.expander("Environment Variables"):
