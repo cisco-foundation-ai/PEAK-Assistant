@@ -3,8 +3,8 @@ import asyncio
 import streamlit as st 
 from dotenv import load_dotenv
 from typing import List, Dict, Any, Callable
-
-from autogen_agentchat.messages import TextMessage
+from datetime import datetime as dt
+from autogen_agentchat.messages import BaseChatMessage, TextMessage
 
 from peak_assistant.utils import find_dotenv_file
 from peak_assistant.utils.agent_callbacks import (
@@ -18,7 +18,7 @@ def peak_assistant_chat(
     title: str = None,
     page_description: str = None,
     doc_title: str = None,
-    input_default: str = "",
+    default_prompt: str = "",
     allow_upload: bool = False,
     agent_runner: Callable = None,
 ):
@@ -41,9 +41,14 @@ def peak_assistant_chat(
 
     # Initialize the document and chat history in session state.
     if document_key not in st.session_state:
-        st.session_state[document_key] = ("")
+        st.session_state[document_key] = ""
     if chat_messages_key not in st.session_state:
-        st.session_state[chat_messages_key] = list()
+        st.session_state[chat_messages_key] = [
+            dict(
+                role="assistant", 
+                content=default_prompt
+            )
+        ]
 
     st.title(title)
     if page_description:
@@ -85,7 +90,7 @@ def peak_assistant_chat(
         }
 
     # The chat input is placed outside the columns to be full-width at the bottom.
-    if prompt := st.chat_input(input_default, key=doc_title, **chat_extra_args):
+    if prompt := st.chat_input("", key=doc_title, **chat_extra_args):
         # This needs to be async so we can call the agent
         async def do_agent(placeholder):
             if allow_upload:
@@ -99,7 +104,10 @@ def peak_assistant_chat(
 
             # Append user message to chat history
             st.session_state[chat_messages_key].append({"role": "user", "content": text_prompt})
-            
+
+            # Record the start time
+            start_time = dt.now()
+
             # Show the spinner in the placeholder
             with placeholder.container():
                 with st.spinner("Please wait...", show_time=True):
@@ -108,8 +116,13 @@ def peak_assistant_chat(
             # Clear the spinner and update the UI
             placeholder.empty()
 
-            # TODO: Update this stub with output from the LLM.
-            response = f"Echo: {text_prompt}"
+            # Record the end time
+            end_time = dt.now()
+
+            # Calculate the elapsed time
+            elapsed_time = end_time - start_time
+
+            response = f"Completed in {elapsed_time.seconds // 60 % 60}m {elapsed_time.seconds % 60}s."
             st.session_state[chat_messages_key].append({"role": "assistant", "content": response})
 
             # Rerun to display the updated content.
@@ -125,7 +138,7 @@ def convert_chat_history_to_text_messages(chat_history: List[Dict[str, Any]]) ->
         for msg in chat_history
     ]
 
-async def run_researcher(debug_agents: bool = False):
+async def run_researcher(debug_agents: bool = True):
 
     debug_agents_opts = dict()
     if debug_agents:
@@ -136,17 +149,23 @@ async def run_researcher(debug_agents: bool = False):
             "msg_postprocess_kwargs": {"agent_id": "researcher"},
         }
 
-    # Convert the chat history to the format expected by the researcher
-    previous_run_messages = convert_chat_history_to_text_messages(
+
+    previous_messages = convert_chat_history_to_text_messages(
         st.session_state["Research_messages"]
     )
+
+    previous_messages.insert(-1, TextMessage(
+        content=f"The current report draft is: {st.session_state['Research_document']}\n", source="user"
+    ))
 
     result = await researcher(
         technique=st.session_state["Research_messages"][0]["content"],
         local_context=st.session_state["local_context"],
-        previous_run=previous_run_messages,
+        previous_run=previous_messages,
         **debug_agents_opts
     )
+
+    st.session_state["Research_previous_messages"] = result.messages
 
     # Find the final message from the "summarizer_agent" using next() and a generator expression
     report = next(
@@ -201,7 +220,7 @@ with research_tab:
         title="Topic Research", 
         page_description="The topic research assistant will search internal and Internet sources and compile a research report for your hunt topic.",
         doc_title="Research",
-        input_default="What would you like to hunt for?", 
+        default_prompt="What would you like to hunt for?", 
         allow_upload=True,
         agent_runner=run_researcher
     )
@@ -217,7 +236,7 @@ with hypothesis_generation_tab:
 #        title="Hypothesis Refinement",
 #        page_description="This is a hypothesis refinement assistant. Given an existing hypothesis, it will help you make it more specific and testable.",
 #        doc_title="Refined Hypothesis",
-#        input_default="Feedback",
+#        default_prompt="Feedback",
 #    )
 
 #with able_tab:
@@ -225,7 +244,7 @@ with hypothesis_generation_tab:
 #        title="ABLE Table",
 #        page_description="The ABLE table assistant will help you create an ABLE table for your hunt topic.",
 #        doc_title="ABLE Table",
-#        input_default="What would you like to hunt for?", 
+#        default_prompt="What would you like to hunt for?", 
 #        allow_upload=True
 #    )
 
@@ -234,7 +253,7 @@ with hypothesis_generation_tab:
 #        title="Data Discovery",
 #        page_description="The data discovery assistant will help you identify potential data sources for your hunt topic.",
 #        doc_title="Data Sources",
-#        input_default="What would you like to hunt for?", 
+#        default_prompt="What would you like to hunt for?", 
 #        allow_upload=True
 #    )   
 
@@ -243,7 +262,7 @@ with hypothesis_generation_tab:
 #        title="Hunt Plan",
 #        page_description="The hunt plan assistant will help you create a hunt plan for your hunt topic.",
 #        doc_title="Hunt Plan",
-#        input_default="What would you like to hunt for?", 
+#        default_prompt="What would you like to hunt for?", 
 #        allow_upload=True
 #    )
 
