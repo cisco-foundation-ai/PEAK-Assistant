@@ -1,4 +1,18 @@
+import os
+import asyncio 
 import streamlit as st 
+from dotenv import load_dotenv
+from typing import List, Dict, Any
+
+from autogen_agentchat.messages import TextMessage
+
+from peak_assistant.utils import find_dotenv_file
+from peak_assistant.utils.agent_callbacks import (
+    preprocess_messages_logging,
+    postprocess_messages_logging,
+)
+
+from peak_assistant.research_assistant import researcher
 
 def peak_assistant_chat(
     title: str = None,
@@ -42,6 +56,9 @@ def peak_assistant_chat(
                 use_container_width=True
             )
 
+    # Create a placeholder for the spinner
+    spinner_placeholder = st.empty()
+
     # Create two columns for the main content.
     chat_col, doc_col = st.columns([1,3])
 
@@ -66,43 +83,113 @@ def peak_assistant_chat(
 
     # The chat input is placed outside the columns to be full-width at the bottom.
     if prompt := st.chat_input(input_default, key=doc_title, **chat_extra_args):
-        if allow_upload:
-            if prompt.files:
-                st.session_state[document_key] += prompt.files[0].read().decode("utf-8")
-            prompt = prompt.text 
+        # This needs to be async so we can call the researcher
+        async def do_research(placeholder):
+            if allow_upload:
+                # The 'prompt' from st.chat_input with files is an object
+                text_prompt = prompt.text
+                if prompt.files:
+                    st.session_state[document_key] += prompt.files[0].read().decode("utf-8")
+            else:
+                # The 'prompt' is just a string
+                text_prompt = prompt
 
-        # Append user message to chat history and document.
-        st.session_state[chat_messages_key].append({"role": "user", "content": prompt})
+            # Append user message to chat history
+            st.session_state[chat_messages_key].append({"role": "user", "content": text_prompt})
 
-        # TODO: Update the markdown document
+            # Show the spinner in the placeholder
+            with placeholder.container():
+                with st.spinner("Researching..."):
+                    await run_researcher()
 
-        # TODO: Update this stub with output from the LLM.
-        # Generate and append assistant response to chat history.
-        response = f"Echo: {prompt}"
-        st.session_state[chat_messages_key].append({"role": "assistant", "content": response})
+            # Clear the spinner and update the UI
+            placeholder.empty()
 
-        # Rerun to display the updated content.
-        st.rerun()
+            # TODO: Update this stub with output from the LLM.
+            response = f"Echo: {text_prompt}"
+            st.session_state[chat_messages_key].append({"role": "assistant", "content": response})
 
-def display_screen(title: str = "Untitled", input_default: str = "Untitled"):
-    st.header(title)
-    text_input = st.text_input(input_default)
-    st.write("You entered:", text_input)
+            # Rerun to display the updated content.
+            st.rerun()
 
+        # Run the async function.
+        asyncio.run(do_research(spinner_placeholder))
+
+def convert_chat_history_to_text_messages(chat_history: List[Dict[str, Any]]) -> List[TextMessage]:
+    """Converts a Streamlit chat history (list of dicts) to a list of TextMessage objects."""
+    return [
+        TextMessage(content=msg["content"], source=msg["role"])
+        for msg in chat_history
+    ]
+
+async def run_researcher(debug_agents: bool = False):
+
+    debug_agents_opts = dict()
+    if debug_agents:
+        debug_agents_opts = {
+            "msg_preprocess_callback": preprocess_messages_logging,
+            "msg_preprocess_kwargs": {"agent_id": "researcher"},
+            "msg_postprocess_callback": postprocess_messages_logging,
+            "msg_postprocess_kwargs": {"agent_id": "researcher"},
+        }
+
+    # Convert the chat history to the format expected by the researcher
+    previous_run_messages = convert_chat_history_to_text_messages(
+        st.session_state["Research_messages"]
+    )
+
+    result = await researcher(
+        technique=st.session_state["Research_messages"][0]["content"],
+        local_context=st.session_state["local_context"],
+        previous_run=previous_run_messages,
+        **debug_agents_opts
+    )
+
+    # Find the final message from the "summarizer_agent" using next() and a generator expression
+    report = next(
+        (
+            getattr(message, "content", None)
+            for message in reversed(result.messages)
+            if message.source == "summarizer_agent" and hasattr(message, "content")
+        ),
+        "no report generated",  # Default value if no "summarizer_agent" message is found
+    )
+
+    st.session_state["Research_document"] = report 
+
+    return True
+
+#############################
+## MAIN
+#############################
+
+# Load our environment variables
+dotenv_path = find_dotenv_file()
+if dotenv_path:
+    load_dotenv(dotenv_path)
+else:
+    raise FileNotFoundError("No .env file found in current or parent directories")
+
+# Find and load our local context file (used for the agents)
+with open("context.txt", "r", encoding="utf-8") as file:
+    local_context = file.read()
+
+st.session_state["local_context"] = local_context
 
 # Use the full page instead of a narrow central column
 st.set_page_config(layout="wide")
 
 st.sidebar.image("images/peak-logo-dark.png", width="stretch")
 
-research_tab, hypothesis_generation_tab, hypothesis_refinement_tab, able_tab, data_discovery_tab, hunt_plan_tab = st.tabs(
+research_tab, hypothesis_generation_tab, hypothesis_refinement_tab, able_tab, data_discovery_tab, hunt_plan_tab, debug_tab = st.tabs(
     [
         "Research", 
         "Hypothesis Generation",
         "Hypothesis Refinement",
         "ABLE Table",
         "Data Discovery",
-        "Hunt Plan"
+        "Hunt Plan",
+        "Debug"
     ]
 )
 
@@ -155,3 +242,11 @@ with hunt_plan_tab:
         input_default="What would you like to hunt for?", 
         allow_upload=True
     )
+
+with debug_tab:
+    with st.expander("Environment Variables"):
+        st.write(os.environ)
+    with st.expander("Session State"):
+        st.write(st.session_state)
+    with st.expander("Local Context"):
+        st.markdown(local_context)
