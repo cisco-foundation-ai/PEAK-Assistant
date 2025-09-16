@@ -118,3 +118,53 @@ async def run_hypothesis_refiner(debug_agents: bool = True):
     st.session_state["Hypothesis"] = refined_hypothesis
     
     return True
+
+async def run_able_table(debug_agents: bool = True):
+
+    debug_agents_opts = dict()
+    if debug_agents:
+        debug_agents_opts = {
+            "msg_preprocess_callback": preprocess_messages_logging,
+            "msg_preprocess_kwargs": {"agent_id": "researcher"},
+            "msg_postprocess_callback": postprocess_messages_logging,
+            "msg_postprocess_kwargs": {"agent_id": "researcher"},
+        }
+
+
+    previous_messages = convert_chat_history_to_text_messages(
+        st.session_state["Refinement_messages"]
+    )
+
+    previous_messages.insert(-1, TextMessage(
+        content=f"The current hypothesis is: {st.session_state['Refinement_document']}\n", source="user"
+    ))
+
+    result = await refiner(
+        hypothesis=st.session_state["Refinement_document"],
+        local_context=st.session_state["local_context"],
+        research_document=st.session_state["Research_document"],
+        previous_run=previous_messages,
+        **debug_agents_opts
+    )
+
+    st.session_state["Refinement_previous_messages"] = result.messages
+
+    # Find the final message from the "critic" agent using next() and a generator expression
+    refined_hypothesis_message = next(
+        (
+            getattr(message, "content", None)
+            for message in reversed(result.messages)
+            if message.source == "critic" and hasattr(message, "content")
+        ),
+        "Could not refine hypothesis. Something went wrong.",  # Default value if no "critic" message is found
+    )
+    
+    # Remove the trailing "YYY-HYPOTHESIS-ACCEPTED-YYY" string if present
+    refined_hypothesis = refined_hypothesis_message.replace("YYY-HYPOTHESIS-ACCEPTED-YYY", "").strip()
+
+    st.session_state["Refinement_document"] = refined_hypothesis
+    
+    # Also update the main Hypothesis state with the refined version
+    st.session_state["Hypothesis"] = refined_hypothesis
+    
+    return True    

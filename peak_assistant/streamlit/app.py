@@ -5,7 +5,7 @@ import streamlit as st
 
 from peak_assistant.utils import find_dotenv_file
 from peak_assistant.streamlit.util.ui import peak_assistant_chat, peak_assistant_hypothesis_list
-from peak_assistant.streamlit.util.runners import run_researcher, run_hypothesis_generator, run_hypothesis_refiner
+from peak_assistant.streamlit.util.runners import run_researcher, run_hypothesis_generator, run_hypothesis_refiner, run_able_table
 #############################
 ## MAIN
 #############################
@@ -92,14 +92,21 @@ with hypothesis_refinement_tab:
             agent_runner=run_hypothesis_refiner
         )
 
-#with able_tab:
-#    peak_assistant_chat(
-#        title="ABLE Table",
-#        page_description="The ABLE table assistant will help you create an ABLE table for your hunt topic.",
-#        doc_title="ABLE Table",
-#        default_prompt="What would you like to hunt for?", 
-#        allow_upload=True
-#    )
+with able_tab:
+    if (
+        (("Refinement_document" not in st.session_state) or not st.session_state["Refinement_document"]) or
+        ((("Hypothesis") not in st.session_state) or not st.session_state["Hypothesis"])
+    ):
+        st.warning("Please run the Hypothesis Generation or Hypothesis Refinement tab first.")
+    else:
+        peak_assistant_chat(
+            title="ABLE Table",
+            page_description="The ABLE table assistant will help you create an Actor/Behavior/Location/Evidence (ABLE table to scope your hunt.",
+            doc_title="ABLE",
+            default_prompt="Let's create that ABLE table!", 
+            allow_upload=False,
+            agent_runner=run_able_table
+        )
 
 #with data_discovery_tab:
 #    peak_assistant_chat(
