@@ -5,7 +5,7 @@ import streamlit as st
 
 from peak_assistant.utils import find_dotenv_file
 from peak_assistant.streamlit.util.ui import peak_assistant_chat, peak_assistant_hypothesis_list
-from peak_assistant.streamlit.util.runners import run_researcher, run_hypothesis_generator, run_hypothesis_refiner, run_able_table
+from peak_assistant.streamlit.util.runners import run_researcher, run_hypothesis_generator, run_hypothesis_refiner, run_able_table, run_data_discovery
 from peak_assistant.streamlit.util.hypothesis_helpers import get_current_hypothesis
 #############################
 ## MAIN
@@ -119,14 +119,34 @@ with able_tab:
             run_button_label="Create ABLE Table"
         )
 
-#with data_discovery_tab:
-#    peak_assistant_chat(
-#        title="Data Discovery",
-#        page_description="The data discovery assistant will help you identify potential data sources for your hunt topic.",
-#        doc_title="Data Sources",
-#        default_prompt="What would you like to hunt for?", 
-#        allow_upload=True
-#    )   
+with data_discovery_tab:
+    current_hypothesis = get_current_hypothesis()
+    
+    if "ABLE_document" not in st.session_state or not st.session_state["ABLE_document"]:
+        st.warning("Please generate an ABLE table first.")
+    else:
+        # Track hypothesis changes for this tab
+        if "last_hypothesis_for_data_discovery" not in st.session_state:
+            st.session_state["last_hypothesis_for_data_discovery"] = None
+        
+        # Reset if hypothesis changed
+        if st.session_state["last_hypothesis_for_data_discovery"] != current_hypothesis:
+            st.session_state["last_hypothesis_for_data_discovery"] = current_hypothesis
+            # Clear the data sources document to show run button
+            if "Data Sources_document" in st.session_state:
+                del st.session_state["Data Sources_document"]
+            if "Data Sources_messages" in st.session_state:
+                del st.session_state["Data Sources_messages"]
+        
+        peak_assistant_chat(
+            title="Data Discovery",
+            page_description="The data discovery assistant will help you identify potential data sources for your hunt topic.",
+            doc_title="Discovery",
+            default_prompt=f"Identify data sources for: :green[{current_hypothesis}]",
+            allow_upload=True,
+            agent_runner=run_data_discovery,
+            run_button_label="Identify Data Sources"
+        )   
 
 #with hunt_plan_tab:
 #    peak_assistant_chat(

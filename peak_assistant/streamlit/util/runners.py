@@ -11,6 +11,7 @@ from peak_assistant.research_assistant import researcher
 from peak_assistant.hypothesis_assistant.hypothesis_assistant_cli import hypothesizer
 from peak_assistant.hypothesis_assistant.hypothesis_refiner_cli import refiner
 from peak_assistant.able_assistant import able_table
+from peak_assistant.data_assistant import identify_data_sources
 
 from .helpers import convert_chat_history_to_text_messages, convert_chat_history_to_user_messages
 from .hypothesis_helpers import get_current_hypothesis
@@ -145,5 +146,68 @@ async def run_able_table(debug_agents: bool = False):
     )
 
     st.session_state["ABLE_document"] = able
+    
+    return True
+
+async def run_data_discovery(debug_agents: bool = False):
+
+    debug_agents_opts = dict()
+    if debug_agents:
+        debug_agents_opts = {
+            "msg_preprocess_callback": preprocess_messages_logging,
+            "msg_preprocess_kwargs": {"agent_id": "researcher"},
+            "msg_postprocess_callback": postprocess_messages_logging,
+            "msg_postprocess_kwargs": {"agent_id": "researcher"},
+        }
+
+    previous_messages = convert_chat_history_to_text_messages(
+        st.session_state["Discovery_messages"]
+    )
+
+    current_hypothesis = get_current_hypothesis()
+    if not current_hypothesis:
+        return False
+
+    try:
+        data_sources_result = await identify_data_sources(
+            hypothesis=current_hypothesis,
+            local_context=st.session_state["local_context"],
+            research_document=st.session_state["Research_document"],
+            able_info=st.session_state["ABLE_document"],
+            previous_run=previous_messages,
+            **debug_agents_opts
+        )
+
+        # Extract the actual content from the TaskResult object
+        data_sources_message = next(
+            (
+                getattr(message, "content", None)
+                for message in reversed(data_sources_result.messages)
+                if hasattr(message, "content")
+                and message.source == "Data_Discovery_Agent"
+            ),
+            None,  # Default value if no message is found
+        )
+
+        # If no message found from Data_Discovery_Agent, try to get any message with content
+        if data_sources_message is None:
+            data_sources_message = next(
+                (
+                    getattr(message, "content", None)
+                    for message in reversed(data_sources_result.messages)
+                    if hasattr(message, "content") and getattr(message, "content", None) is not None
+                ),
+                None,
+            )
+
+        # Final fallback if still None
+        if data_sources_message is None:
+            data_sources_message = "Error: Unable to identify data sources due to system configuration issues. Please check MCP server configuration."
+
+    except Exception as e:
+        # Handle MCP or other errors gracefully
+        data_sources_message = f"Error: Unable to identify data sources due to system error: {str(e)}\n\nPlease check your MCP server configuration and ensure all required services are running."
+
+    st.session_state["Discovery_document"] = data_sources_message
     
     return True
