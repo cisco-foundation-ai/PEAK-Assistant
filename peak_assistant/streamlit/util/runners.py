@@ -12,6 +12,7 @@ from peak_assistant.hypothesis_assistant.hypothesis_assistant_cli import hypothe
 from peak_assistant.hypothesis_assistant.hypothesis_refiner_cli import refiner
 from peak_assistant.able_assistant import able_table
 from peak_assistant.data_assistant import identify_data_sources
+from peak_assistant.planning_assistant import plan_hunt
 
 from .helpers import convert_chat_history_to_text_messages, convert_chat_history_to_user_messages
 from .hypothesis_helpers import get_current_hypothesis
@@ -209,5 +210,78 @@ async def run_data_discovery(debug_agents: bool = False):
         data_sources_message = f"Error: Unable to identify data sources due to system error: {str(e)}\n\nPlease check your MCP server configuration and ensure all required services are running."
 
     st.session_state["Discovery_document"] = data_sources_message
+    
+    return True
+
+async def run_hunt_plan(debug_agents: bool = False):
+
+    debug_agents_opts = dict()
+    if debug_agents:
+        debug_agents_opts = {
+            "msg_preprocess_callback": preprocess_messages_logging,
+            "msg_preprocess_kwargs": {"agent_id": "hunt-planner"},
+            "msg_postprocess_callback": postprocess_messages_logging,
+            "msg_postprocess_kwargs": {"agent_id": "hunt-planner"},
+        }
+
+    previous_messages = convert_chat_history_to_text_messages(
+        st.session_state["Hunt Plan_messages"]
+    )
+
+    current_hypothesis = get_current_hypothesis()
+    if not current_hypothesis:
+        return False
+
+    # Check if required dependencies exist
+    if "ABLE_document" not in st.session_state or not st.session_state["ABLE_document"]:
+        st.session_state["Hunt Plan_document"] = "Error: ABLE table is required before creating a hunt plan. Please generate an ABLE table first."
+        return True
+    
+    if "Discovery_document" not in st.session_state or not st.session_state["Discovery_document"]:
+        st.session_state["Hunt Plan_document"] = "Error: Data discovery information is required before creating a hunt plan. Please run data discovery first."
+        return True
+
+    try:
+        hunt_plan_result = await plan_hunt(
+            hypothesis=current_hypothesis,
+            research_document=st.session_state["Research_document"],
+            able_info=st.session_state["ABLE_document"],
+            data_discovery=st.session_state["Discovery_document"],
+            local_context=st.session_state["local_context"],
+            previous_run=previous_messages,
+            **debug_agents_opts
+        )
+
+        # Extract the actual content from the TaskResult object
+        hunt_plan_message = next(
+            (
+                getattr(message, "content", None)
+                for message in reversed(hunt_plan_result.messages)
+                if hasattr(message, "content")
+                and message.source == "hunt_planner"
+            ),
+            None,  # Default value if no message is found
+        )
+
+        # If no message found from hunt_planner, try to get any message with content
+        if hunt_plan_message is None:
+            hunt_plan_message = next(
+                (
+                    getattr(message, "content", None)
+                    for message in reversed(hunt_plan_result.messages)
+                    if hasattr(message, "content") and getattr(message, "content", None) is not None
+                ),
+                None,
+            )
+
+        # Final fallback if still None
+        if hunt_plan_message is None:
+            hunt_plan_message = "Error: Unable to create hunt plan due to system configuration issues. Please check system configuration."
+
+    except Exception as e:
+        # Handle errors gracefully
+        hunt_plan_message = f"Error: Unable to create hunt plan due to system error: {str(e)}\n\nPlease check your system configuration and ensure all required services are running."
+
+    st.session_state["Hunt Plan_document"] = hunt_plan_message
     
     return True

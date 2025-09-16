@@ -5,7 +5,7 @@ import streamlit as st
 
 from peak_assistant.utils import find_dotenv_file
 from peak_assistant.streamlit.util.ui import peak_assistant_chat, peak_assistant_hypothesis_list
-from peak_assistant.streamlit.util.runners import run_researcher, run_hypothesis_generator, run_hypothesis_refiner, run_able_table, run_data_discovery
+from peak_assistant.streamlit.util.runners import run_researcher, run_hypothesis_generator, run_hypothesis_refiner, run_able_table, run_data_discovery, run_hunt_plan
 from peak_assistant.streamlit.util.hypothesis_helpers import get_current_hypothesis
 #############################
 ## MAIN
@@ -148,14 +148,36 @@ with data_discovery_tab:
             run_button_label="Identify Data Sources"
         )   
 
-#with hunt_plan_tab:
-#    peak_assistant_chat(
-#        title="Hunt Plan",
-#        page_description="The hunt plan assistant will help you create a hunt plan for your hunt topic.",
-#        doc_title="Hunt Plan",
-#        default_prompt="What would you like to hunt for?", 
-#        allow_upload=True
-#    )
+with hunt_plan_tab:
+    current_hypothesis = get_current_hypothesis()
+    
+    if "ABLE_document" not in st.session_state or not st.session_state["ABLE_document"]:
+        st.warning("Please generate an ABLE table first.")
+    elif "Discovery_document" not in st.session_state or not st.session_state["Discovery_document"]:
+        st.warning("Please run data discovery first.")
+    else:
+        # Track hypothesis changes for this tab
+        if "last_hypothesis_for_hunt_plan" not in st.session_state:
+            st.session_state["last_hypothesis_for_hunt_plan"] = None
+        
+        # Reset if hypothesis changed
+        if st.session_state["last_hypothesis_for_hunt_plan"] != current_hypothesis:
+            st.session_state["last_hypothesis_for_hunt_plan"] = current_hypothesis
+            # Clear the hunt plan document to show run button
+            if "Hunt Plan_document" in st.session_state:
+                del st.session_state["Hunt Plan_document"]
+            if "Hunt Plan_messages" in st.session_state:
+                del st.session_state["Hunt Plan_messages"]
+        
+        peak_assistant_chat(
+            title="Hunt Plan",
+            page_description="The hunt plan assistant will help you create a comprehensive hunt plan for your hunt topic.",
+            doc_title="Hunt Plan",
+            default_prompt=f"Create hunt plan for: :green[{current_hypothesis}]",
+            allow_upload=True,
+            agent_runner=run_hunt_plan,
+            run_button_label="Create Hunt Plan"
+        )
 
 with debug_tab:
     with st.expander("Environment Variables"):
