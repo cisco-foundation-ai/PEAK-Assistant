@@ -10,8 +10,9 @@ from peak_assistant.utils.agent_callbacks import (
 from peak_assistant.research_assistant import researcher
 from peak_assistant.hypothesis_assistant.hypothesis_assistant_cli import hypothesizer
 from peak_assistant.hypothesis_assistant.hypothesis_refiner_cli import refiner
+from peak_assistant.able_assistant import able_table
 
-from .helpers import convert_chat_history_to_text_messages
+from .helpers import convert_chat_history_to_text_messages, convert_chat_history_to_user_messages
 from .hypothesis_helpers import get_current_hypothesis
 
 
@@ -126,56 +127,23 @@ async def run_hypothesis_refiner(debug_agents: bool = True):
     
     return True
 
-async def run_able_table(debug_agents: bool = True):
+async def run_able_table(debug_agents: bool = False):
 
-    debug_agents_opts = dict()
-    if debug_agents:
-        debug_agents_opts = {
-            "msg_preprocess_callback": preprocess_messages_logging,
-            "msg_preprocess_kwargs": {"agent_id": "researcher"},
-            "msg_postprocess_callback": postprocess_messages_logging,
-            "msg_postprocess_kwargs": {"agent_id": "researcher"},
-        }
-
-
-    previous_messages = convert_chat_history_to_text_messages(
-        st.session_state["Refinement_messages"]
+    previous_messages = convert_chat_history_to_user_messages(
+        st.session_state["ABLE_messages"]
     )
 
     current_hypothesis = get_current_hypothesis()
     if not current_hypothesis:
         return False
 
-    previous_messages.insert(-1, TextMessage(
-        content=f"The current hypothesis is: {current_hypothesis}\n", source="user"
-    ))
-
-    result = await refiner(
-        hypothesis=current_hypothesis,
+    able = await able_table(
+        hypothesis=get_current_hypothesis(),
         local_context=st.session_state["local_context"],
         research_document=st.session_state["Research_document"],
         previous_run=previous_messages,
-        **debug_agents_opts
     )
 
-    st.session_state["Refinement_previous_messages"] = result.messages
-
-    # Find the final message from the "critic" agent using next() and a generator expression
-    refined_hypothesis_message = next(
-        (
-            getattr(message, "content", None)
-            for message in reversed(result.messages)
-            if message.source == "critic" and hasattr(message, "content")
-        ),
-        "Could not refine hypothesis. Something went wrong.",  # Default value if no "critic" message is found
-    )
+    st.session_state["ABLE_document"] = able
     
-    # Remove the trailing "YYY-HYPOTHESIS-ACCEPTED-YYY" string if present
-    refined_hypothesis = refined_hypothesis_message.replace("YYY-HYPOTHESIS-ACCEPTED-YYY", "").strip()
-
-    st.session_state["Refinement_document"] = refined_hypothesis
-    
-    # Note: We don't update the main Hypothesis state during refinement iterations
-    # to avoid triggering the reset logic in app.py
-    
-    return True    
+    return True

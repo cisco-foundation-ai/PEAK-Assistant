@@ -95,14 +95,25 @@ with hypothesis_refinement_tab:
         )
 
 with able_tab:
-    if not get_current_hypothesis():
-        st.warning("Please complete hypothesis generation or refinementfirst.")
+    current_hypothesis = get_current_hypothesis()
+    if not current_hypothesis:
+        st.warning("Please run the Hypothesis Generation or Hypothesis Refinement tab first.")
     else:
+        # Reset if effective hypothesis has changed
+        if "last_hypothesis_for_able" not in st.session_state:
+            st.session_state["last_hypothesis_for_able"] = current_hypothesis
+        elif st.session_state.get("last_hypothesis_for_able") != current_hypothesis:
+            # Effective hypothesis changed, reset the ABLE table
+            st.session_state["ABLE_document"] = ""  # Clear document to show button
+            st.session_state["last_hypothesis_for_able"] = current_hypothesis
+            # Clear any previous ABLE messages to start fresh
+            if "ABLE_messages" in st.session_state:
+                del st.session_state["ABLE_messages"]
         peak_assistant_chat(
             title="ABLE Table",
             page_description="The ABLE table assistant will help you create an Actor/Behavior/Location/Evidence (ABLE table to scope your hunt.",
             doc_title="ABLE",
-            default_prompt="Let's create that ABLE table!", 
+            default_prompt=f"The hunting hypothesis is :green[{get_current_hypothesis()}]",
             allow_upload=False,
             agent_runner=run_able_table,
             run_button_label="Create ABLE Table"
