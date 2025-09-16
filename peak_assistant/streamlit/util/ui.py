@@ -144,32 +144,53 @@ def peak_assistant_hypothesis_list(
     st.title(title)
     st.markdown(page_description)
 
-    with st.container(height=500, border=False):
-        selected_hypothesis = None
-        if "generated_hypotheses" not in st.session_state or not st.session_state["generated_hypotheses"]:
-            st.session_state["generated_hypotheses"] = []
-            if st.button("Generate Hypotheses"):
+    # --- Callback function for the dropdown menu --- #
+    def _set_hypothesis_from_menu(key):
+        # This callback fires when the menu selection changes.
+        # We check if the new menu value is different from the last known one.
+        if st.session_state[key] != st.session_state.hypothesis_list_last_menu_value:
+            st.session_state["Hypothesis"] = st.session_state[key]
+            # Update the last known value to the new selection.
+            st.session_state.hypothesis_list_last_menu_value = st.session_state[key]
 
+    # Initialize session state keys
+    if "generated_hypotheses" not in st.session_state:
+        st.session_state["generated_hypotheses"] = []
+    if "Hypothesis" not in st.session_state:
+        st.session_state["Hypothesis"] = ""
+    if "hypothesis_list_last_menu_value" not in st.session_state:
+        st.session_state.hypothesis_list_last_menu_value = None
+
+    with st.container(height=500, border=False):
+        if not st.session_state["generated_hypotheses"]:
+            if st.button("Generate Hypotheses"):
                 async def do_generate():
                     with st.spinner("Generating hypotheses..."):
                         await agent_runner()
+                    # After generating, reset the last known value
+                    st.session_state.hypothesis_list_last_menu_value = st.session_state.generated_hypotheses[0]
                     st.rerun()
-
                 asyncio.run(do_generate())
         else:
-            selected_hypothesis = option_menu(
+            try:
+                default_index = st.session_state["generated_hypotheses"].index(st.session_state["Hypothesis"])
+            except ValueError:
+                default_index = 0
+            
+            option_menu(
                 menu_title="Select a Hypothesis",
-                options=st.session_state["generated_hypotheses"]
+                options=st.session_state["generated_hypotheses"],
+                default_index=default_index,
+                key="hypothesis_list_menu",
+                on_change=_set_hypothesis_from_menu
             )
         
+    # Handle manual input directly
     manual_hypothesis = st.chat_input(placeholder="Or enter your hypothesis here.")
-
     if manual_hypothesis:
         st.session_state["Hypothesis"] = manual_hypothesis
-    elif selected_hypothesis:
-        st.session_state["Hypothesis"] = selected_hypothesis
-    else:
-        st.session_state["Hypothesis"] = ""
+        # A manual entry means the menu is now out of sync, so update last_menu_value
+        st.session_state.hypothesis_list_last_menu_value = st.session_state.hypothesis_list_menu
 
 def peak_assistant_hypothesis_refiner(
     title: str = "Hypothesis Refinement",
