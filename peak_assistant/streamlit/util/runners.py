@@ -85,12 +85,18 @@ async def run_hypothesis_refiner(debug_agents: bool = True):
         st.session_state["Refinement_messages"]
     )
 
+    # Use the current hypothesis if Refinement_document doesn't exist or is empty
+    if "Refinement_document" in st.session_state and st.session_state["Refinement_document"].strip():
+        current_hypothesis = st.session_state["Refinement_document"]
+    else:
+        current_hypothesis = st.session_state["Hypothesis"]
+
     previous_messages.insert(-1, TextMessage(
-        content=f"The current hypothesis is: {st.session_state['Refinement_document']}\n", source="user"
+        content=f"The current hypothesis is: {current_hypothesis}\n", source="user"
     ))
 
     result = await refiner(
-        hypothesis=st.session_state["Refinement_document"],
+        hypothesis=current_hypothesis,
         local_context=st.session_state["local_context"],
         research_document=st.session_state["Research_document"],
         previous_run=previous_messages,
@@ -114,8 +120,8 @@ async def run_hypothesis_refiner(debug_agents: bool = True):
 
     st.session_state["Refinement_document"] = refined_hypothesis
     
-    # Also update the main Hypothesis state with the refined version
-    st.session_state["Hypothesis"] = refined_hypothesis
+    # Note: We don't update the main Hypothesis state during refinement iterations
+    # to avoid triggering the reset logic in app.py
     
     return True
 

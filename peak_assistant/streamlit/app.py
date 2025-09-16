@@ -73,12 +73,11 @@ with hypothesis_refinement_tab:
         st.warning("Please run the Hypothesis Generation tab first.")
     else:
         # Reset refinement if hypothesis has changed
-        if "Refinement_document" not in st.session_state:
-            st.session_state["Refinement_document"] = st.session_state["Hypothesis"]
+        if "last_hypothesis_for_refinement" not in st.session_state:
             st.session_state["last_hypothesis_for_refinement"] = st.session_state["Hypothesis"]
         elif st.session_state.get("last_hypothesis_for_refinement") != st.session_state["Hypothesis"]:
             # Hypothesis changed, reset the refinement
-            st.session_state["Refinement_document"] = st.session_state["Hypothesis"]
+            st.session_state["Refinement_document"] = ""  # Clear document to show button
             st.session_state["last_hypothesis_for_refinement"] = st.session_state["Hypothesis"]
             # Clear any previous refinement messages to start fresh
             if "Refinement_messages" in st.session_state:
@@ -87,9 +86,10 @@ with hypothesis_refinement_tab:
             title="Hypothesis Refinement",
             page_description="The hypothesis refinement assistant will help you ensure your hypothesis is both specific and testable.",
             doc_title="Refinement",
-            default_prompt="What would you like to refine?", 
+            default_prompt=f"Your original hypothesis was: :green[{st.session_state['Hypothesis']}]", 
             allow_upload=False,
-            agent_runner=run_hypothesis_refiner
+            agent_runner=run_hypothesis_refiner,
+            run_button_label="Refine Hypothesis"
         )
 
 with able_tab:
@@ -105,7 +105,8 @@ with able_tab:
             doc_title="ABLE",
             default_prompt="Let's create that ABLE table!", 
             allow_upload=False,
-            agent_runner=run_able_table
+            agent_runner=run_able_table,
+            run_button_label="Create ABLE Table"
         )
 
 #with data_discovery_tab:
