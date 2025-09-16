@@ -145,10 +145,11 @@ def peak_assistant_hypothesis_list(
     def _set_hypothesis_from_menu(key):
         # This callback fires when the menu selection changes.
         # We check if the new menu value is different from the last known one.
-        if st.session_state[key] != st.session_state.hypothesis_list_last_menu_value:
-            st.session_state["Hypothesis"] = st.session_state[key]
+        current_selection = st.session_state[key]
+        if current_selection != st.session_state.hypothesis_list_last_menu_value:
+            st.session_state["Hypothesis"] = current_selection
             # Update the last known value to the new selection.
-            st.session_state.hypothesis_list_last_menu_value = st.session_state[key]
+            st.session_state.hypothesis_list_last_menu_value = current_selection
 
     # Initialize session state keys
     if "generated_hypotheses" not in st.session_state:
@@ -158,14 +159,21 @@ def peak_assistant_hypothesis_list(
     if "hypothesis_list_last_menu_value" not in st.session_state:
         st.session_state.hypothesis_list_last_menu_value = None
 
+    # Show current hypothesis status (always visible)
+    if st.session_state["Hypothesis"]:
+        st.success(f"Hypothesis: {st.session_state['Hypothesis'][:100]}{'...' if len(st.session_state['Hypothesis']) > 100 else ''}")
+    else:
+        st.info("Select a hypothesis from the list below or type your own at the bottom")
+
     with st.container(height=500, border=False):
         if not st.session_state["generated_hypotheses"]:
             if st.button("Generate Hypotheses"):
                 async def do_generate():
                     with st.spinner("Generating hypotheses..."):
                         await agent_runner()
-                    # After generating, reset the last known value
-                    st.session_state.hypothesis_list_last_menu_value = st.session_state.generated_hypotheses[0]
+                    # After generating, clear current hypothesis and reset tracking
+                    st.session_state["Hypothesis"] = ""
+                    st.session_state.hypothesis_list_last_menu_value = None
                     st.rerun()
                 asyncio.run(do_generate())
         else:
@@ -187,25 +195,8 @@ def peak_assistant_hypothesis_list(
     if manual_hypothesis:
         st.session_state["Hypothesis"] = manual_hypothesis
         # A manual entry means the menu is now out of sync, so update last_menu_value
-        st.session_state.hypothesis_list_last_menu_value = st.session_state.hypothesis_list_menu
-
-
-    if ("Hypothesis" not in st.session_state) or not st.session_state["Hypothesis"]:
-        st.warning("Please run the Hypothesis Generation tab first.")
-        return
-
-    st.title(title)
-    st.markdown(page_description)
-
-    with st.container(height=500, border=False):
-        st.markdown(f"*Hypothesis:* {st.session_state['Hypothesis']}")
-        if st.button("Refine Hypothesis"):
-
-            async def do_refine():
-                with st.spinner("Refining hypothesis..."):
-                    await agent_runner()
-                st.rerun()
-
-            asyncio.run(do_refine())
-
-            st.rerun()
+        # Only update if the menu exists (i.e., hypotheses have been generated)
+        if "hypothesis_list_menu" in st.session_state:
+            st.session_state.hypothesis_list_last_menu_value = st.session_state.hypothesis_list_menu
+        # Trigger a rerun to update the status display
+        st.rerun()
