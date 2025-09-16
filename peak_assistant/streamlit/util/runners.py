@@ -12,6 +12,7 @@ from peak_assistant.hypothesis_assistant.hypothesis_assistant_cli import hypothe
 from peak_assistant.hypothesis_assistant.hypothesis_refiner_cli import refiner
 
 from .helpers import convert_chat_history_to_text_messages
+from .hypothesis_helpers import get_current_hypothesis
 
 
 async def run_researcher(debug_agents: bool = True):
@@ -141,12 +142,16 @@ async def run_able_table(debug_agents: bool = True):
         st.session_state["Refinement_messages"]
     )
 
+    current_hypothesis = get_current_hypothesis()
+    if not current_hypothesis:
+        return False
+
     previous_messages.insert(-1, TextMessage(
-        content=f"The current hypothesis is: {st.session_state['Refinement_document']}\n", source="user"
+        content=f"The current hypothesis is: {current_hypothesis}\n", source="user"
     ))
 
     result = await refiner(
-        hypothesis=st.session_state["Refinement_document"],
+        hypothesis=current_hypothesis,
         local_context=st.session_state["local_context"],
         research_document=st.session_state["Research_document"],
         previous_run=previous_messages,
@@ -170,7 +175,7 @@ async def run_able_table(debug_agents: bool = True):
 
     st.session_state["Refinement_document"] = refined_hypothesis
     
-    # Also update the main Hypothesis state with the refined version
-    st.session_state["Hypothesis"] = refined_hypothesis
+    # Note: We don't update the main Hypothesis state during refinement iterations
+    # to avoid triggering the reset logic in app.py
     
     return True    

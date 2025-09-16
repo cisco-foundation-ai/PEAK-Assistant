@@ -6,6 +6,7 @@ import streamlit as st
 from peak_assistant.utils import find_dotenv_file
 from peak_assistant.streamlit.util.ui import peak_assistant_chat, peak_assistant_hypothesis_list
 from peak_assistant.streamlit.util.runners import run_researcher, run_hypothesis_generator, run_hypothesis_refiner, run_able_table
+from peak_assistant.streamlit.util.hypothesis_helpers import get_current_hypothesis
 #############################
 ## MAIN
 #############################
@@ -69,16 +70,17 @@ with hypothesis_generation_tab:
         )
 
 with hypothesis_refinement_tab:
-    if ("Hypothesis" not in st.session_state) or not st.session_state["Hypothesis"]:
+    current_hypothesis = get_current_hypothesis()
+    if not current_hypothesis:
         st.warning("Please run the Hypothesis Generation tab first.")
     else:
-        # Reset refinement if hypothesis has changed
+        # Reset refinement if original hypothesis has changed
         if "last_hypothesis_for_refinement" not in st.session_state:
-            st.session_state["last_hypothesis_for_refinement"] = st.session_state["Hypothesis"]
-        elif st.session_state.get("last_hypothesis_for_refinement") != st.session_state["Hypothesis"]:
-            # Hypothesis changed, reset the refinement
+            st.session_state["last_hypothesis_for_refinement"] = st.session_state.get("Hypothesis")
+        elif st.session_state.get("last_hypothesis_for_refinement") != st.session_state.get("Hypothesis"):
+            # Original hypothesis changed, reset the refinement
             st.session_state["Refinement_document"] = ""  # Clear document to show button
-            st.session_state["last_hypothesis_for_refinement"] = st.session_state["Hypothesis"]
+            st.session_state["last_hypothesis_for_refinement"] = st.session_state.get("Hypothesis")
             # Clear any previous refinement messages to start fresh
             if "Refinement_messages" in st.session_state:
                 del st.session_state["Refinement_messages"]
@@ -86,18 +88,15 @@ with hypothesis_refinement_tab:
             title="Hypothesis Refinement",
             page_description="The hypothesis refinement assistant will help you ensure your hypothesis is both specific and testable.",
             doc_title="Refinement",
-            default_prompt=f"Your original hypothesis was: :green[{st.session_state['Hypothesis']}]", 
+            default_prompt=f"Your original hypothesis was: :green[{current_hypothesis}]", 
             allow_upload=False,
             agent_runner=run_hypothesis_refiner,
             run_button_label="Refine Hypothesis"
         )
 
 with able_tab:
-    if (
-        (("Refinement_document" not in st.session_state) or not st.session_state["Refinement_document"]) or
-        ((("Hypothesis") not in st.session_state) or not st.session_state["Hypothesis"])
-    ):
-        st.warning("Please run the Hypothesis Generation or Hypothesis Refinement tab first.")
+    if not get_current_hypothesis():
+        st.warning("Please complete hypothesis generation or refinementfirst.")
     else:
         peak_assistant_chat(
             title="ABLE Table",
