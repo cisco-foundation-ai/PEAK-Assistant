@@ -1,10 +1,11 @@
 import os
-import streamlit as st 
 from dotenv import load_dotenv
 
+import streamlit as st 
+
 from peak_assistant.utils import find_dotenv_file
-from peak_assistant.streamlit.util.ui import peak_assistant_chat
-from peak_assistant.streamlit.util.runners import run_researcher
+from peak_assistant.streamlit.util.ui import peak_assistant_chat, peak_assistant_hypothesis_list, peak_assistant_hypothesis_refiner
+from peak_assistant.streamlit.util.runners import run_researcher, run_hypothesis_generator, run_hypothesis_refiner
 #############################
 ## MAIN
 #############################
@@ -24,6 +25,15 @@ st.session_state["local_context"] = local_context
 
 # Use the full page instead of a narrow central column
 st.set_page_config(layout="wide")
+
+# Reduce the margin above the tabs
+st.markdown("""
+    <style>
+        .block-container {
+            padding-top: 2rem;
+        }
+    </style>
+    """, unsafe_allow_html=True)
 
 st.sidebar.image("images/peak-logo-dark.png", width="stretch")
 
@@ -51,17 +61,14 @@ with research_tab:
 
 # TODO: Implement something here.
 with hypothesis_generation_tab:
-    st.title("Hypothesis Generation")
-    st.markdown("The hypothesis generation assistant will help you generate a hypothesis for your hunt topic.")
-    
+    peak_assistant_hypothesis_list(
+        agent_runner = run_hypothesis_generator
+    )
 
-#with hypothesis_refinement_tab:
-#    peak_assistant_chat(
-#        title="Hypothesis Refinement",
-#        page_description="This is a hypothesis refinement assistant. Given an existing hypothesis, it will help you make it more specific and testable.",
-#        doc_title="Refined Hypothesis",
-#        default_prompt="Feedback",
-#    )
+with hypothesis_refinement_tab:
+    peak_assistant_hypothesis_refiner(
+        agent_runner = run_hypothesis_refiner
+    )
 
 #with able_tab:
 #    peak_assistant_chat(

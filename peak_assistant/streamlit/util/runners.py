@@ -1,4 +1,6 @@
 import streamlit as st
+import sys
+
 from autogen_agentchat.messages import TextMessage
 
 from peak_assistant.utils.agent_callbacks import (
@@ -6,6 +8,8 @@ from peak_assistant.utils.agent_callbacks import (
     postprocess_messages_logging,
 )
 from peak_assistant.research_assistant import researcher
+from peak_assistant.hypothesis_assistant.hypothesis_assistant_cli import hypothesizer
+
 from .helpers import convert_chat_history_to_text_messages
 
 
@@ -50,4 +54,21 @@ async def run_researcher(debug_agents: bool = True):
 
     st.session_state["Research_document"] = report 
 
+    return True
+
+async def run_hypothesis_generator():
+
+    hypotheses = await hypothesizer(
+        user_input="",
+        research_document=st.session_state["Research_document"],
+        local_context=st.session_state["local_context"],
+    )
+    hypotheses = hypotheses.split("\n")
+    hypotheses = [h for h in hypotheses if h.strip()]
+    st.session_state["generated_hypotheses"] = hypotheses
+    return True
+
+async def run_hypothesis_refiner():
+    print(f"**** st.session_state['Hypothesis']: {st.session_state['Hypothesis']}")
+    st.session_state["Hypothesis"] = "Refined hypothesis"
     return True
