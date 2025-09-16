@@ -112,7 +112,7 @@ def peak_assistant_chat(
                 # Show the spinner in the placeholder
                 with placeholder.container():
                     with st.spinner("Please wait...", show_time=True):
-                        await agent_runner()
+                        await agent_runner(debug_agents=True)
 
                 # Clear the spinner and update the UI
                 placeholder.empty()
@@ -137,9 +137,6 @@ def peak_assistant_hypothesis_list(
     page_description: str = "Create a hunting hypothesis, or let the assistant generate some for you to choose from.",
     agent_runner: Callable = None,
 ):
-    if ("Research_document" not in st.session_state) or not st.session_state["Research_document"]:
-        st.warning("Please run the Research tab first.")
-        return
 
     st.title(title)
     st.markdown(page_description)
@@ -192,11 +189,7 @@ def peak_assistant_hypothesis_list(
         # A manual entry means the menu is now out of sync, so update last_menu_value
         st.session_state.hypothesis_list_last_menu_value = st.session_state.hypothesis_list_menu
 
-def peak_assistant_hypothesis_refiner(
-    title: str = "Hypothesis Refinement",
-    page_description: str = "Refine a hunting hypothesis.",
-    agent_runner: Callable = None,
-):
+
     if ("Hypothesis" not in st.session_state) or not st.session_state["Hypothesis"]:
         st.warning("Please run the Hypothesis Generation tab first.")
         return

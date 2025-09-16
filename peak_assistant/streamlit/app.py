@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 import streamlit as st 
 
 from peak_assistant.utils import find_dotenv_file
-from peak_assistant.streamlit.util.ui import peak_assistant_chat, peak_assistant_hypothesis_list, peak_assistant_hypothesis_refiner
+from peak_assistant.streamlit.util.ui import peak_assistant_chat, peak_assistant_hypothesis_list
 from peak_assistant.streamlit.util.runners import run_researcher, run_hypothesis_generator, run_hypothesis_refiner
 #############################
 ## MAIN
@@ -61,14 +61,28 @@ with research_tab:
 
 # TODO: Implement something here.
 with hypothesis_generation_tab:
-    peak_assistant_hypothesis_list(
-        agent_runner = run_hypothesis_generator
-    )
+    if ("Research_document" not in st.session_state) or not st.session_state["Research_document"]:
+        st.warning("Please run the Research tab first.")
+    else:
+        peak_assistant_hypothesis_list(
+            agent_runner = run_hypothesis_generator
+        )
 
 with hypothesis_refinement_tab:
-    peak_assistant_hypothesis_refiner(
-        agent_runner = run_hypothesis_refiner
-    )
+    if ("Hypothesis" not in st.session_state) or not st.session_state["Hypothesis"]:
+        st.warning("Please run the Hypothesis Generation tab first.")
+    else:
+        # Only set the initial value if it doesn't exist yet
+        if "Refinement_document" not in st.session_state:
+            st.session_state["Refinement_document"] = st.session_state["Hypothesis"]
+        peak_assistant_chat(
+            title="Hypothesis Refinement",
+            page_description="The hypothesis refinement assistant will help you ensure your hypothesis is both specific and testable.",
+            doc_title="Refinement",
+            default_prompt="What would you like to refine?", 
+            allow_upload=False,
+            agent_runner=run_hypothesis_refiner
+        )
 
 #with able_tab:
 #    peak_assistant_chat(
