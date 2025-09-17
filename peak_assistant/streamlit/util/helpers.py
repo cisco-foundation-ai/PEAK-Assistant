@@ -1,19 +1,48 @@
 from typing import List, Dict, Any, Optional, Tuple
 from autogen_agentchat.messages import TextMessage, UserMessage
 import streamlit as st
+import hashlib
 import json
 import os
-import logging
-import asyncio
 import secrets
-import time
 import tempfile
-import hashlib
+import time
+from typing import Optional, Dict, Any, Tuple
+import logging
+from urllib.parse import urlparse
 from enum import Enum
 from dataclasses import dataclass
 from urllib.parse import urljoin
 
 logger = logging.getLogger(__name__)
+
+def get_streamlit_redirect_uri() -> str:
+    """
+    Get the current Streamlit app's base URL for OAuth redirects.
+    Uses Streamlit's runtime context to get the actual URL and port.
+    """
+    try:
+        # Try to get the current URL from Streamlit's context
+        from streamlit.web import cli as stcli
+        from streamlit.runtime import get_instance
+        
+        # Get the runtime instance to access server info
+        runtime = get_instance()
+        if runtime and hasattr(runtime, '_main_server') and runtime._main_server:
+            # Get the server's port
+            port = runtime._main_server._port
+            # Default to localhost, but could be enhanced to detect actual host
+            base_url = f"http://localhost:{port}"
+            logger.debug(f"Detected Streamlit URL: {base_url}")
+            return base_url
+        else:
+            # Fallback to default Streamlit port
+            logger.debug("Could not detect Streamlit server info, using default port 8501")
+            return "http://localhost:8501"
+    except Exception as e:
+        # Fallback to default if detection fails
+        logger.debug(f"Failed to detect Streamlit URL: {e}, using default port 8501")
+        return "http://localhost:8501"
 
 def convert_chat_history_to_text_messages(chat_history: List[Dict[str, Any]]) -> List[TextMessage]:
     """Converts a Streamlit chat history (list of dicts) to a list of TextMessage objects."""
@@ -624,7 +653,7 @@ def initiate_oauth_flow(server_name: str, server_config: MCPServerConfig) -> Opt
             "state": state,
             "scope": server_config.auth.scope or "read",
             # Use clean redirect URI (no query parameters)
-            "redirect_uri": server_config.auth.redirect_uri or "http://localhost:8501"
+            "redirect_uri": server_config.auth.redirect_uri or get_streamlit_redirect_uri()
         }
         
         # Build the full URL
@@ -652,18 +681,17 @@ def initiate_oauth_flow(server_name: str, server_config: MCPServerConfig) -> Opt
                 # First, try dynamic client registration if needed
                 client_id = "PEAK Assistant"  # Default
                 
-                # Check if this looks like an Atlassian server that needs dynamic registration
-                if "atlassian.com" in server_config.url.lower():
-                    logger.info(f"Attempting dynamic client registration for {server_name}")
-                    # Try dynamic client registration
-                    registered_client = perform_dynamic_client_registration(server_config.url)
-                    if registered_client:
-                        client_id = registered_client["client_id"]
-                        # Store the registered client info for token exchange
-                        st.session_state[f"oauth_client_{server_name}"] = registered_client
-                        logger.info(f"Stored OAuth client info for {server_name}: {list(registered_client.keys())}")
-                    else:
-                        logger.warning(f"Dynamic client registration failed for {server_name}")
+                # Try dynamic client registration for all OAuth servers
+                # Many servers support dynamic registration even if they don't advertise the endpoint
+                logger.info(f"Attempting dynamic client registration for {server_name}")
+                registered_client = perform_dynamic_client_registration(server_config.url)
+                if registered_client:
+                    client_id = registered_client["client_id"]
+                    # Store the registered client info for token exchange
+                    st.session_state[f"oauth_client_{server_name}"] = registered_client
+                    logger.info(f"Stored OAuth client info for {server_name}: {list(registered_client.keys())}")
+                else:
+                    logger.debug(f"Dynamic client registration failed for {server_name}, using default client ID")
                 
                 # Store session state for recovery after OAuth redirect (AFTER client registration)
                 store_session_for_oauth(server_name, state)
@@ -675,7 +703,7 @@ def initiate_oauth_flow(server_name: str, server_config: MCPServerConfig) -> Opt
                     "state": state,
                     "scope": "read",  # Default scope
                     # Use clean redirect URI (no query parameters)
-                    "redirect_uri": "http://localhost:8501"
+                    "redirect_uri": get_streamlit_redirect_uri()
                 }
                 
                 from urllib.parse import urlencode
@@ -765,7 +793,7 @@ def perform_dynamic_client_registration(server_url: str) -> Optional[Dict[str, s
         registration_data = {
             "client_name": "PEAK Assistant",
             "client_uri": "https://github.com/splunk/PEAK-Assistant",
-            "redirect_uris": ["http://localhost:8501"],
+            "redirect_uris": [get_streamlit_redirect_uri()],
             "grant_types": ["authorization_code"],
             "response_types": ["code"],
             "scope": "read write",
@@ -849,7 +877,7 @@ def exchange_oauth_code_for_token(server_name: str, auth_code: str) -> bool:
         token_data = {
             "grant_type": "authorization_code",
             "code": auth_code,
-            "redirect_uri": "http://localhost:8501",
+            "redirect_uri": get_streamlit_redirect_uri(),
             "client_id": client_id,
             "client_secret": client_secret
         }

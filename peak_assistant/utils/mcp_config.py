@@ -108,7 +108,7 @@ class OAuth2TokenManager:
             logger.warning(f"Failed to auto-generate redirect URI: {e}")
             
         # Fallback to default localhost pattern if Flask context not available
-        default_redirect = "https://localhost:8000/oauth/callback"
+        default_redirect = "http://localhost:8501"
         logger.warning(f"Using fallback redirect URI: {default_redirect}")
         return default_redirect
         
@@ -761,7 +761,7 @@ class MCPConfigManager:
                 logger.info(f"Auto-generated redirect URI for {server_name}: {redirect_uri}")
             except Exception:
                 # Fallback if Flask context not available
-                redirect_uri = "http://localhost:8000/oauth/callback"
+                redirect_uri = "http://localhost:8501"
                 logger.info(f"Using fallback redirect URI for {server_name}: {redirect_uri}")
         
         # Build registration payload with proper handling of None values
