@@ -1,7 +1,5 @@
 import os
 import time
-import sys
-import argparse
 import logging
 from dotenv import load_dotenv
 
@@ -27,34 +25,9 @@ from peak_assistant.streamlit.util.helpers import (
 ## LOGGING SETUP
 #############################
 
-def setup_logging():
-    """Setup logging configuration based on command line arguments"""
-    # Parse command line arguments for log level
-    parser = argparse.ArgumentParser(description='PEAK Assistant Streamlit App')
-    parser.add_argument('--log-level', 
-                       choices=['debug', 'info', 'warning', 'error'], 
-                       default='warning',
-                       help='Set the logging level (default: warning)')
-    
-    # Parse known args to avoid conflicts with Streamlit's own arguments
-    args, unknown = parser.parse_known_args()
-    
-    # Configure logging
-    log_level = getattr(logging, args.log_level.upper())
-    logging.basicConfig(
-        level=log_level,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(sys.stdout)
-        ]
-    )
-    
-    logger = logging.getLogger(__name__)
-    logger.info(f"Logging configured at {args.log_level.upper()} level")
-    return logger
-
-# Setup logging
-logger = setup_logging()
+# Use Streamlit's built-in logging configuration
+# Control via: streamlit run app.py --logger.level debug
+logger = logging.getLogger(__name__)
 
 #############################
 ## MAIN
