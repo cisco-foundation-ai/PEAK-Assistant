@@ -52,7 +52,7 @@ if "code" in query_params and "state" in query_params:
     # Try to restore session state using the OAuth state parameter
     session_restored = restore_session_from_oauth(state)
     if session_restored:
-        st.info("Session state restored from OAuth redirect")
+        logger.debug("Session state restored from OAuth redirect")
     
     # Find which server this callback is for
     server_name = None
@@ -70,12 +70,12 @@ if "code" in query_params and "state" in query_params:
     
     if server_name:
         # Try to exchange authorization code for access token
-        st.write(f"**Exchanging authorization code for access token...**")
+        logger.debug(f"Exchanging authorization code for access token for {server_name}")
         token_exchange_success = exchange_oauth_code_for_token(server_name, auth_code)
         
         if not token_exchange_success:
             # Fallback: store authorization code if token exchange fails
-            st.warning("Token exchange failed, storing authorization code as fallback")
+            logger.warning("Token exchange failed, storing authorization code as fallback")
             auth_key = f"MCP.{server_name}"
             user_session_id = get_user_session_id()
             st.session_state[auth_key] = {
@@ -92,11 +92,7 @@ if "code" in query_params and "state" in query_params:
         if f"oauth_server_for_state_{state}" in st.session_state:
             del st.session_state[f"oauth_server_for_state_{state}"]
         
-        st.success(f"Successfully authenticated with {server_name}!")
-        
         # Log authentication details
-        import logging
-        logger = logging.getLogger(__name__)
         logger.info(f"OAuth authentication successful for {server_name}")
         logger.debug(f"Session restored: {session_restored}")
         logger.debug(f"Token exchange successful: {token_exchange_success}")
@@ -122,11 +118,6 @@ if "code" in query_params and "state" in query_params:
                 logger.debug("No OAuth client info found for token exchange")
         else:
             logger.warning("No auth data found in session state")
-        
-        # Note: MCP connection test will be available in the Status tab
-        st.info("💡 You can test the MCP connection in the Status tab after authentication")
-        
-        st.info("Redirecting to Status tab...")
         
         # Clear query parameters and redirect to status tab
         st.query_params.clear()
@@ -446,7 +437,7 @@ with status_tab:
                         logger.info(f"Initiating OAuth flow for {server_name}")
                         auth_url = initiate_oauth_flow(server_name, config)
                         if auth_url:
-                            st.info(f"Redirecting to authenticate with {server_name}...")
+                            logger.debug(f"Redirecting to authenticate with {server_name}")
                             logger.debug(f"Generated auth URL: {auth_url[:100]}...")
                             
                             # Log dynamic registration info if available
