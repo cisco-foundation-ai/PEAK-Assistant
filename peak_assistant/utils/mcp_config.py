@@ -969,25 +969,48 @@ class MCPClientManager:
                     return {}
                 headers[config.auth.header_name] = config.auth.api_key
             elif config.auth.type in [AuthType.OAUTH2_CLIENT_CREDENTIALS, AuthType.OAUTH2_AUTHORIZATION_CODE]:
-                if not user_id and config.auth.requires_user_auth:
-                    logger.error(f"User ID is required for user-based OAuth on {config.name}")
-                    return {}
-                
-                # Use authlib OAuth manager for OAuth token handling
+                # Use Streamlit session state for OAuth authentication
+                logger.debug(f"Getting OAuth headers for {config.name} from Streamlit session state")
                 try:
-                    from .authlib_oauth import get_oauth_manager
-                    oauth_manager = get_oauth_manager()
-                    
-                    # Get authentication headers from OAuth manager using hybrid approach (OAuth client + manual fallback)
-                    oauth_headers = oauth_manager.get_fresh_auth_headers(config.name)
-                    if oauth_headers:
-                        headers.update(oauth_headers)
-                    else:
-                        logger.error(f"No valid OAuth token available for {config.name}")
-                        return {}
+                    import streamlit as st
+                    if hasattr(st, 'session_state'):
+                        auth_key = f"MCP.{config.name}"
+                        logger.debug(f"Looking for auth key: {auth_key}")
+                        logger.debug(f"Available MCP session keys: {[k for k in st.session_state.keys() if k.startswith('MCP.')]}")
                         
+                        if auth_key in st.session_state:
+                            auth_data = st.session_state[auth_key]
+                            access_token = auth_data.get("access_token")
+                            stored_user_id = auth_data.get("user_id")
+                            
+                            logger.debug(f"Found auth data: access_token={bool(access_token)}, user_id={bool(stored_user_id)}")
+                            
+                            if access_token:
+                                # Always include access token
+                                headers["Authorization"] = f"Bearer {access_token}"
+                                
+                                # Include user ID if available and required
+                                if stored_user_id:
+                                    headers["X-User-ID"] = stored_user_id
+                                    logger.info(f"Using Streamlit OAuth headers for {config.name} with user ID: {stored_user_id}")
+                                else:
+                                    logger.info(f"Using Streamlit OAuth headers for {config.name} (no user ID)")
+                                    
+                                    # Check if user ID is required
+                                    if config.auth.requires_user_auth:
+                                        logger.error(f"User ID is required for user-based OAuth on {config.name}")
+                                        return {}
+                            else:
+                                logger.error(f"No access token in Streamlit session state for {config.name}")
+                                return {}
+                        else:
+                            logger.error(f"No OAuth data found in Streamlit session state for {config.name}")
+                            return {}
+                    else:
+                        logger.error(f"Streamlit session state not available")
+                        return {}
                 except Exception as e:
-                    logger.error(f"Failed to get OAuth headers for {config.name}: {e}")
+                    logger.error(f"Failed to get Streamlit OAuth headers for {config.name}: {e}")
                     return {}
         
         return headers
