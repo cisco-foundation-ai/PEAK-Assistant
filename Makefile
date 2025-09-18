@@ -50,7 +50,8 @@ container-local:
 .PHONY: container-run
 container-run: container-local
 	docker run --rm -it \
-		--mount "type=bind,src=$(PWD),target=/certs" \
+		--mount "type=bind,src=$(PWD)/cert.pem,target=/certs/cert.pem" \
+		--mount "type=bind,src=$(PWD)/key.pem,target=/certs/key.pem" \
 		--mount "type=bind,src=$(PWD)/context.txt,target=/home/peakassistant/context.txt" \
 		--mount "type=bind,src=$(PWD)/.env,target=/home/peakassistant/.env" \
 		--mount "type=bind,src=$(PWD)/mcp_servers.json,target=/home/peakassistant/mcp_servers.json" \

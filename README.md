@@ -4,7 +4,7 @@ PEAK-Assistant is an AI-powered threat hunting assistant designed to guide hunte
 ⛔️⛔️ **The PEAK Assistant is intended solely as a proof-of-concept project to demonstrate the potential of agentic security solutions. It has not undergone security testing. Be cautious when deploying this to anything but a local system environment.** ⛔️⛔️
 
 ## Features
-The PEAK Assistant offers the following features:
+The PEAK Assistant web app offers the following features:
 
 - Generate detailed threat hunting research reports for specific techniques, tactics, or actors. It can access both Internet-based sources and local databases (ticket systems, wiki pages, threat intel platforms, etc).
 - Suggest and refine threat hunting hypotheses based on the research it performed.
@@ -15,7 +15,6 @@ The PEAK Assistant offers the following features:
 - Upload documents that you have prepared yourself, so the AI doesn't have to regenerate them.
 - Integration with research and Splunk data sources via either local or remote MCP servers, including OAuth2, API key, and bearer token authentication support.
 - Most phases incorporate a chat-like interface so you can collaborate with the assistant to refine outputs until they exactly right
-- Dark / Light mode UI
 
 ## Setting up the Python Environment
 Clone the [GitHub repo] to a directory on your local system:
@@ -24,15 +23,9 @@ git clone https://github.com/splunk/PEAK-Assistant
 cd PEAK-Assistant
 ```
 
-**I strongly recommend you use a python virtualenv to run this app.** If you are using `pyenv`, you can do something like the following to create a new virtualenv called `peak-assistant` and automatically switch to it whenever you enter the `PEAK-Assistant` directory.
+**I strongly recommend you use 'uv' to manage your python environment.** It will take care of creating a virtual environment and installing all the dependencies. 
 ```bash
-pyenv virtualenv 3.13.2 peak-assistant
-pyenv local peak-assistant
-```
-
-Inside your virtualenv, install the entire Assistant repo as a Python module:
-```bash
-pip install -e .
+uv sync
 ```
 
 ## Generate TLS Certificate
@@ -66,19 +59,16 @@ You will also need to configure the MCP servers the assistant uses to research t
         "TAVILY_API_KEY": "tvly-dev-YOUR-KEY"
       }
     },
-    "splunk-mcp-surge": {
-      "transport": "stdio",
-      "description": null,
-      "timeout": 300,
-      "command": "/home/user/.pyenv/versions/peak-assistant/bin/python3",
+    "splunk-mcp-official": {
+      "description": "Connect to a running Splunk server and run searches.",
+      "command": "npx",
       "args": [
-        "/home/user/splunk-mcp/splunk-mcp.py"
+        "-y",
+        "mcp-remote",
+        "https://18.215.204.181:8089/services/mcp",
+        "--header",
+        "Authorization: Bearer splunk-mcp-YOUR-TOKEN"
       ],
-      "env": {
-        "SPLUNK_SERVER_URL": "https://1.1.1.1:8089",
-        "SPLUNK_MCP_USER": "mcpuser",
-        "SPLUNK_MCP_PASSWD": "mcp_p4ss47"
-      }
     },
     "atlassian-remote-mcp": {
       "transport": "sse",
@@ -107,7 +97,7 @@ At a minimum, you must provide the following types of MCP server (at least one o
 
 If you want to incorporate local data sources, for example to learn from the results of past hunts you may have performed on a topic, you may optionally also include MCP servers for those sources, though they are not required. In this example, we used:
 
-* [Atlassian's offical MCP server](https://www.atlassian.com/platform/remote-mcp-server) (provides access to Jira and Confluence)
+* [Atlassian's offical MCP server](https://www.atlassian.com/platform/remote-mcp-server) to allow the Assistant to search Jira tickets and Confluence wiki pages.
 
 Feel free to substitute MCP servers with functional equivalents. For example, if you have a different Internet search provider, replace the Tavily configuration with whatever you're using.
 
@@ -128,7 +118,7 @@ The PEAK Assistant supports OAuth2 authentication for remote MCP servers, as wel
 
 ## Local Context Files
 
-The Assistant supports an optional file for providing "local context". This provides a way for you to give the LLM clues and guidance about your local environment or preferences so you can adapt the AI to your needs without having to edit the prompts. If present, this context file lives at `UI/context.txt` and should contain information that helps the AI agents understand your specific environment, such as:
+The Assistant supports an optional file for providing "local context". This provides a way for you to give the LLM hints and guidance about your environment or preferences so you can adapt the AI to your needs without having to edit the prompts. If present, this context file should be named `context.txt` and should be placed in the root of the repository. It should contain information that helps the AI agents understand your specific environment, such as:
 
 - Organizational structure and naming conventions
 - Specific technologies and tools in use
@@ -168,6 +158,10 @@ Splunk hints:
     - Don't try to use accelerated datamodels. There are no datamodels on this server.
 ```
 
+We strongly recommend you also include at least some basic information about your most important
+Splunk indices, sourcetypes, and fields. This will help the AI agents understand your data better
+and generate more accurate queries. It's not required, because the automated data discovery is actually pretty good, but it can be helpful.
+
 ## 2. Environment Variables
 The rest of the Assistant configuration has to do with the LLM configuration, and is held in environment variables. Create a `.env` file in the project root with the following variables:
 
@@ -181,8 +175,10 @@ AZURE_OPENAI_API_VERSION=2023-05-15
 # Use this model for most tasks
 AZURE_OPENAI_MODEL=gpt-4o
 
-# Use this model when you need extended thinking (some of the research, data discovery, and planning tasks).
-# If you prefer not to use a reasoning model, simply set it to whatever model you're using above
+# Use this model when you need extended thinking (some of the research, data discovery, 
+# and planning tasks benefit from this). If you prefer not to use a reasoning model, simply 
+set these to whatever values you're using above for the non-reasoning model.
+AZURE_OPENAI_REASONING_DEPLOYMENT=your-reasoning-deployment-nameqvi
 AZURE_OPENAI_REASONING_MODEL=o4-mini
 ```
 
@@ -190,21 +186,67 @@ AZURE_OPENAI_REASONING_MODEL=o4-mini
 Now that it is configured it's time to run the app. Since you installed this as a module, you can simpley run the assistant:
 
 ```bash
-peak-assistant
+uv run peak-assistant
 ```
 
-By default, the application will run on `https://127.0.0.1:8000/` (note HTTPS - if you're using self-signed certificates as in the examples above, you'll also need to tell the browser to accept the certificate before you can proceed).
+By default, the application will run on `http://127.0.0.1:8501/` (or HTTPS if you have a certificate configured).
+
+## Accessing the Assistant
+Once the app is running, you can access it by opening `http://127.0.0.1:8501/` (or HTTPS if configured) in your browser.
 
 ## Workflow
 
 The PEAK-Assistant follows a structured workflow that aligns with the PEAK Threat Hunting Framework:
 
-1. **Research Phase**: Generate comprehensive research reports on specific cybersecurity techniques or threat actors
+1. **Research Phase**: Generate comprehensive research reports on specified cybersecurity techniques or threat actors
 2. **Hypothesis Generation**: Create testable hypotheses based on the research findings
 3. **Hypothesis Refinement**: Improve and refine hypotheses through automated or human-guided feedback
 4. **ABLE Table Creation**: Develop Actor, Behavior, Location, Evidence tables to scope the hunt
 5. **Data Discovery**: Identify relevant data sources in your Splunk environment for testing hypotheses
 6. **Hunt Planning**: Combine all components into a comprehensive threat hunting plan
+
+## Docker Support
+
+The PEAK Assistant can be run in a Docker container. To do this, you will need to have Docker installed on your system. Alternatives, such as `podman` or other container systems that use Docker images, work as well but are not officially supported. 
+
+### Pulling the Docker image from the container registery
+The project provides pre-built Docker images, which can be downloaded by running the following command:
+
+```bash
+docker pull ghcr.io/peak-assistant/peak-assistant:latest
+```
+
+### Building the Docker image from source
+If you prefer to build the image from source, you can do so by running the following command from the root of the repository::
+
+```bash
+docker build -t peak-assistant .
+```
+
+### Running the Docker container
+Once you have the image downloaded, you can run the container by running the following command:
+
+```bash
+	docker run --rm -it \
+		--mount "type=bind,src=$(PWD)/cert.pem,target=/certs/cert.pem" \
+		--mount "type=bind,src=$(PWD)/key.pem,target=/certs/key.pem" \
+		--mount "type=bind,src=$(PWD)/context.txt,target=/home/peakassistant/context.txt" \
+		--mount "type=bind,src=$(PWD)/.env,target=/home/peakassistant/.env" \
+		--mount "type=bind,src=$(PWD)/mcp_servers.json,target=/home/peakassistant/mcp_servers.json" \
+		-p "127.0.0.1:8501:8501" \
+		ghcr.io/splunk/peak-assistant:latest
+```
+
+Note that you will still need to provide the same configuration files as you would if you were running the app natively:
+* `context.txt`
+* `.env`
+* `mcp_servers.json`
+* `cert.pem` & `key.pem`
+
+The sample command mounts the current directory as `/certs`, and maps the other files into the working directory of the app running in the container. It assumes these files are in the current directory, but you can adjust the paths as needed.
+
+### Accessing the Assistant via Docker
+Once the container is running, you can access it just as though it were running natively. Open `http://127.0.0.1:8501/` (or HTTPS if configured) in your browser.
 
 ## License
 See the [LICENSE](LICENSE) for details.
