@@ -1,5 +1,5 @@
 # PEAK-Assistant
-PEAK-Assistant is an AI-powered threat hunting assistant designed to guide hunters quickly through the process of researching and planning a hypothesis-driven hunt. It aligns with the [PEAK Threat Hunting Framework](https://www.splunk.com/en_us/form/the-peak-threat-hunting-framework.html) and leverages large language models, agents, and automated research tools to streamline the process of preparing for a hunt.
+PEAK-Assistant is an AI-powered threat hunting assistant designed to guide hunters quickly through the process of researching and planning a hypothesis-driven hunt. It aligns with the [PEAK Threat Hunting Framework](https://www.splunk.com/en_us/form/the-peak-threat-hunting-framework.html) and leverages large language models, teams of AI agents, and automated research tools to streamline the process of preparing for a hunt.
 
 ⛔️⛔️ **The PEAK Assistant is intended solely as a proof-of-concept project to demonstrate the potential of agentic security solutions. It has not undergone security testing. Be cautious when deploying this to anything but a local system environment.** ⛔️⛔️
 
@@ -9,12 +9,12 @@ The PEAK Assistant offers the following features:
 - Generate detailed threat hunting research reports for specific techniques, tactics, or actors. It can access both Internet-based sources and local databases (ticket systems, wiki pages, threat intel platforms, etc).
 - Suggest and refine threat hunting hypotheses based on the research it performed.
 - Create PEAK ABLE tables to help scope the hunt.
-- Automatically identify relevant data sources in your Splunk instance.
+- Automatically identify relevant indices, sourcetypes, and field names in your Splunk instance.
 - Create step-by-step hunt plans, including guidance for how to analyze and interpret the results
-- Export any documents in Markdown or PDF format
+- Export documents in Markdown format
 - Upload documents that you have prepared yourself, so the AI doesn't have to regenerate them.
-- Integration with research and Splunk data sources via either local or remote MCP servers, including OAuth2 support for authenticating to the MCP servers.
-- Each phase incorporates user feedback so you can collaborate with the assistant to refine outputs until they exactly right
+- Integration with research and Splunk data sources via either local or remote MCP servers, including OAuth2, API key, and bearer token authentication support.
+- Most phases incorporate a chat-like interface so you can collaborate with the assistant to refine outputs until they exactly right
 - Dark / Light mode UI
 
 ## Setting up the Python Environment

@@ -565,7 +565,7 @@ class MCPConfigManager:
         """Find the MCP configuration file"""
         possible_paths = [
             "mcp_servers.json",  # Current directory
-            "../mcp_servers.json",  # Parent directory (when Flask runs from UI subdirectory)
+            "../mcp_servers.json",  # Parent directory
             ".mcp_servers.json",
             os.path.expanduser("~/.config/peak-assistant/mcp_servers.json"),
             "/etc/peak-assistant/mcp_servers.json"
