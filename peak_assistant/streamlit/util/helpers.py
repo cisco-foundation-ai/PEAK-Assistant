@@ -13,8 +13,14 @@ from urllib.parse import urlparse
 from enum import Enum
 from dataclasses import dataclass
 from urllib.parse import urljoin
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+def get_asset_path(relative_path: str) -> str:
+    """Get absolute path to asset relative to streamlit app directory"""
+    app_dir = Path(__file__).parent.parent  # Go up from util/ to streamlit/
+    return str(app_dir / relative_path)
 
 def get_streamlit_redirect_uri() -> str:
     """

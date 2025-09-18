@@ -19,7 +19,8 @@ from peak_assistant.streamlit.util.helpers import (
     test_mcp_connection, 
     initiate_oauth_flow,
     restore_session_from_oauth,
-    exchange_oauth_code_for_token
+    exchange_oauth_code_for_token,
+    get_asset_path
 )
 #############################
 ## LOGGING SETUP
@@ -160,7 +161,7 @@ st.markdown("""
 
 with st.sidebar:
 
-    st.image("images/peak-logo-dark.png", width="stretch")
+    st.image(get_asset_path("images/peak-logo-dark.png"), width="stretch")
 
     with stylable_container(
         key="reset_button_container",
