@@ -5,15 +5,11 @@ description = "An AI-powered threat hunting assistant designed to help cybersecu
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "flask-session>=0.8.0",
-    "flask==2.3.2",
-    "flask-sqlalchemy>=3.1.1",
     "python-dotenv>=1.1.1",
     "markdown-pdf>=1.7",
     "openai>=1.98.0",
     "markdown>=3.8.2",
     "fpdf>=1.7.2",
-    "gunicorn>=21.0.0",
     "tavily-python>=0.7.10",
     "autogen>=0.9.7",
     "autogen-agentchat>=0.7.1",
@@ -23,7 +19,6 @@ dependencies = [
     "pydantic>=2.11.7",
     "aiohttp>=3.12.15",
     "httpx>=0.28.1",
-    "authlib>=1.6.1",
     "click>=8.2.1",
     "streamlit>=1.49.1",
     "streamlit-option-menu>=0.4.0",
@@ -39,7 +34,6 @@ dev = [
     "ruff>=0.12.7",
     "types-requests>=2.32.4.20250611",
     "coverage>=7.10.1",
-    "types-authlib>=1.6.0.20250711",
     "anthropic>=0.64.0",
 ]
 
@@ -58,7 +52,7 @@ hypothesis-assistant = "peak_assistant.hypothesis_assistant.hypothesis_assistant
 hypothesis-refiner = "peak_assistant.hypothesis_assistant.hypothesis_refiner_cli:main"
 planning-assistant = "peak_assistant.planning_assistant.__main__:main"
 peak-mcp = "peak_assistant.peak_mcp.__main__:main"
-peak-assistant = "peak_assistant.UI.__main__:main"
+peak-assistant = "peak_assistant.streamlit.__main__:main"
 research-assistant = "peak_assistant.research_assistant.__main__:main"
 
 
