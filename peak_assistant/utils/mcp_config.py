@@ -15,7 +15,7 @@ from enum import Enum
 import logging
 from urllib.parse import urljoin
 from dotenv import load_dotenv
-from flask import has_app_context, url_for
+# Removed Flask dependency; redirect URIs resolved via Streamlit helpers
 from autogen_ext.tools.mcp import McpWorkbench, StdioServerParams
 
 logger = logging.getLogger(__name__)
@@ -92,24 +92,30 @@ class OAuth2TokenManager:
         return None
         
     def get_effective_redirect_uri(self) -> str:
-        """Get the effective redirect URI, using explicit config or auto-generating from Flask app"""
+        """Get the effective redirect URI, using explicit config or auto-generating from Streamlit runtime
+        Falls back to environment variable PEAK_REDIRECT_URI, then default localhost:8501.
+        """
         if self.auth_config.redirect_uri:
             return self.auth_config.redirect_uri
-            
-        # Auto-generate redirect URI from Flask app configuration
+        
+        # Prefer Streamlit runtime (dynamic port/host) if available
         try:
-            
-            if has_app_context():
-                # Generate the full URL including domain and port
-                redirect_uri = url_for('oauth.oauth_callback', _external=True)
-                logger.info(f"Auto-generated redirect URI: {redirect_uri}")
-                return redirect_uri
+            from peak_assistant.streamlit.util.helpers import get_streamlit_redirect_uri
+            redirect_uri = get_streamlit_redirect_uri()
+            logger.info(f"Using Streamlit redirect URI: {redirect_uri}")
+            return redirect_uri
         except Exception as e:
-            logger.warning(f"Failed to auto-generate redirect URI: {e}")
-            
-        # Fallback to default localhost pattern if Flask context not available
+            logger.warning(f"Failed to obtain Streamlit redirect URI: {e}")
+        
+        # Environment override
+        env_redirect = os.getenv("PEAK_REDIRECT_URI")
+        if env_redirect:
+            logger.info(f"Using PEAK_REDIRECT_URI from environment: {env_redirect}")
+            return env_redirect
+        
+        # Final fallback
         default_redirect = "http://localhost:8501"
-        logger.warning(f"Using fallback redirect URI: {default_redirect}")
+        logger.warning(f"Falling back to default redirect URI: {default_redirect}")
         return default_redirect
         
     async def discover_oauth_endpoints(self) -> Optional[Dict[str, Any]]:
@@ -756,13 +762,19 @@ class MCPConfigManager:
         redirect_uri = config.auth.redirect_uri
         if not redirect_uri:
             try:
-                from flask import url_for
-                redirect_uri = url_for('oauth.oauth_callback', _external=True)
+                # Prefer Streamlit runtime for dynamic URL
+                from peak_assistant.streamlit.util.helpers import get_streamlit_redirect_uri
+                redirect_uri = get_streamlit_redirect_uri()
                 logger.info(f"Auto-generated redirect URI for {server_name}: {redirect_uri}")
             except Exception:
-                # Fallback if Flask context not available
-                redirect_uri = "http://localhost:8501"
-                logger.info(f"Using fallback redirect URI for {server_name}: {redirect_uri}")
+                # Environment override, then fallback
+                env_redirect = os.getenv("PEAK_REDIRECT_URI")
+                if env_redirect:
+                    redirect_uri = env_redirect
+                    logger.info(f"Using environment redirect URI for {server_name}: {redirect_uri}")
+                else:
+                    redirect_uri = "http://localhost:8501"
+                    logger.info(f"Using fallback redirect URI for {server_name}: {redirect_uri}")
         
         # Build registration payload with proper handling of None values
         registration_payload = {

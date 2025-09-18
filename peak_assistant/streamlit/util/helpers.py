@@ -19,30 +19,83 @@ logger = logging.getLogger(__name__)
 def get_streamlit_redirect_uri() -> str:
     """
     Get the current Streamlit app's base URL for OAuth redirects.
-    Uses Streamlit's runtime context to get the actual URL and port.
+    Resolution order:
+      1) Explicit override via env PEAK_REDIRECT_URI
+      2) st.secrets['redirect_uri'] or st.secrets['peak']['redirect_uri']
+      3) Streamlit config (browser.serverAddress/server.address, server.port, server.baseUrlPath, TLS)
+      4) Streamlit runtime (detect active port, default host localhost)
+      5) Default http://localhost:8501
     """
+    # 1) Environment override
     try:
-        # Try to get the current URL from Streamlit's context
-        from streamlit.web import cli as stcli
+        env_uri = os.getenv("PEAK_REDIRECT_URI")
+        if env_uri:
+            logger.debug(f"Using PEAK_REDIRECT_URI from environment: {env_uri}")
+            return env_uri
+    except Exception:
+        pass
+
+    # 2) Secrets override
+    try:
+        secret_uri = None
+        if hasattr(st, "secrets"):
+            if "redirect_uri" in st.secrets:
+                secret_uri = st.secrets["redirect_uri"]
+            elif "peak" in st.secrets and isinstance(st.secrets["peak"], dict):
+                secret_uri = st.secrets["peak"].get("redirect_uri")
+        if secret_uri:
+            logger.debug(f"Using redirect_uri from st.secrets: {secret_uri}")
+            return str(secret_uri)
+    except Exception:
+        pass
+
+    # 3) Streamlit config
+    try:
+        from streamlit import config as stconf  # type: ignore
+        # Prefer browser.serverAddress (external) then server.address
+        address = stconf.get_option("browser.serverAddress") or stconf.get_option("server.address") or "localhost"
+        # Port from config if set
+        cfg_port = stconf.get_option("server.port")
+        # Base URL path (e.g., behind reverse proxy)
+        base_path = stconf.get_option("server.baseUrlPath") or ""
+        # Determine scheme from TLS config
+        scheme = "https" if stconf.get_option("server.sslCertFile") else "http"
+        # If port not set in config, try runtime below
+        port = None
+        try:
+            from streamlit.runtime import get_instance
+            runtime = get_instance()
+            if cfg_port:
+                port = cfg_port
+            elif runtime and hasattr(runtime, '_main_server') and runtime._main_server:
+                port = runtime._main_server._port
+        except Exception:
+            port = cfg_port or 8501
+        port = port or 8501
+        # Normalize base path
+        if base_path and not str(base_path).startswith("/"):
+            base_path = f"/{base_path}"
+        base_url = f"{scheme}://{address}:{port}{base_path}"
+        logger.debug(f"Detected Streamlit URL from config: {base_url}")
+        return base_url
+    except Exception as e:
+        logger.debug(f"Failed to derive URL from Streamlit config: {e}")
+
+    # 4) Runtime-only fallback (port)
+    try:
         from streamlit.runtime import get_instance
-        
-        # Get the runtime instance to access server info
         runtime = get_instance()
         if runtime and hasattr(runtime, '_main_server') and runtime._main_server:
-            # Get the server's port
             port = runtime._main_server._port
-            # Default to localhost, but could be enhanced to detect actual host
             base_url = f"http://localhost:{port}"
-            logger.debug(f"Detected Streamlit URL: {base_url}")
+            logger.debug(f"Detected Streamlit URL from runtime: {base_url}")
             return base_url
-        else:
-            # Fallback to default Streamlit port
-            logger.debug("Could not detect Streamlit server info, using default port 8501")
-            return "http://localhost:8501"
     except Exception as e:
-        # Fallback to default if detection fails
-        logger.debug(f"Failed to detect Streamlit URL: {e}, using default port 8501")
-        return "http://localhost:8501"
+        logger.debug(f"Failed to detect Streamlit runtime URL: {e}")
+
+    # 5) Final default
+    logger.debug("Using default Streamlit URL: http://localhost:8501")
+    return "http://localhost:8501"
 
 def convert_chat_history_to_text_messages(chat_history: List[Dict[str, Any]]) -> List[TextMessage]:
     """Converts a Streamlit chat history (list of dicts) to a list of TextMessage objects."""
