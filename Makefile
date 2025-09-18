@@ -52,5 +52,7 @@ container-run: container-local
 	docker run --rm -it \
 		--mount "type=bind,src=$(PWD),target=/certs" \
 		--mount "type=bind,src=$(PWD)/context.txt,target=/home/peakassistant/context.txt" \
-		-p "127.0.0.1:8000:8000" \
+		--mount "type=bind,src=$(PWD)/.env,target=/home/peakassistant/.env" \
+		--mount "type=bind,src=$(PWD)/mcp_servers.json,target=/home/peakassistant/mcp_servers.json" \
+		-p "127.0.0.1:8501:8501" \
 		ghcr.io/splunk/peak-assistant:$(shell git branch --show-current)
