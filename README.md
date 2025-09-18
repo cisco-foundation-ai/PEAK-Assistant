@@ -3,6 +3,8 @@ PEAK-Assistant is an AI-powered threat hunting assistant designed to guide hunte
 
 ⛔️⛔️ **The PEAK Assistant is intended solely as a proof-of-concept project to demonstrate the potential of agentic security solutions. It has not undergone security testing. Be cautious when deploying this to anything but a local system environment.** ⛔️⛔️
 
+<img src="research-screenshot.png" alt="A screenshot of the PEAK Assistant's topic research tab.">
+
 ## Features
 The PEAK Assistant web app offers the following features:
 
