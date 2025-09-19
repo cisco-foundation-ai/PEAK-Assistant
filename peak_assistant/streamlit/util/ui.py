@@ -68,9 +68,9 @@ def peak_assistant_chat(
             for message in st.session_state[chat_messages_key]:
                 with st.chat_message(message["role"]):
                     st.markdown(message["content"])
-
-            # Create a placeholder for the spinner
-            spinner_placeholder = st.empty()
+            
+            # Create an empty container for immediate message display
+            new_message_container = st.empty()
 
     with doc_col:
         # Use a container with a fixed height to make the content scrollable.
@@ -95,17 +95,13 @@ def peak_assistant_chat(
     if run_button_label and not document_exists:
         if st.button(run_button_label, key=f"{doc_title}_run_button"):
             # This needs to be async so we can call the agent
-            async def do_agent_button(placeholder):
+            async def do_agent_button():
                 # Record the start time
                 start_time = dt.now()
 
-                # Show the spinner in the placeholder
-                with placeholder.container():
-                    with st.spinner("Please wait...", show_time=True):
-                        await agent_runner(debug_agents=True)
-
-                # Clear the spinner and update the UI
-                placeholder.empty()
+                # Show the spinner
+                with st.spinner("Please wait...", show_time=True):
+                    await agent_runner(debug_agents=True)
 
                 # Record the end time
                 end_time = dt.now()
@@ -117,44 +113,51 @@ def peak_assistant_chat(
                 st.session_state[chat_messages_key].append({"role": "assistant", "content": response})
 
             # Run the async function.
-            asyncio.run(do_agent_button(spinner_placeholder))
+            asyncio.run(do_agent_button())
             
             # Rerun to display the updated content.
             st.rerun()
     else:
         # Show chat input (normal behavior)
         if prompt := st.chat_input("", key=doc_title, **chat_extra_args):
-            # This needs to be async so we can call the agent
-            async def do_agent(placeholder):
-                if allow_upload:
-                    # The 'prompt' from st.chat_input with files is an object
-                    # TODO: we set the text_prompt here to None so we explicitly ignore whatever
-                    #       the user types when they upload a file. We should fix this to actually
-                    #       use the text they typed.
-                    text_prompt = None
-                    if prompt.files:
-                        st.session_state[document_key] += prompt.files[0].read().decode("utf-8")
-                        st.session_state[chat_messages_key].append({"role": "assistant", "content": "User uploaded a research report."})
-                    else:
-                        text_prompt = prompt.text
+            # Handle the prompt to determine text content
+            if allow_upload:
+                # The 'prompt' from st.chat_input with files is an object
+                # TODO: we set the text_prompt here to None so we explicitly ignore whatever
+                #       the user types when they upload a file. We should fix this to actually
+                #       use the text they typed.
+                text_prompt = None
+                if prompt.files:
+                    st.session_state[document_key] += prompt.files[0].read().decode("utf-8")
+                    st.session_state[chat_messages_key].append({"role": "assistant", "content": "User uploaded a research report."})
+                    # Rerun to show the upload message
+                    st.rerun()
                 else:
-                    # The 'prompt' is just a string
-                    text_prompt = prompt
+                    text_prompt = prompt.text
+            else:
+                # The 'prompt' is just a string
+                text_prompt = prompt
 
-                if text_prompt:
-                    # Append user message to chat history
-                    st.session_state[chat_messages_key].append({"role": "user", "content": text_prompt})
+            if text_prompt:
+                # Show user message immediately in the empty container
+                with new_message_container.container():
+                    with st.chat_message("user"):
+                        st.markdown(text_prompt)
+                
+                # Add to session state for permanent storage
+                st.session_state[chat_messages_key].append({"role": "user", "content": text_prompt})
 
+                # This needs to be async so we can call the agent
+                async def do_agent():
                     # Record the start time
                     start_time = dt.now()
 
-                    # Show the spinner in the placeholder
-                    with placeholder.container():
+                    # Show the spinner in the chat area, right after the user message
+                    with new_message_container.container():
+                        with st.chat_message("user"):
+                            st.markdown(text_prompt)
                         with st.spinner("Please wait...", show_time=True):
                             await agent_runner(debug_agents=True)
-
-                    # Clear the spinner and update the UI
-                    placeholder.empty()
 
                     # Record the end time
                     end_time = dt.now()
@@ -165,11 +168,12 @@ def peak_assistant_chat(
                     response = f"Completed in {elapsed_time.seconds // 60 % 60}m {elapsed_time.seconds % 60}s."
                     st.session_state[chat_messages_key].append({"role": "assistant", "content": response})
 
-                # Rerun to display the updated content.
+                # Run the async function.
+                asyncio.run(do_agent())
+                
+                # Clear the temporary container and rerun to show in main chat history
+                new_message_container.empty()
                 st.rerun()
-
-            # Run the async function.
-            asyncio.run(do_agent(spinner_placeholder))
 
 def peak_assistant_hypothesis_list(
     title: str = "Hypothesis Generation",
