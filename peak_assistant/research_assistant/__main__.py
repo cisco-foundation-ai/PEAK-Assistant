@@ -34,15 +34,9 @@ def generate_unique_filename(title, extension):
     return base_filename
 
 
-async def websocket_input():
-    return
-
-
 def get_input_function():
-    if os.getenv("FLASK_RUN_FROM_CLI") or os.getenv("WERKZEUG_RUN_MAIN"):
-        return websocket_input
-    else:
-        return input
+    # Always use standard input (Flask integration removed)
+    return input
 
 
 def main() -> None:

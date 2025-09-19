@@ -15,7 +15,7 @@ from enum import Enum
 import logging
 from urllib.parse import urljoin
 from dotenv import load_dotenv
-from flask import has_app_context, url_for
+# Removed Flask dependency; redirect URIs resolved via Streamlit helpers
 from autogen_ext.tools.mcp import McpWorkbench, StdioServerParams
 
 logger = logging.getLogger(__name__)
@@ -92,24 +92,30 @@ class OAuth2TokenManager:
         return None
         
     def get_effective_redirect_uri(self) -> str:
-        """Get the effective redirect URI, using explicit config or auto-generating from Flask app"""
+        """Get the effective redirect URI, using explicit config or auto-generating from Streamlit runtime
+        Falls back to environment variable PEAK_REDIRECT_URI, then default localhost:8501.
+        """
         if self.auth_config.redirect_uri:
             return self.auth_config.redirect_uri
-            
-        # Auto-generate redirect URI from Flask app configuration
+        
+        # Prefer Streamlit runtime (dynamic port/host) if available
         try:
-            
-            if has_app_context():
-                # Generate the full URL including domain and port
-                redirect_uri = url_for('oauth.oauth_callback', _external=True)
-                logger.info(f"Auto-generated redirect URI: {redirect_uri}")
-                return redirect_uri
+            from peak_assistant.streamlit.util.helpers import get_streamlit_redirect_uri
+            redirect_uri = get_streamlit_redirect_uri()
+            logger.info(f"Using Streamlit redirect URI: {redirect_uri}")
+            return redirect_uri
         except Exception as e:
-            logger.warning(f"Failed to auto-generate redirect URI: {e}")
-            
-        # Fallback to default localhost pattern if Flask context not available
-        default_redirect = "https://localhost:8000/oauth/callback"
-        logger.warning(f"Using fallback redirect URI: {default_redirect}")
+            logger.warning(f"Failed to obtain Streamlit redirect URI: {e}")
+        
+        # Environment override
+        env_redirect = os.getenv("PEAK_REDIRECT_URI")
+        if env_redirect:
+            logger.info(f"Using PEAK_REDIRECT_URI from environment: {env_redirect}")
+            return env_redirect
+        
+        # Final fallback
+        default_redirect = "http://localhost:8501"
+        logger.warning(f"Falling back to default redirect URI: {default_redirect}")
         return default_redirect
         
     async def discover_oauth_endpoints(self) -> Optional[Dict[str, Any]]:
@@ -559,7 +565,7 @@ class MCPConfigManager:
         """Find the MCP configuration file"""
         possible_paths = [
             "mcp_servers.json",  # Current directory
-            "../mcp_servers.json",  # Parent directory (when Flask runs from UI subdirectory)
+            "../mcp_servers.json",  # Parent directory
             ".mcp_servers.json",
             os.path.expanduser("~/.config/peak-assistant/mcp_servers.json"),
             "/etc/peak-assistant/mcp_servers.json"
@@ -756,13 +762,19 @@ class MCPConfigManager:
         redirect_uri = config.auth.redirect_uri
         if not redirect_uri:
             try:
-                from flask import url_for
-                redirect_uri = url_for('oauth.oauth_callback', _external=True)
+                # Prefer Streamlit runtime for dynamic URL
+                from peak_assistant.streamlit.util.helpers import get_streamlit_redirect_uri
+                redirect_uri = get_streamlit_redirect_uri()
                 logger.info(f"Auto-generated redirect URI for {server_name}: {redirect_uri}")
             except Exception:
-                # Fallback if Flask context not available
-                redirect_uri = "http://localhost:8000/oauth/callback"
-                logger.info(f"Using fallback redirect URI for {server_name}: {redirect_uri}")
+                # Environment override, then fallback
+                env_redirect = os.getenv("PEAK_REDIRECT_URI")
+                if env_redirect:
+                    redirect_uri = env_redirect
+                    logger.info(f"Using environment redirect URI for {server_name}: {redirect_uri}")
+                else:
+                    redirect_uri = "http://localhost:8501"
+                    logger.info(f"Using fallback redirect URI for {server_name}: {redirect_uri}")
         
         # Build registration payload with proper handling of None values
         registration_payload = {
@@ -969,25 +981,48 @@ class MCPClientManager:
                     return {}
                 headers[config.auth.header_name] = config.auth.api_key
             elif config.auth.type in [AuthType.OAUTH2_CLIENT_CREDENTIALS, AuthType.OAUTH2_AUTHORIZATION_CODE]:
-                if not user_id and config.auth.requires_user_auth:
-                    logger.error(f"User ID is required for user-based OAuth on {config.name}")
-                    return {}
-                
-                # Use authlib OAuth manager for OAuth token handling
+                # Use Streamlit session state for OAuth authentication
+                logger.debug(f"Getting OAuth headers for {config.name} from Streamlit session state")
                 try:
-                    from .authlib_oauth import get_oauth_manager
-                    oauth_manager = get_oauth_manager()
-                    
-                    # Get authentication headers from OAuth manager using hybrid approach (OAuth client + manual fallback)
-                    oauth_headers = oauth_manager.get_fresh_auth_headers(config.name)
-                    if oauth_headers:
-                        headers.update(oauth_headers)
-                    else:
-                        logger.error(f"No valid OAuth token available for {config.name}")
-                        return {}
+                    import streamlit as st
+                    if hasattr(st, 'session_state'):
+                        auth_key = f"MCP.{config.name}"
+                        logger.debug(f"Looking for auth key: {auth_key}")
+                        logger.debug(f"Available MCP session keys: {[k for k in st.session_state.keys() if k.startswith('MCP.')]}")
                         
+                        if auth_key in st.session_state:
+                            auth_data = st.session_state[auth_key]
+                            access_token = auth_data.get("access_token")
+                            stored_user_id = auth_data.get("user_id")
+                            
+                            logger.debug(f"Found auth data: access_token={bool(access_token)}, user_id={bool(stored_user_id)}")
+                            
+                            if access_token:
+                                # Always include access token
+                                headers["Authorization"] = f"Bearer {access_token}"
+                                
+                                # Include user ID if available and required
+                                if stored_user_id:
+                                    headers["X-User-ID"] = stored_user_id
+                                    logger.info(f"Using Streamlit OAuth headers for {config.name} with user ID: {stored_user_id}")
+                                else:
+                                    logger.info(f"Using Streamlit OAuth headers for {config.name} (no user ID)")
+                                    
+                                    # Check if user ID is required
+                                    if config.auth.requires_user_auth:
+                                        logger.error(f"User ID is required for user-based OAuth on {config.name}")
+                                        return {}
+                            else:
+                                logger.error(f"No access token in Streamlit session state for {config.name}")
+                                return {}
+                        else:
+                            logger.error(f"No OAuth data found in Streamlit session state for {config.name}")
+                            return {}
+                    else:
+                        logger.error(f"Streamlit session state not available")
+                        return {}
                 except Exception as e:
-                    logger.error(f"Failed to get OAuth headers for {config.name}: {e}")
+                    logger.error(f"Failed to get Streamlit OAuth headers for {config.name}: {e}")
                     return {}
         
         return headers
