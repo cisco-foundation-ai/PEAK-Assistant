@@ -79,9 +79,9 @@ async def run_hypothesis_refiner(debug_agents: bool = True):
     if debug_agents:
         debug_agents_opts = {
             "msg_preprocess_callback": preprocess_messages_logging,
-            "msg_preprocess_kwargs": {"agent_id": "researcher"},
+            "msg_preprocess_kwargs": {"agent_id": "refiner"},
             "msg_postprocess_callback": postprocess_messages_logging,
-            "msg_postprocess_kwargs": {"agent_id": "researcher"},
+            "msg_postprocess_kwargs": {"agent_id": "refiner"},
         }
 
 
@@ -156,9 +156,9 @@ async def run_data_discovery(debug_agents: bool = False):
     if debug_agents:
         debug_agents_opts = {
             "msg_preprocess_callback": preprocess_messages_logging,
-            "msg_preprocess_kwargs": {"agent_id": "researcher"},
+            "msg_preprocess_kwargs": {"agent_id": "discovery"},
             "msg_postprocess_callback": postprocess_messages_logging,
-            "msg_postprocess_kwargs": {"agent_id": "researcher"},
+            "msg_postprocess_kwargs": {"agent_id": "discovery"},
         }
 
     previous_messages = convert_chat_history_to_text_messages(

@@ -99,9 +99,10 @@ def peak_assistant_chat(
                 # Record the start time
                 start_time = dt.now()
 
-                # Show the spinner
-                with st.spinner("Please wait...", show_time=True):
-                    await agent_runner(debug_agents=True)
+                # Show the spinner in the chat area
+                with new_message_container.container():
+                    with st.spinner("Please wait...", show_time=True):
+                        await agent_runner(debug_agents=True)
 
                 # Record the end time
                 end_time = dt.now()
@@ -115,7 +116,8 @@ def peak_assistant_chat(
             # Run the async function.
             asyncio.run(do_agent_button())
             
-            # Rerun to display the updated content.
+            # Clear the temporary container and rerun to display the updated content.
+            new_message_container.empty()
             st.rerun()
     else:
         # Show chat input (normal behavior)
