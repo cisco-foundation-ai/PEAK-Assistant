@@ -250,5 +250,9 @@ The sample command mounts the current directory as `/certs`, and maps the other 
 ### Accessing the Assistant via Docker
 Once the container is running, you can access it just as though it were running natively. Open `http://127.0.0.1:8501/` (or HTTPS if configured) in your browser.
 
+## Troubleshooting
+### The application is working, but I network errors when I try to download any of the files.
+The most likely cause is that you are using self-signed TLS certificates and, while Chrome may allow you to access the app's pages, it will not allow you to download any files. If you can, use a recognized certificate authority to issue your TLS certificates. If this isn't feasible (e.g., if you are running on a local development machine), you will need to add your CA to the system's root certificate store as a trusted CA. The easiest way to do this is to use the [mkcert](https://github.com/FiloSottile/mkcert) tool to create the local CA, install it on your system, and then use it to create the TLS certificates for the app.
+
 ## License
 See the [LICENSE](LICENSE) for details.
