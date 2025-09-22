@@ -1,0 +1,22 @@
+[logger]
+# Default to only logging warnings and above.  Set this to "info" or even "debug" if 
+# you need more verbose logging.
+level = "warning"
+
+[client]
+# Hide the sidebar by default, since there's not much there.
+showSidebarNavigation = false
+
+# Don't show the default streamlit controls (e.g., the "Deploy" button)
+toolbarMode = "minimal"
+
+[server]
+# Don't open a browser window when you run the app.
+headless = true
+
+# Listen on this interface (0.0.0.0 == all interfaces)
+address = "0.0.0.0"
+
+[browser]
+# Don't send usage statistics to Streamlit.
+gatherUsageStats = false

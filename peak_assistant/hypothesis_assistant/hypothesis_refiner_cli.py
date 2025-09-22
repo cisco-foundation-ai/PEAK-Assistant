@@ -78,7 +78,7 @@ async def refiner(
         However, there may be other criteria that you may consider as well, such as whether the hypothesis 
         is specific enough, whether it is relevant to the research document, and whether it is actionable. 
         
-        For each input hypothesis, if you believe it is a "good" hypothesis, you will return the hypothesis as-is, 
+        For each input hypothesis, if you believe it is a "good" hypothesis, you will always restate the hypothesis as-is, 
         followed by the string "YYY-HYPOTHESIS-ACCEPTED-YYY" on a new line. For "good" hypotheses, do not
         include any additional commentary or notes of your own. If the hypothesis is not a good
         hypothesis, you will return a list of up to 5 reasons why you believe it is not a good hypothesis and 
