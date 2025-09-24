@@ -341,6 +341,14 @@ def store_session_for_oauth(server_name: str, state: str) -> str:
             # Skip MCP server configs (they'll be reloaded from JSON)
             if key == "mcp_server_configs":
                 continue
+            # Skip UI widget keys that can conflict with Streamlit policies on restore
+            if (
+                key.startswith("test_conn_")
+                or key.startswith("status_btn_")
+                or key.startswith("auth_button_")
+                or key.startswith("btn_")
+            ):
+                continue
             # Preserve OAuth client info (needed for token exchange)
             if key.startswith("oauth_client_"):
                 # OAuth client info should be serializable (it's from JSON responses)
@@ -414,6 +422,14 @@ def restore_session_from_oauth(state: str) -> bool:
         # Note: MCP server configs are excluded from storage and will be reloaded from JSON
         stored_state = session_data.get("session_state", {})
         for key, value in stored_state.items():
+            # Skip UI widget keys to avoid Streamlit assignment errors
+            if (
+                key.startswith("test_conn_")
+                or key.startswith("status_btn_")
+                or key.startswith("auth_button_")
+                or key.startswith("btn_")
+            ):
+                continue
             if key not in st.session_state:  # Don't overwrite existing state
                 st.session_state[key] = value
         

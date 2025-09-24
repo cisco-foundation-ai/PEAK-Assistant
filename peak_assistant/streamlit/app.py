@@ -365,8 +365,8 @@ with status_tab:
         # Display server status table
         st.subheader(f"Configured Servers ({len(server_configs)})")
         
-        # Create columns for the table header
-        col1, col2, col3, col4 = st.columns([3, 2, 2, 3])
+        # Create columns for the table header (added Actions column)
+        col1, col2, col3, col4, col5 = st.columns([3, 2, 2, 2, 3])
         with col1:
             st.write("**Server Name**")
         with col2:
@@ -375,6 +375,8 @@ with status_tab:
             st.write("**Description**")
         with col4:
             st.write("**Status**")
+        with col5:
+            st.write("**Actions**")
         
         st.divider()
         
@@ -388,15 +390,19 @@ with status_tab:
             # Clear any potentially conflicting keys from session state
             keys_to_remove = []
             for key in st.session_state.keys():
-                if (key.startswith(f"auth_button_{server_name}") or 
-                    key.startswith(f"status_btn_{server_name}") or
-                    key.startswith(f"btn_{server_name}")):
+                if (
+                    key.startswith(f"auth_button_{server_name}")
+                    or key.startswith(f"status_btn_{server_name}")
+                    or key.startswith(f"btn_{server_name}")
+                    or key.startswith(f"test_conn_{server_name}")  # clear restored test button keys
+                ):
                     keys_to_remove.append(key)
             
             for key in keys_to_remove:
                 del st.session_state[key]
                 
-            col1, col2, col3, col4 = st.columns([3, 2, 2, 3])
+            # Include Actions column on the same row
+            col1, col2, col3, col4, col5 = st.columns([3, 2, 2, 2, 3])
             
             with col1:
                 st.write(f"**{server_name}**")
@@ -499,6 +505,21 @@ with status_tab:
                                     st.error(f"{server_name}: {message}")
                             except Exception as e:
                                 st.error(f"{server_name}: Connection test failed - {str(e)}")
+                
+            with col5:
+                # Dedicated Test Connection button (always available) on same row
+                # Avoid an explicit key to prevent conflicts with restored session state
+                if st.button(f"🧪 Test Connection ({server_name})", type="secondary"):
+                    with st.spinner(f"Testing connection to {server_name}..."):
+                        import asyncio
+                        try:
+                            success, message = asyncio.run(test_mcp_connection(server_name, config))
+                            if success:
+                                st.success(f"{server_name}: {message}")
+                            else:
+                                st.error(f"{server_name}: {message}")
+                        except Exception as e:
+                            st.error(f"{server_name}: Connection test failed - {str(e)}")
             
             # Show API key input if requested
             if st.session_state.get(f"show_api_key_input_{server_name}", False):
