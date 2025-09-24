@@ -366,16 +366,14 @@ with status_tab:
         st.subheader(f"Configured Servers ({len(server_configs)})")
         
         # Create columns for the table header
-        col1, col2, col3, col4, col5 = st.columns([3, 2, 2, 3, 2])
+        col1, col2, col3, col4 = st.columns([3, 2, 2, 3])
         with col1:
             st.write("**Server Name**")
         with col2:
             st.write("**Transport**")
         with col3:
-            st.write("**Auth Type**")
-        with col4:
             st.write("**Description**")
-        with col5:
+        with col4:
             st.write("**Status**")
         
         st.divider()
@@ -398,7 +396,7 @@ with status_tab:
             for key in keys_to_remove:
                 del st.session_state[key]
                 
-            col1, col2, col3, col4, col5 = st.columns([3, 2, 2, 3, 2])
+            col1, col2, col3, col4 = st.columns([3, 2, 2, 3])
             
             with col1:
                 st.write(f"**{server_name}**")
@@ -407,15 +405,9 @@ with status_tab:
                 st.write(config.transport.value.upper())
             
             with col3:
-                if config.auth:
-                    st.write(config.auth.type.value.replace("_", " ").title())
-                else:
-                    st.write("None")
-            
-            with col4:
                 st.write(config.description or "No description")
             
-            with col5:
+            with col4:
                 # Get authentication status
                 status_color, status_message = get_mcp_auth_status(server_name, config)
                 
