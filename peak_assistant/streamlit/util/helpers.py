@@ -889,7 +889,7 @@ def perform_dynamic_client_registration(server_url: str) -> Optional[Dict[str, s
         # Client registration payload
         registration_data = {
             "client_name": "PEAK Assistant",
-            "client_uri": "https://github.com/splunk/PEAK-Assistant",
+            "client_uri": "https://github.com/cisco-foundation-ai/PEAK-Assistant",
             "redirect_uris": [get_streamlit_redirect_uri()],
             "grant_types": ["authorization_code"],
             "response_types": ["code"],
