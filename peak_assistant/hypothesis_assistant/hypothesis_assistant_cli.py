@@ -30,8 +30,7 @@ import asyncio
 from autogen_core.models import UserMessage, SystemMessage
 
 from ..utils import find_dotenv_file
-from ..utils.assistant_auth import PEAKAssistantAuthManager
-from ..utils.azure_client import PEAKAssistantAzureOpenAIClient
+from ..utils.llm_factory import get_model_client
 
 
 async def hypothesizer(
@@ -39,7 +38,7 @@ async def hypothesizer(
 ) -> str:
     """
     Hypothesizer agent that combines user input, a markdown document, and its own prompt
-    to generate output using an OpenAI model on Azure.
+    to generate output using the configured LLM provider.
 
     Args:
         user_input (str): A string provided by the user.
@@ -81,14 +80,11 @@ async def hypothesizer(
         ),
     ]
 
-    auth_mgr = PEAKAssistantAuthManager()
-    az_model_client = await PEAKAssistantAzureOpenAIClient().get_client(
-        auth_mgr=auth_mgr
-    )
+    chat_model_client = await get_model_client("chat")
 
-    # Call the LLM using the AzureOpenAIChatCompletionClient
+    # Call the LLM using the configured provider client
     try:
-        result = await az_model_client.create(messages)  # Await the async method
+        result = await chat_model_client.create(messages)  # Await the async method
         # Access the content from the CreateResult object
         return str(
             result.content

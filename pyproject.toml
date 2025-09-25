@@ -81,3 +81,6 @@ research-assistant = "peak_assistant.research_assistant.__main__:main"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "live: marks tests that call external LLM APIs (deselect with '-m \"not live\"')",
+]

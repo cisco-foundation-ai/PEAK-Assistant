@@ -27,8 +27,7 @@ from autogen_agentchat.teams import RoundRobinGroupChat
 from autogen_agentchat.ui import Console
 from autogen_agentchat.conditions import TextMentionTermination
 
-from ..utils.assistant_auth import PEAKAssistantAuthManager
-from ..utils.azure_client import PEAKAssistantAzureOpenAIClient
+from ..utils.llm_factory import get_model_client
 from ..utils.mcp_config import get_client_manager, setup_mcp_servers
 
 
@@ -140,14 +139,9 @@ async def identify_data_sources(
     if previous_run:
         messages = messages + previous_run
 
-    # Initialize the model client
-    auth_mgr = PEAKAssistantAuthManager()
-    az_model_client = await PEAKAssistantAzureOpenAIClient().get_client(
-        auth_mgr=auth_mgr
-    )
-    az_model_reasoning_client = await PEAKAssistantAzureOpenAIClient().get_client(
-        auth_mgr=auth_mgr, model_type="reasoning"
-    )
+    # Initialize the model client(s)
+    chat_model_client = await get_model_client("chat")
+    reasoning_model_client = await get_model_client("reasoning")
 
     # Set up MCP servers for data discovery
     mcp_client_manager = get_client_manager()
@@ -184,8 +178,8 @@ async def identify_data_sources(
         messages,
         data_discovery_prompt,
         discovery_critic_prompt,
-        az_model_client,
-        az_model_reasoning_client,
+        chat_model_client,
+        reasoning_model_client,
         verbose,
         previous_run,
         msg_preprocess_callback,
@@ -200,8 +194,8 @@ async def _run_data_discovery_with_workbench(
     messages,
     data_discovery_prompt,
     discovery_critic_prompt,
-    az_model_client,
-    az_model_reasoning_client,
+    chat_model_client,
+    reasoning_model_client,
     verbose,
     previous_run,
     msg_preprocess_callback,
@@ -213,7 +207,7 @@ async def _run_data_discovery_with_workbench(
 
     data_discovery_agent = AssistantAgent(
         "Data_Discovery_Agent",
-        model_client=az_model_client,
+        model_client=chat_model_client,
         workbench=mcp_workbench,
         reflect_on_tool_use=True,
         model_client_stream=True,
@@ -222,7 +216,7 @@ async def _run_data_discovery_with_workbench(
 
     discovery_critic_agent = AssistantAgent(
         "Discovery_Critic_Agent",
-        model_client=az_model_reasoning_client,
+        model_client=reasoning_model_client,
         system_message=discovery_critic_prompt,
     )
 

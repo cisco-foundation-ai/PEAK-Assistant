@@ -165,23 +165,99 @@ Splunk indices, sourcetypes, and fields. This will help the AI agents understand
 and generate more accurate queries. It's not required, because the automated data discovery is actually pretty good, but it can be helpful.
 
 ## 2. Environment Variables
-The rest of the Assistant configuration has to do with the LLM configuration, and is held in environment variables. Create a `.env` file in the project root with the following variables:
+The rest of the Assistant configuration has to do with the LLM configuration, and is held in environment variables. Create a `.env` file in the project root with the following variables. The app automatically searches for `.env` in the current directory and its parents.
+
+All configurations require a provider selector:
 
 ```
-# Note that the PEAK Assistant only supports Azure OpenAI at this time.
+LLM_PROVIDER=azure | openai
+```
+
+### Azure OpenAI configuration
+
+```
+LLM_PROVIDER=azure
+
 AZURE_OPENAI_API_KEY=your-azure-openai-api-key
 AZURE_OPENAI_ENDPOINT=https://your-azure-endpoint.openai.azure.com/
-AZURE_OPENAI_DEPLOYMENT=your-deployment-name
-AZURE_OPENAI_API_VERSION=2023-05-15
+AZURE_OPENAI_API_VERSION=2025-04-01-preview
 
-# Use this model for most tasks
+# Use this model/deployment for most tasks (chat)
+AZURE_OPENAI_DEPLOYMENT=your-chat-deployment
 AZURE_OPENAI_MODEL=gpt-4o
 
-# Use this model when you need extended thinking (some of the research, data discovery, 
-# and planning tasks benefit from this). If you prefer not to use a reasoning model, simply 
-set these to whatever values you're using above for the non-reasoning model.
-AZURE_OPENAI_REASONING_DEPLOYMENT=your-reasoning-deployment-nameqvi
+# Optional: separate reasoning configuration; if omitted, falls back to chat
+AZURE_OPENAI_REASONING_DEPLOYMENT=your-reasoning-deployment
 AZURE_OPENAI_REASONING_MODEL=o4-mini
+```
+
+### OpenAI (native) configuration
+
+```
+LLM_PROVIDER=openai
+
+OPENAI_API_KEY=sk-your-key
+OPENAI_MODEL=gpt-4o-mini
+
+# Optional: separate reasoning model; if omitted, falls back to OPENAI_MODEL
+OPENAI_REASONING_MODEL=gpt-4o
+```
+
+### OpenAI-compatible endpoints (custom base_url)
+
+Use this to connect to local/self-hosted servers that expose an OpenAI-compatible API (e.g., Ollama, vLLM, LM Studio). Many local servers accept any string as an API key, but an API key is still required by the client.
+
+```
+LLM_PROVIDER=openai
+
+OPENAI_API_KEY=sk-local-or-any-string
+OPENAI_MODEL=gpt-4o-mini
+OPENAI_BASE_URL=http://localhost:11434/v1
+
+# Optional: separate reasoning model; if omitted, falls back to OPENAI_MODEL
+OPENAI_REASONING_MODEL=gpt-4o
+```
+
+If your OpenAI-compatible server uses non-OpenAI model names, provide a model info JSON file that contains a TOP-LEVEL mapping of `model_id -> ModelInfo` so the client knows each model's capabilities:
+
+```
+# Provide model_info mapping for non-OpenAI model names
+OPENAI_MODEL_INFO_FILE=/absolute/path/to/models.json
+```
+
+Example minimal `model_info` mapping JSON (adjust fields to match your server). Required fields include: `family`, `vision`, `audio`, `function_calling`, `json_output`, `structured_output`, and nested `input.max_tokens`, `output.max_tokens`.
+
+```json
+{
+  "your-local-chat-model": {
+    "id": "your-local-chat-model",
+    "object": "model",
+    "owned_by": "local",
+    "family": "gpt-4o-mini",
+    "vision": false,
+    "audio": false,
+    "function_calling": false,
+    "json_output": false,
+    "structured_output": false,
+    "input": { "max_tokens": 131072 },
+    "output": { "max_tokens": 8192 },
+    "tokenizer": "tiktoken-gpt-4o"
+  },
+  "your-local-reasoning-model": {
+    "id": "your-local-reasoning-model",
+    "object": "model",
+    "owned_by": "local",
+    "family": "gpt-4o-mini",
+    "vision": false,
+    "audio": false,
+    "function_calling": false,
+    "json_output": false,
+    "structured_output": false,
+    "input": { "max_tokens": 131072 },
+    "output": { "max_tokens": 8192 },
+    "tokenizer": "tiktoken-gpt-4o"
+  }
+}
 ```
 
 ## Running the Assistant
@@ -206,6 +282,32 @@ The PEAK-Assistant follows a structured workflow that aligns with the PEAK Threa
 4. **ABLE Table Creation**: Develop Actor, Behavior, Location, Evidence tables to scope the hunt
 5. **Data Discovery**: Identify relevant data sources in your Splunk environment for testing hypotheses
 6. **Hunt Planning**: Combine all components into a comprehensive threat hunting plan
+
+## Live Integration Tests (optional)
+
+This repository includes live integration tests that make real calls to the configured LLM provider. These tests are marked with `@pytest.mark.live` and are skipped unless your `.env` is properly configured for the target provider.
+
+- Run all live tests:
+  ```bash
+  pytest -m live tests/integration -q
+  ```
+
+- OpenAI (native): ensure `.env` includes `LLM_PROVIDER=openai`, `OPENAI_API_KEY`, `OPENAI_MODEL`, and does not set `OPENAI_BASE_URL`.
+  ```bash
+  pytest -m live tests/integration/test_openai_live.py -q
+  ```
+
+- OpenAI-compatible (custom base_url): ensure `.env` includes `LLM_PROVIDER=openai`, `OPENAI_API_KEY`, `OPENAI_MODEL`, and `OPENAI_BASE_URL` (e.g., `http://localhost:11434/v1`).
+  ```bash
+  pytest -m live tests/integration/test_openai_base_url_live.py -q
+  ```
+
+- Azure OpenAI: ensure `.env` includes `LLM_PROVIDER=azure` and the required `AZURE_OPENAI_*` variables.
+  ```bash
+  pytest -m live tests/integration/test_azure_live.py -q
+  ```
+
+Note: These tests make real network calls and may incur costs when using hosted providers.
 
 ## Docker Support
 
@@ -255,7 +357,13 @@ Once the container is running, you can access it just as though it were running 
 Podman commands are generally very compatible with Docker commands, so you should be able to use them interchangeably. The only difference is that you will need to use `podman` instead of `docker` in the commands above.
 
 ### What if I want to use a different LLM provider?
-We're working on this. Stay tuned!
+The Assistant supports multiple providers via environment configuration:
+
+- Azure OpenAI: `LLM_PROVIDER=azure` + `AZURE_OPENAI_*` variables
+- OpenAI (native): `LLM_PROVIDER=openai` + `OPENAI_*` variables
+- OpenAI-compatible: `LLM_PROVIDER=openai` + `OPENAI_*` + `OPENAI_BASE_URL`
+
+Agents can request either a "chat" or "reasoning" model. If a reasoning model isn’t configured, the app falls back to the chat model. Additional native providers may be added in the future.
 
 ## Troubleshooting
 ### The application is working, but I network errors when I try to download any of the files.

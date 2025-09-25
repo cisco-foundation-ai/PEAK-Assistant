@@ -180,6 +180,7 @@ cython_debug/
 *.md
 *.json
 *.jsonl
+*.ORIG
 
 # Ignore everything in the evaluation reports directory.
 # We don't commit these to the repo anyway. 

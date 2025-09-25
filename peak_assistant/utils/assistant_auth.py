@@ -62,3 +62,73 @@ class PEAKAssistantAuthManager:
         auth_params["api_key"] = self._api_key
 
         return auth_params
+
+
+class LLMAuthManager:
+    """Provider-aware authentication manager for the LLM factory.
+
+    Reads environment variables based on the selected provider and exposes
+    provider-agnostic auth parameters (e.g., api_key).
+    """
+
+    def __init__(self) -> None:
+        self._provider = os.getenv("LLM_PROVIDER")
+        # Defer reading provider-specific keys until validation to keep state simple
+
+    def ensure_configured(self) -> bool:
+        """Validate that required env vars for the selected provider are present.
+
+        Raises:
+            EnvironmentError: if LLM_PROVIDER is missing or required values are missing.
+        """
+
+        if not self._provider:
+            raise EnvironmentError(
+                "LLM_PROVIDER is required. Set it to 'azure' or 'openai'."
+            )
+
+        prov = self._provider.lower().strip()
+        missing: list[str] = []
+
+        if prov == "azure":
+            # Required for Azure
+            if not os.getenv("AZURE_OPENAI_API_KEY"):
+                missing.append("AZURE_OPENAI_API_KEY")
+            if not os.getenv("AZURE_OPENAI_ENDPOINT"):
+                missing.append("AZURE_OPENAI_ENDPOINT")
+            if not os.getenv("AZURE_OPENAI_API_VERSION"):
+                missing.append("AZURE_OPENAI_API_VERSION")
+            # Chat model/deployment required; reasoning is optional
+            if not os.getenv("AZURE_OPENAI_DEPLOYMENT"):
+                missing.append("AZURE_OPENAI_DEPLOYMENT")
+            if not os.getenv("AZURE_OPENAI_MODEL"):
+                missing.append("AZURE_OPENAI_MODEL")
+        elif prov == "openai":
+            # Required for OpenAI/OpenAI-compatible
+            if not os.getenv("OPENAI_API_KEY"):
+                missing.append("OPENAI_API_KEY")
+            if not os.getenv("OPENAI_MODEL"):
+                missing.append("OPENAI_MODEL")
+            # OPENAI_BASE_URL is optional for OpenAI-compatible endpoints
+        else:
+            raise EnvironmentError(
+                f"Unsupported LLM_PROVIDER '{self._provider}'. Supported: azure, openai."
+            )
+
+        if missing:
+            raise EnvironmentError(
+                f"Missing required environment variable(s) for provider '{prov}': {', '.join(missing)}"
+            )
+
+        return True
+
+    async def get_auth_params(self) -> dict[str, Optional[str]]:
+        """Return provider-agnostic authentication params for the model client."""
+
+        prov = (self._provider or "").lower().strip()
+        if prov == "azure":
+            return {"api_key": os.getenv("AZURE_OPENAI_API_KEY")}
+        elif prov == "openai":
+            return {"api_key": os.getenv("OPENAI_API_KEY")}
+        # Should not reach here due to ensure_configured
+        return {"api_key": None}

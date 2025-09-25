@@ -37,8 +37,7 @@ from autogen_agentchat.ui import Console
 from autogen_agentchat.base import TaskResult
 
 from ..utils import find_dotenv_file
-from ..utils.assistant_auth import PEAKAssistantAuthManager
-from ..utils.azure_client import PEAKAssistantAzureOpenAIClient
+from ..utils.llm_factory import get_model_client
 from ..utils.agent_callbacks import (
     preprocess_messages_logging,
     postprocess_messages_logging,
@@ -58,7 +57,7 @@ async def refiner(
 ) -> TaskResult:
     """
     Threat hunting hypothesis refiner agent that combines user input, a markdown document, and its own prompt
-    to generate output using an OpenAI model on Azure.
+    to generate output using the configured LLM provider.
 
     Args:
         hypothesis (str): A string provided by the user containing a threat hunting hypothesis.
@@ -110,22 +109,16 @@ async def refiner(
         host, or other monitoring necessary to test their hypothesis.
     """
 
-    auth_mgr = PEAKAssistantAuthManager()
-    az_model_client = await PEAKAssistantAzureOpenAIClient().get_client(
-        auth_mgr=auth_mgr
-    )
-    # _az_model_reasoning_client = await PEAKAssistantAzureOpenAIClient().get_client(
-    #     auth_mgr=auth_mgr, model_type="reasoning"
-    # )
+    chat_model_client = await get_model_client("chat")
 
     # Create the primary agent.
     refiner_agent = AssistantAgent(
-        "refiner", model_client=az_model_client, system_message=refiner_system_prompt
+        "refiner", model_client=chat_model_client, system_message=refiner_system_prompt
     )
 
     # Create the critic agent.
     critic_agent = AssistantAgent(
-        "critic", model_client=az_model_client, system_message=critic_system_prompt
+        "critic", model_client=chat_model_client, system_message=critic_system_prompt
     )
 
     # Define a termination condition that stops the task if the critic approves.

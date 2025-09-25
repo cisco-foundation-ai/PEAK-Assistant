@@ -23,7 +23,6 @@
 from typing import Optional
 
 import traceback
-import openai
 
 from autogen_agentchat.messages import TextMessage
 from autogen_agentchat.agents import AssistantAgent
@@ -32,8 +31,7 @@ from autogen_agentchat.teams import SelectorGroupChat
 from autogen_agentchat.ui import Console
 from autogen_agentchat.base import TaskResult
 
-from ..utils.assistant_auth import PEAKAssistantAuthManager
-from ..utils.azure_client import PEAKAssistantAzureOpenAIClient
+from ..utils.llm_factory import get_model_client
 from ..utils.mcp_config import get_client_manager, setup_mcp_servers
 
 
@@ -300,13 +298,8 @@ async def researcher(
         {history}
     """
 
-    auth_mgr = PEAKAssistantAuthManager()
-    az_model_client = await PEAKAssistantAzureOpenAIClient().get_client(
-        auth_mgr=auth_mgr
-    )
-    az_model_reasoning_client = await PEAKAssistantAzureOpenAIClient().get_client(
-        auth_mgr=auth_mgr, model_type="reasoning"
-    )
+    chat_model_client = await get_model_client("chat")
+    reasoning_model_client = await get_model_client("reasoning")
 
     # Set up MCP servers for research
     mcp_client_manager = get_client_manager()
@@ -346,20 +339,20 @@ async def researcher(
         AssistantAgent(
             "external_search_agent",
             description="Performs searches and analyzes information using external research tools (i.e. web search)",
-            model_client=az_model_client,
+            model_client=chat_model_client,
             workbench=group_workbenches_external,
             system_message=search_system_prompt,
         ),
         AssistantAgent(
             "summarizer_agent",
             description="Provides a detailed markdown summary of the research as a report to the user.",
-            model_client=az_model_client,
+            model_client=chat_model_client,
             system_message=summarizer_system_prompt,
         ),
         AssistantAgent(
             "summary_critic",
             description="Evaluates the summary and ensures it meets the user's needs.",
-            model_client=az_model_reasoning_client,
+            model_client=reasoning_model_client,
             system_message=summary_critic_system_prompt,
         ),
     ]
@@ -369,7 +362,7 @@ async def researcher(
             AssistantAgent(
                 "internal_search_agent",
                 description="Performs searches and analyzes information using local information sources (e.g., wikis, ticket systems, etc)",
-                model_client=az_model_client,
+                model_client=chat_model_client,
                 workbench=group_workbenches_internal,
                 system_message=search_system_prompt,
             )
@@ -382,7 +375,7 @@ async def researcher(
     # Create a team
     team = SelectorGroupChat(
         participants=participants,
-        model_client=az_model_client,
+        model_client=chat_model_client,
         termination_condition=text_termination,
         selector_prompt=selector_prompt,
     )
@@ -419,9 +412,6 @@ async def researcher(
             )
 
         return result
-    except (openai.RateLimitError, openai.APIError) as e:
-        # Re-raise specific OpenAI errors to be handled by the API layer
-        raise e
     except Exception as e:
         # Catch any other unexpected errors and wrap them
         print(
