@@ -21,7 +21,7 @@ The PEAK Assistant web app offers the following features:
 ## Setting up the Python Environment
 Clone the [GitHub repo] to a directory on your local system:
 ```bash
-git clone https://github.com/splunk/PEAK-Assistant
+git clone https://github.com/cisco-foundation-ai/PEAK-Assistant
 cd PEAK-Assistant
 ```
 
@@ -236,7 +236,7 @@ Once you have the image downloaded, you can run the container by running the fol
 		--mount "type=bind,src=$(PWD)/.env,target=/home/peakassistant/.env" \
 		--mount "type=bind,src=$(PWD)/mcp_servers.json,target=/home/peakassistant/mcp_servers.json" \
 		-p "127.0.0.1:8501:8501" \
-		ghcr.io/splunk/peak-assistant:latest
+		ghcr.io/cisco-foundation-ai/peak-assistant:latest
 ```
 
 Note that you will still need to provide the same configuration files as you would if you were running the app natively:

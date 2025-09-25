@@ -44,7 +44,7 @@ coverage-html: coverage
 
 .PHONY: container-local
 container-local:
-	docker buildx build -t ghcr.io/splunk/peak-assistant:$(shell git branch --show-current) --load .
+	docker buildx build -t ghcr.io/cisco-foundation-ai/peak-assistant:$(shell git branch --show-current) --load .
 
 
 .PHONY: container-run
@@ -56,4 +56,4 @@ container-run: container-local
 		--mount "type=bind,src=$(PWD)/.env,target=/home/peakassistant/.env" \
 		--mount "type=bind,src=$(PWD)/mcp_servers.json,target=/home/peakassistant/mcp_servers.json" \
 		-p "127.0.0.1:8501:8501" \
-		ghcr.io/splunk/peak-assistant:$(shell git branch --show-current)
+		ghcr.io/cisco-foundation-ai/peak-assistant:$(shell git branch --show-current)
