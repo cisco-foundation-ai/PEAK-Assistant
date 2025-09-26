@@ -136,7 +136,7 @@ async def run_hypothesis_refiner(debug_agents: bool = True):
         (
             getattr(message, "content", None)
             for message in reversed(result.messages)
-            if message.source == "critic" and hasattr(message, "content")
+            if message.source == "refiner" and hasattr(message, "content")
         ),
         "Could not refine hypothesis. Something went wrong.",  # Default value if no "critic" message is found
     )
