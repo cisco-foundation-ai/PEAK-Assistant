@@ -104,7 +104,8 @@ async def able_table(
 
         The output should be a Markdown document with the following format:
             - Title: 1st level header with the title "PEAK ABLE Table: " followed by the 
-                common name for the technique being hunted for.
+                common name for the technique being hunted for. This should be the first line
+                of your output.
             - Hypothesis: Italic text with the text "Hypothesis: " followed by the user's
                 hunting hypothesis.
             - ABLE Table: An easy-to-read table with the following columns:
@@ -113,6 +114,10 @@ async def able_table(
             - Notes: If there are any notes or additional information that the user should
                 be aware of, include them here. This should be a bulleted list. This is an 
                 option section and should be omitted if there are no notes. 
+
+        Never include any markdown langauage hints (e.g., ```, ```markdown, etc.) or any 
+        other text in the output. The first line should be the title. The very first character 
+        should be the # symbol.
     """
 
     messages: List[SystemMessage | UserMessage] = [
