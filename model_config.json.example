@@ -48,13 +48,13 @@
   },
   "groups": {
     "research-team": {
-      "match": ["external_search_*", "internal_search_*", "summarizer_agent", "summary_critic", "research_selector"],
+      "match": ["external_search_*", "internal_search_*", "summarizer_agent", "summary_critic", "research_team_lead"],
       "provider": "azure-main",
       "model": "gpt-4o",
       "deployment": "gpt-4o-deployment"
     },
     "reasoning-agents": {
-      "match": ["*_critic", "hunt_planner", "hunt_plan_critic"],
+      "match": ["hunt_planner", "hunt_plan_critic"],
       "provider": "azure-main",
       "model": "o4-mini",
       "deployment": "o4-mini-deployment"
