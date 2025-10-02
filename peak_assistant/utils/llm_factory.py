@@ -23,65 +23,62 @@
 Provider-agnostic LLM factory.
 
 Usage:
-    client = await get_model_client(kind="chat")
-    reasoning_client = await get_model_client(kind="reasoning")
+    client = await get_model_client(agent_name="summarizer_agent")
+    client = await get_model_client()  # Uses defaults
 
-Configuration (env-only, enforced):
-    - LLM_PROVIDER: azure | openai
-
-Azure:
-    - AZURE_OPENAI_API_KEY
-    - AZURE_OPENAI_ENDPOINT
-    - AZURE_OPENAI_API_VERSION
-    - AZURE_OPENAI_DEPLOYMENT, AZURE_OPENAI_MODEL
-    - AZURE_OPENAI_REASONING_DEPLOYMENT (optional)
-    - AZURE_OPENAI_REASONING_MODEL (optional)
-
-OpenAI (native and OpenAI-compatible):
-    - OPENAI_API_KEY
-    - OPENAI_MODEL
-    - OPENAI_REASONING_MODEL (optional)
-    - OPENAI_BASE_URL (optional; enables OpenAI-compatible endpoints)
-    - OPENAI_MODEL_INFO_FILE (optional; JSON file path to a TOP-LEVEL MAPPING of
-      model_id -> ModelInfo for non-OpenAI model names when using a custom base_url)
+Configuration:
+    Requires model_config.json in the current working directory.
+    See MODEL_CONFIGURATION.md for details.
 """
 
 from __future__ import annotations
 
-import os
-import json
-from typing import Literal, Any, Type
+from typing import Optional, Any, Type
+from pathlib import Path
 
-from .assistant_auth import LLMAuthManager
-
-
-Kind = Literal["chat", "reasoning"]
+from .model_config_loader import get_loader, ModelConfigError
 
 
-async def get_model_client(kind: Kind = "chat"):
-    """Return a configured model client for the selected provider.
+async def get_model_client(agent_name: Optional[str] = None, config_path: Optional[Path] = None):
+    """Return a configured model client for the specified agent.
 
     Args:
-        kind: "chat" or "reasoning". If reasoning is not configured for the
-              provider, this will fall back to the chat configuration.
+        agent_name: Name of the agent. If None, uses defaults from config.
+        config_path: Path to model_config.json. If None, uses CWD.
+
+    Returns:
+        Configured LLM client instance.
 
     Raises:
-        EnvironmentError: if provider selection or required env vars are missing.
-        ValueError: for unsupported provider.
+        ModelConfigError: if configuration is missing or invalid.
+        ValueError: for unsupported provider type.
     """
-    auth_mgr = LLMAuthManager()
-    auth_mgr.ensure_configured()
-
-    provider = (os.getenv("LLM_PROVIDER") or "").lower().strip()
-
-    if provider == "azure":
-        return await _build_azure_client(kind, auth_mgr)
-    elif provider == "openai":
-        return await _build_openai_client(kind, auth_mgr)
-    else:
-        raise ValueError(
-            f"Unsupported LLM_PROVIDER '{provider}'. Supported: azure, openai."
-        )
+    try:
+        loader = get_loader(config_path)
+        
+        # Resolve agent configuration
+        agent_config = loader.resolve_agent_config(agent_name)
+        
+        # Get provider configuration
+        provider_name = agent_config["provider"]
+        provider_config = loader.get_provider_config(provider_name)
+        
+        provider_type = provider_config["type"]
+        
+        if provider_type == "azure":
+            return await _build_azure_client(agent_config, provider_config, loader)
+        elif provider_type == "openai":
+            return await _build_openai_client(agent_config, provider_config, loader)
+        else:
+            raise ValueError(
+                f"Unsupported provider type '{provider_type}'. Supported: azure, openai."
+            )
+    except ModelConfigError:
+        raise
+    except Exception as e:
+        raise ModelConfigError(
+            f"Failed to create model client for agent '{agent_name or 'defaults'}': {e}"
+        ) from e
 
 
 """Module-level placeholders for client classes to enable test monkeypatching
@@ -90,109 +87,112 @@ AZURE_CLIENT_CLASS: Type[Any] | None = None
 OPENAI_CLIENT_CLASS: Type[Any] | None = None
 
 
-async def _build_azure_client(kind: Kind, auth_mgr: LLMAuthManager):
-    # Determine model/deployment based on kind, with fallback for reasoning
-    if kind == "reasoning":
-        azure_deployment = os.getenv(
-            "AZURE_OPENAI_REASONING_DEPLOYMENT", os.getenv("AZURE_OPENAI_DEPLOYMENT")
+async def _build_azure_client(agent_config: dict, provider_config: dict, loader: Any):
+    """Build Azure OpenAI client from configuration.
+    
+    Args:
+        agent_config: Resolved agent configuration (must include 'model' and 'deployment')
+        provider_config: Provider configuration (must include 'config' with connection details)
+        loader: ModelConfigLoader instance
+    
+    Returns:
+        AzureOpenAIChatCompletionClient instance
+    """
+    # Validate required agent fields
+    if "model" not in agent_config:
+        raise ModelConfigError("Azure agent configuration must include 'model' field")
+    if "deployment" not in agent_config:
+        raise ModelConfigError("Azure agent configuration must include 'deployment' field")
+    
+    # Get connection config from provider
+    conn_config = provider_config["config"]
+    
+    # Validate required provider fields
+    required_fields = ["endpoint", "api_key", "api_version"]
+    missing = [f for f in required_fields if f not in conn_config]
+    if missing:
+        raise ModelConfigError(
+            f"Azure provider configuration missing required fields: {', '.join(missing)}"
         )
-        model = os.getenv(
-            "AZURE_OPENAI_REASONING_MODEL", os.getenv("AZURE_OPENAI_MODEL")
-        )
-    else:
-        azure_deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT")
-        model = os.getenv("AZURE_OPENAI_MODEL")
-
-    params: dict[str, str | None] = {
-        "azure_deployment": azure_deployment,
-        "model": model,
-        "api_version": os.getenv("AZURE_OPENAI_API_VERSION"),
-        "azure_endpoint": os.getenv("AZURE_OPENAI_ENDPOINT"),
+    
+    params = {
+        "azure_deployment": agent_config["deployment"],
+        "model": agent_config["model"],
+        "api_version": conn_config["api_version"],
+        "azure_endpoint": conn_config["endpoint"],
+        "api_key": conn_config["api_key"],
     }
-
-    params.update(await auth_mgr.get_auth_params())
-
+    
     global AZURE_CLIENT_CLASS
     if AZURE_CLIENT_CLASS is None:
         # Lazy import to avoid requiring dependency at module import time
         from autogen_ext.models.openai import AzureOpenAIChatCompletionClient as _AZ
-
         AZURE_CLIENT_CLASS = _AZ
-
+    
     return AZURE_CLIENT_CLASS(**params)  # type: ignore[misc]
 
 
-async def _build_openai_client(kind: Kind, auth_mgr: LLMAuthManager):
-    # Determine model based on kind, with fallback for reasoning
-    if kind == "reasoning":
-        model = os.getenv("OPENAI_REASONING_MODEL", os.getenv("OPENAI_MODEL"))
-    else:
-        model = os.getenv("OPENAI_MODEL")
-
-    params: dict[str, str | None] = {
-        "model": model,
+async def _build_openai_client(agent_config: dict, provider_config: dict, loader: Any):
+    """Build OpenAI client from configuration.
+    
+    Args:
+        agent_config: Resolved agent configuration (must include 'model')
+        provider_config: Provider configuration (must include 'config' with connection details)
+        loader: ModelConfigLoader instance
+    
+    Returns:
+        OpenAIChatCompletionClient instance
+    """
+    # Validate required agent fields
+    if "model" not in agent_config:
+        raise ModelConfigError("OpenAI agent configuration must include 'model' field")
+    
+    # Get connection config from provider
+    conn_config = provider_config["config"]
+    
+    # Validate required provider fields
+    if "api_key" not in conn_config:
+        raise ModelConfigError("OpenAI provider configuration missing required 'api_key' field")
+    
+    params = {
+        "model": agent_config["model"],
+        "api_key": conn_config["api_key"],
     }
-
-    base_url = os.getenv("OPENAI_BASE_URL")
-    if base_url:
-        params["base_url"] = base_url
-
-    # Optional: provide model_info for OpenAI-compatible servers when model name
-    # is not a recognized OpenAI model. We expect a top-level mapping of model_id -> ModelInfo.
-    model_info_file = os.getenv("OPENAI_MODEL_INFO_FILE")
-    if model_info_file:
-        try:
-            with open(model_info_file, "r", encoding="utf-8") as f:
-                info_map = json.load(f)
-            if not isinstance(info_map, dict):
-                raise ValueError(
-                    "OPENAI_MODEL_INFO_FILE must be a JSON object mapping model_id -> ModelInfo"
-                )
-            entry = info_map.get(model)
-            if entry is None:
-                available = ", ".join(sorted(k for k in info_map.keys() if isinstance(k, str)))
-                raise KeyError(
-                    f"Model '{model}' not found in OPENAI_MODEL_INFO_FILE mapping. Available: {available}"
-                )
-            if not isinstance(entry, dict):
-                raise ValueError(
-                    f"Entry for model '{model}' must be a JSON object containing ModelInfo fields"
-                )
-            # Ensure 'id' is present and matches the model name
-            entry = dict(entry)  # shallow copy in case we need to set id
-            entry.setdefault("id", model)
-            params["model_info"] = entry
-        except Exception as e:
-            raise EnvironmentError(
-                f"Failed to process OPENAI_MODEL_INFO_FILE '{model_info_file}': {e}"
-            ) from e
-
-    params.update(await auth_mgr.get_auth_params())
-
+    
+    # Optional: base_url for OpenAI-compatible servers
+    if "base_url" in conn_config:
+        params["base_url"] = conn_config["base_url"]
+    
+    # Optional: organization and project
+    if "organization" in conn_config:
+        params["organization"] = conn_config["organization"]
+    if "project" in conn_config:
+        params["project"] = conn_config["project"]
+    
+    # Optional: model_info for OpenAI-compatible servers
+    model_info = loader.get_model_info(agent_config["provider"], agent_config["model"])
+    if model_info:
+        params["model_info"] = model_info
+    
     global OPENAI_CLIENT_CLASS
     if OPENAI_CLIENT_CLASS is None:
         # Lazy import to avoid requiring dependency at module import time
         from autogen_ext.models.openai import OpenAIChatCompletionClient as _OC
-
         OPENAI_CLIENT_CLASS = _OC
-
+    
     try:
         return OPENAI_CLIENT_CLASS(**params)  # type: ignore[misc]
-    except ValueError as e:  # Improve guidance for model_info-related errors
+    except ValueError as e:
         msg = str(e)
         if "model_info" in msg or "ModelInfo" in msg:
-            # Provide actionable guidance with required fields
             required_fields = (
                 "family, vision, audio, function_calling, json_output, structured_output, "
                 "input.max_tokens, output.max_tokens"
             )
-            hint_env = (
-                "Set OPENAI_MODEL_INFO_FILE to a JSON file that contains a TOP-LEVEL mapping "
-                "of model_id -> ModelInfo. Include an entry for the configured model name. "
-                "Each ModelInfo must include: " + required_fields + ". The 'id' inside each entry "
-                "should match the model_id key. See README 'OpenAI-compatible' section."
+            hint = (
+                f"OpenAI-compatible model '{agent_config['model']}' requires model_info. "
+                f"Add a 'models' section to your provider configuration with model_info for this model. "
+                f"Required fields: {required_fields}. See MODEL_CONFIGURATION.md for examples."
             )
-            raise EnvironmentError(
-                f"OpenAI-compatible model '{model}' appears to require model_info. {hint_env}\nOriginal error: {msg}"
-            ) from e
+            raise ModelConfigError(f"{hint}\nOriginal error: {msg}") from e
         raise

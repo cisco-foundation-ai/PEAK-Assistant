@@ -164,101 +164,18 @@ We strongly recommend you also include at least some basic information about you
 Splunk indices, sourcetypes, and fields. This will help the AI agents understand your data better
 and generate more accurate queries. It's not required, because the automated data discovery is actually pretty good, but it can be helpful.
 
-## 2. Environment Variables
-The rest of the Assistant configuration has to do with the LLM configuration, and is held in environment variables. Create a `.env` file in the project root with the following variables. The app automatically searches for `.env` in the current directory and its parents.
+## Model Configuration
 
-All configurations require a provider selector:
+The PEAK Assistant requires a `model_config.json` file to configure LLM providers and models. This file must be placed in the current working directory (the directory from which you run the application).
 
-```
-LLM_PROVIDER=azure | openai
-```
+For complete documentation on model configuration, including:
+- Detailed provider setup (Azure OpenAI, OpenAI, OpenAI-compatible)
+- Per-agent model assignment
+- Multiple configuration examples
+- Environment variable interpolation
+- Troubleshooting
 
-### Azure OpenAI configuration
-
-```
-LLM_PROVIDER=azure
-
-AZURE_OPENAI_API_KEY=your-azure-openai-api-key
-AZURE_OPENAI_ENDPOINT=https://your-azure-endpoint.openai.azure.com/
-AZURE_OPENAI_API_VERSION=2025-04-01-preview
-
-# Use this model/deployment for most tasks (chat)
-AZURE_OPENAI_DEPLOYMENT=your-chat-deployment
-AZURE_OPENAI_MODEL=gpt-4o
-
-# Optional: separate reasoning configuration; if omitted, falls back to chat
-AZURE_OPENAI_REASONING_DEPLOYMENT=your-reasoning-deployment
-AZURE_OPENAI_REASONING_MODEL=o4-mini
-```
-
-### OpenAI (native) configuration
-
-```
-LLM_PROVIDER=openai
-
-OPENAI_API_KEY=sk-your-key
-OPENAI_MODEL=gpt-4o-mini
-
-# Optional: separate reasoning model; if omitted, falls back to OPENAI_MODEL
-OPENAI_REASONING_MODEL=gpt-4o
-```
-
-### OpenAI-compatible endpoints (custom base_url)
-
-Use this to connect to local/self-hosted servers that expose an OpenAI-compatible API (e.g., Ollama, vLLM, LM Studio). Many local servers accept any string as an API key, but an API key is still required by the client.
-
-```
-LLM_PROVIDER=openai
-
-OPENAI_API_KEY=sk-local-or-any-string
-OPENAI_MODEL=gpt-4o-mini
-OPENAI_BASE_URL=http://localhost:11434/v1
-
-# Optional: separate reasoning model; if omitted, falls back to OPENAI_MODEL
-OPENAI_REASONING_MODEL=gpt-4o
-```
-
-If your OpenAI-compatible server uses non-OpenAI model names, provide a model info JSON file that contains a TOP-LEVEL mapping of `model_id -> ModelInfo` so the client knows each model's capabilities:
-
-```
-# Provide model_info mapping for non-OpenAI model names
-OPENAI_MODEL_INFO_FILE=/absolute/path/to/models.json
-```
-
-Example minimal `model_info` mapping JSON (adjust fields to match your server). Required fields include: `family`, `vision`, `audio`, `function_calling`, `json_output`, `structured_output`, and nested `input.max_tokens`, `output.max_tokens`.
-
-```json
-{
-  "your-local-chat-model": {
-    "id": "your-local-chat-model",
-    "object": "model",
-    "owned_by": "local",
-    "family": "gpt-4o-mini",
-    "vision": false,
-    "audio": false,
-    "function_calling": false,
-    "json_output": false,
-    "structured_output": false,
-    "input": { "max_tokens": 131072 },
-    "output": { "max_tokens": 8192 },
-    "tokenizer": "tiktoken-gpt-4o"
-  },
-  "your-local-reasoning-model": {
-    "id": "your-local-reasoning-model",
-    "object": "model",
-    "owned_by": "local",
-    "family": "gpt-4o-mini",
-    "vision": false,
-    "audio": false,
-    "function_calling": false,
-    "json_output": false,
-    "structured_output": false,
-    "input": { "max_tokens": 131072 },
-    "output": { "max_tokens": 8192 },
-    "tokenizer": "tiktoken-gpt-4o"
-  }
-}
-```
+See **[MODEL_CONFIGURATION.md](MODEL_CONFIGURATION.md)** for the full guide.
 
 ## Running the Assistant
 Now that it is configured it's time to run the app. Since you installed this as a module, you can simpley run the assistant:
@@ -285,24 +202,24 @@ The PEAK-Assistant follows a structured workflow that aligns with the PEAK Threa
 
 ## Live Integration Tests (optional)
 
-This repository includes live integration tests that make real calls to the configured LLM provider. These tests are marked with `@pytest.mark.live` and are skipped unless your `.env` is properly configured for the target provider.
+This repository includes live integration tests that make real calls to the configured LLM provider. These tests are marked with `@pytest.mark.live` and require a properly configured `model_config.json` file in the test directory.
 
 - Run all live tests:
   ```bash
   pytest -m live tests/integration -q
   ```
 
-- OpenAI (native): ensure `.env` includes `LLM_PROVIDER=openai`, `OPENAI_API_KEY`, `OPENAI_MODEL`, and does not set `OPENAI_BASE_URL`.
+- OpenAI (native): ensure your `model_config.json` is configured with OpenAI provider and does not set `base_url`.
   ```bash
   pytest -m live tests/integration/test_openai_live.py -q
   ```
 
-- OpenAI-compatible (custom base_url): ensure `.env` includes `LLM_PROVIDER=openai`, `OPENAI_API_KEY`, `OPENAI_MODEL`, and `OPENAI_BASE_URL` (e.g., `http://localhost:11434/v1`).
+- OpenAI-compatible (custom base_url): ensure your `model_config.json` is configured with OpenAI provider and includes `base_url` (e.g., `http://localhost:11434/v1`).
   ```bash
   pytest -m live tests/integration/test_openai_base_url_live.py -q
   ```
 
-- Azure OpenAI: ensure `.env` includes `LLM_PROVIDER=azure` and the required `AZURE_OPENAI_*` variables.
+- Azure OpenAI: ensure your `model_config.json` is configured with Azure provider.
   ```bash
   pytest -m live tests/integration/test_azure_live.py -q
   ```
@@ -343,11 +260,15 @@ Once you have the image downloaded, you can run the container by running the fol
 
 Note that you will still need to provide the same configuration files as you would if you were running the app natively:
 * `context.txt`
-* `.env`
+* `model_config.json`
 * `mcp_servers.json`
 * `cert.pem` & `key.pem`
 
-The sample command mounts the current directory as `/certs`, and maps the other files into the working directory of the app running in the container. It assumes these files are in the current directory, but you can adjust the paths as needed.
+The sample command mounts the current directory as `/certs`, and maps the other files into the working directory of the app running in the container. It assumes these files are in the current directory, but you can adjust the paths as needed. Don't forget to add a mount for `model_config.json`:
+
+```bash
+--mount "type=bind,src=$(PWD)/model_config.json,target=/home/peakassistant/model_config.json"
+```
 
 ### Accessing the Assistant via Docker
 Once the container is running, you can access it just as though it were running natively. Open `http://127.0.0.1:8501/` (or HTTPS if configured) in your browser.
@@ -357,13 +278,13 @@ Once the container is running, you can access it just as though it were running 
 Podman commands are generally very compatible with Docker commands, so you should be able to use them interchangeably. The only difference is that you will need to use `podman` instead of `docker` in the commands above.
 
 ### What if I want to use a different LLM provider?
-The Assistant supports multiple providers via environment configuration:
+The Assistant supports multiple providers via the `model_config.json` file:
 
-- Azure OpenAI: `LLM_PROVIDER=azure` + `AZURE_OPENAI_*` variables
-- OpenAI (native): `LLM_PROVIDER=openai` + `OPENAI_*` variables
-- OpenAI-compatible: `LLM_PROVIDER=openai` + `OPENAI_*` + `OPENAI_BASE_URL`
+- Azure OpenAI
+- OpenAI (native)
+- OpenAI-compatible servers (e.g., Ollama, vLLM, LM Studio)
 
-Agents can request either a "chat" or "reasoning" model. If a reasoning model isn’t configured, the app falls back to the chat model. Additional native providers may be added in the future.
+You can configure different models for different agents, or use a single model for all agents. See [MODEL_CONFIGURATION.md](MODEL_CONFIGURATION.md) for detailed configuration examples and provider-specific requirements.
 
 ## Troubleshooting
 ### The application is working, but I network errors when I try to download any of the files.

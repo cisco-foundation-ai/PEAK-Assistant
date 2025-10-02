@@ -186,5 +186,7 @@ cython_debug/
 # We don't commit these to the repo anyway. 
 reports/
 
-# re-allow README.md to be included in the repo
+# re-allow README.md and MODEL_CONFIGURATION.md to be included in the repo
 !README.md
+!MODEL_CONFIGURATION.md
+!model_config.json.example
