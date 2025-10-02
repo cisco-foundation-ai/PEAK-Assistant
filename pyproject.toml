@@ -76,6 +76,7 @@ planning-assistant = "peak_assistant.planning_assistant.__main__:main"
 peak-mcp = "peak_assistant.peak_mcp.__main__:main"
 peak-assistant = "peak_assistant.streamlit.__main__:main"
 research-assistant = "peak_assistant.research_assistant.__main__:main"
+validate-config = "peak_assistant.utils.validate_config:main"
 
 
 [tool.pytest.ini_options]
