@@ -125,6 +125,28 @@ async def _build_azure_client(agent_config: dict, provider_config: dict, loader:
         "api_key": conn_config["api_key"],
     }
     
+    # Optional parameters - common
+    if "max_tokens" in conn_config:
+        params["max_tokens"] = conn_config["max_tokens"]
+    if "temperature" in conn_config:
+        params["temperature"] = conn_config["temperature"]
+    if "top_p" in conn_config:
+        params["top_p"] = conn_config["top_p"]
+    if "timeout" in conn_config:
+        params["timeout"] = conn_config["timeout"]
+    if "max_retries" in conn_config:
+        params["max_retries"] = conn_config["max_retries"]
+    if "stop" in conn_config:
+        params["stop"] = conn_config["stop"]
+    
+    # Optional parameters - Azure/OpenAI specific
+    if "frequency_penalty" in conn_config:
+        params["frequency_penalty"] = conn_config["frequency_penalty"]
+    if "presence_penalty" in conn_config:
+        params["presence_penalty"] = conn_config["presence_penalty"]
+    if "seed" in conn_config:
+        params["seed"] = conn_config["seed"]
+    
     global AZURE_CLIENT_CLASS
     if AZURE_CLIENT_CLASS is None:
         # Lazy import to avoid requiring dependency at module import time
@@ -170,6 +192,28 @@ async def _build_openai_client(agent_config: dict, provider_config: dict, loader
         params["organization"] = conn_config["organization"]
     if "project" in conn_config:
         params["project"] = conn_config["project"]
+    
+    # Optional parameters - common
+    if "max_tokens" in conn_config:
+        params["max_tokens"] = conn_config["max_tokens"]
+    if "temperature" in conn_config:
+        params["temperature"] = conn_config["temperature"]
+    if "top_p" in conn_config:
+        params["top_p"] = conn_config["top_p"]
+    if "timeout" in conn_config:
+        params["timeout"] = conn_config["timeout"]
+    if "max_retries" in conn_config:
+        params["max_retries"] = conn_config["max_retries"]
+    if "stop" in conn_config:
+        params["stop"] = conn_config["stop"]
+    
+    # Optional parameters - Azure/OpenAI specific
+    if "frequency_penalty" in conn_config:
+        params["frequency_penalty"] = conn_config["frequency_penalty"]
+    if "presence_penalty" in conn_config:
+        params["presence_penalty"] = conn_config["presence_penalty"]
+    if "seed" in conn_config:
+        params["seed"] = conn_config["seed"]
     
     # Optional: model_info for OpenAI-compatible servers
     model_info = loader.get_model_info(agent_config["provider"], agent_config["model"])

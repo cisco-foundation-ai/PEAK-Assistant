@@ -810,3 +810,115 @@ async def test_factory_anthropic_missing_model(temp_config_file):
     
     with pytest.raises(ModelConfigError, match="must include 'model' field"):
         await llm_factory.get_model_client(config_path=config_file)
+
+
+@pytest.mark.asyncio
+async def test_factory_azure_with_optional_params(temp_config_file, monkeypatch):
+    """Test Azure with optional parameters."""
+    monkeypatch.setenv("AZURE_API_KEY", "test-key")
+    
+    config_file = temp_config_file({
+        "version": "1",
+        "providers": {
+            "azure-test": {
+                "type": "azure",
+                "config": {
+                    "endpoint": "https://test.openai.azure.com/",
+                    "api_key": "${AZURE_API_KEY}",
+                    "api_version": "2024-02-01",
+                    "max_tokens": 2000,
+                    "temperature": 0.5,
+                    "top_p": 0.9,
+                    "frequency_penalty": 0.2,
+                    "presence_penalty": 0.1,
+                    "seed": 42
+                }
+            }
+        },
+        "defaults": {
+            "provider": "azure-test",
+            "model": "gpt-4o",
+            "deployment": "gpt-4o-deployment"
+        }
+    })
+    
+    client = await llm_factory.get_model_client(config_path=config_file)
+    
+    # Verify optional params were passed
+    assert client.kwargs["max_tokens"] == 2000
+    assert client.kwargs["temperature"] == 0.5
+    assert client.kwargs["top_p"] == 0.9
+    assert client.kwargs["frequency_penalty"] == 0.2
+    assert client.kwargs["presence_penalty"] == 0.1
+    assert client.kwargs["seed"] == 42
+
+
+@pytest.mark.asyncio
+async def test_factory_openai_with_optional_params(temp_config_file):
+    """Test OpenAI with optional parameters."""
+    config_file = temp_config_file({
+        "version": "1",
+        "providers": {
+            "openai-test": {
+                "type": "openai",
+                "config": {
+                    "api_key": "test-key",
+                    "max_tokens": 1500,
+                    "temperature": 0.7,
+                    "top_p": 0.95,
+                    "frequency_penalty": 0.5,
+                    "presence_penalty": 0.3,
+                    "seed": 123,
+                    "stop": ["END", "STOP"]
+                }
+            }
+        },
+        "defaults": {
+            "provider": "openai-test",
+            "model": "gpt-4o-mini"
+        }
+    })
+    
+    client = await llm_factory.get_model_client(config_path=config_file)
+    
+    # Verify optional params were passed
+    assert client.kwargs["max_tokens"] == 1500
+    assert client.kwargs["temperature"] == 0.7
+    assert client.kwargs["top_p"] == 0.95
+    assert client.kwargs["frequency_penalty"] == 0.5
+    assert client.kwargs["presence_penalty"] == 0.3
+    assert client.kwargs["seed"] == 123
+    assert client.kwargs["stop"] == ["END", "STOP"]
+
+
+@pytest.mark.asyncio
+async def test_factory_anthropic_with_optional_params(temp_config_file):
+    """Test Anthropic with optional parameters."""
+    config_file = temp_config_file({
+        "version": "1",
+        "providers": {
+            "anthropic-test": {
+                "type": "anthropic",
+                "config": {
+                    "api_key": "sk-ant-test-key",
+                    "max_tokens": 4096,
+                    "temperature": 0.8,
+                    "top_p": 0.9,
+                    "top_k": 50,
+                    "timeout": 30.0,
+                    "max_retries": 3
+                }
+            }
+        },
+        "defaults": {
+            "provider": "anthropic-test",
+            "model": "claude-3-5-sonnet-20241022"
+        }
+    })
+    
+    # Client creation with optional params should succeed
+    # (Anthropic client doesn't expose kwargs like Azure/OpenAI, but if params
+    # are invalid, the client creation would fail)
+    client = await llm_factory.get_model_client(config_path=config_file)
+    assert client is not None
+    assert client.__class__.__name__ == "AnthropicChatCompletionClient"
