@@ -298,9 +298,6 @@ async def researcher(
         {history}
     """
 
-    chat_model_client = await get_model_client("chat")
-    reasoning_model_client = await get_model_client("reasoning")
-
     # Set up MCP servers for research
     mcp_client_manager = get_client_manager()
     connected_servers_external = await setup_mcp_servers(
@@ -335,34 +332,41 @@ async def researcher(
         if verbose:
             print(error_msg)
 
+    # Create model clients for all agents
+    external_search_client = await get_model_client(agent_name="external_search_agent")
+    summarizer_client = await get_model_client(agent_name="summarizer_agent")
+    summary_critic_client = await get_model_client(agent_name="summary_critic")
+    research_team_lead_client = await get_model_client(agent_name="research_team_lead")
+
     participants = [
         AssistantAgent(
             "external_search_agent",
             description="Performs searches and analyzes information using external research tools (i.e. web search)",
-            model_client=chat_model_client,
+            model_client=external_search_client,
             workbench=group_workbenches_external,
             system_message=search_system_prompt,
         ),
         AssistantAgent(
             "summarizer_agent",
             description="Provides a detailed markdown summary of the research as a report to the user.",
-            model_client=chat_model_client,
+            model_client=summarizer_client,
             system_message=summarizer_system_prompt,
         ),
         AssistantAgent(
             "summary_critic",
             description="Evaluates the summary and ensures it meets the user's needs.",
-            model_client=reasoning_model_client,
+            model_client=summary_critic_client,
             system_message=summary_critic_system_prompt,
         ),
     ]
 
     if group_workbenches_internal:
+        internal_search_client = await get_model_client(agent_name="internal_search_agent")
         participants.append(
             AssistantAgent(
                 "internal_search_agent",
                 description="Performs searches and analyzes information using local information sources (e.g., wikis, ticket systems, etc)",
-                model_client=chat_model_client,
+                model_client=internal_search_client,
                 workbench=group_workbenches_internal,
                 system_message=search_system_prompt,
             )
@@ -375,7 +379,7 @@ async def researcher(
     # Create a team
     team = SelectorGroupChat(
         participants=participants,
-        model_client=chat_model_client,
+        model_client=research_team_lead_client,
         termination_condition=text_termination,
         selector_prompt=selector_prompt,
     )

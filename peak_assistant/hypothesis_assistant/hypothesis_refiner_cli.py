@@ -173,16 +173,18 @@ Hunt for signs of a data exfiltration attempt using PowerShell Empire. [specifie
 Refined hypothesis: LSASS process memory on Windows systems is being accessed without proper authorization, indicating potential theft of authentication credentials, leading to unauthorized access and data exfiltration. [Begins with a "Refined hypothesis:" label, no details on how LSASS might be being accessed that can be tested]
     """
 
-    chat_model_client = await get_model_client("chat")
+    # Get client for refiner agent (used by both refiner and critic)
+    hypothesis_refiner_client = await get_model_client(agent_name="hypothesis-refiner")
+    hypothesis_refiner_critic_client = await get_model_client(agent_name="hypothesis-refiner-critic")
 
     # Create the primary agent.
     refiner_agent = AssistantAgent(
-        "refiner", model_client=chat_model_client, system_message=refiner_system_prompt
+        "refiner", model_client=hypothesis_refiner_client, system_message=refiner_system_prompt
     )
 
     # Create the critic agent.
     critic_agent = AssistantAgent(
-        "critic", model_client=chat_model_client, system_message=critic_system_prompt
+        "critic", model_client=hypothesis_refiner_critic_client, system_message=critic_system_prompt
     )
 
     # Define a termination condition that stops the task if the critic approves.

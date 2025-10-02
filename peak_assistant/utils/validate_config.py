@@ -44,14 +44,15 @@ KNOWN_AGENTS = [
     "internal_search_agent",
     "summarizer_agent",
     "summary_critic",
-    "research_selector",
-    "refiner",
-    "critic",
+    "research_team_lead",
+    "hypothesis-refiner",
+    "hypothesis-refiner-critic",
     "Data_Discovery_Agent",
     "Discovery_Critic_Agent",
     "hunt_planner",
     "hunt_plan_critic",
     "able_table",
+    "hypothesizer_agent",
 ]
 
 

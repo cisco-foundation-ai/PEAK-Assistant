@@ -139,10 +139,6 @@ async def identify_data_sources(
     if previous_run:
         messages = messages + previous_run
 
-    # Initialize the model client(s)
-    chat_model_client = await get_model_client("chat")
-    reasoning_model_client = await get_model_client("reasoning")
-
     # Set up MCP servers for data discovery
     mcp_client_manager = get_client_manager()
     connected_servers = await setup_mcp_servers(mcp_server_group)
@@ -178,8 +174,6 @@ async def identify_data_sources(
         messages,
         data_discovery_prompt,
         discovery_critic_prompt,
-        chat_model_client,
-        reasoning_model_client,
         verbose,
         previous_run,
         msg_preprocess_callback,
@@ -194,8 +188,6 @@ async def _run_data_discovery_with_workbench(
     messages,
     data_discovery_prompt,
     discovery_critic_prompt,
-    chat_model_client,
-    reasoning_model_client,
     verbose,
     previous_run,
     msg_preprocess_callback,
@@ -205,9 +197,13 @@ async def _run_data_discovery_with_workbench(
 ) -> TaskResult:
     """Helper function to run data discovery with a given MCP workbench"""
 
+    # Create model clients for agents
+    data_discovery_client = await get_model_client(agent_name="Data_Discovery_Agent")
+    discovery_critic_client = await get_model_client(agent_name="Discovery_Critic_Agent")
+
     data_discovery_agent = AssistantAgent(
         "Data_Discovery_Agent",
-        model_client=chat_model_client,
+        model_client=data_discovery_client,
         workbench=mcp_workbench,
         reflect_on_tool_use=True,
         model_client_stream=True,
@@ -216,7 +212,7 @@ async def _run_data_discovery_with_workbench(
 
     discovery_critic_agent = AssistantAgent(
         "Discovery_Critic_Agent",
-        model_client=reasoning_model_client,
+        model_client=discovery_critic_client,
         system_message=discovery_critic_prompt,
     )
 

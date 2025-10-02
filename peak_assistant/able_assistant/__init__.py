@@ -139,11 +139,11 @@ async def able_table(
     if previous_run:
         messages = messages + previous_run
 
-    chat_model_client = await get_model_client("chat")
+    able_table_client = await get_model_client(agent_name="able_table")
 
     # Call the LLM using the configured provider client
     try:
-        result = await chat_model_client.create(messages)  # Await the async method
+        result = await able_table_client.create(messages)  # Await the async method
         # Access the content from the CreateResult object
         return str(
             result.content

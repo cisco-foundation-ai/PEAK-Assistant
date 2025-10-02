@@ -106,11 +106,11 @@ Hunt for signs of a data exfiltration attempt using PowerShell Empire. [specifie
         ),
     ]
 
-    chat_model_client = await get_model_client("chat")
+    hypothesizer_agent_client = await get_model_client(agent_name="hypothesizer_agent")
 
     # Call the LLM using the configured provider client
     try:
-        result = await chat_model_client.create(messages)  # Await the async method
+        result = await hypothesizer_agent_client.create(messages)  # Await the async method
         # Access the content from the CreateResult object
         return str(
             result.content

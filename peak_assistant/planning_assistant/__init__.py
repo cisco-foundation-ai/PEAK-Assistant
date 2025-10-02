@@ -211,17 +211,18 @@ async def plan_hunt(
     if previous_run:
         messages = messages + previous_run
 
-    reasoning_model_client = await get_model_client("reasoning")
+    hunt_planner_client = await get_model_client(agent_name="hunt_planner")
+    hunt_plan_critic_client = await get_model_client(agent_name="hunt_plan_critic")
 
     planning_agent = AssistantAgent(
         "hunt_planner",
-        model_client=reasoning_model_client,
+        model_client=hunt_planner_client,
         system_message=planner_prompt,
     )
 
     plan_critic_agent = AssistantAgent(
         "hunt_plan_critic",
-        model_client=reasoning_model_client,
+        model_client=hunt_plan_critic_client,
         system_message=plan_critic_prompt,
     )
 
