@@ -102,10 +102,10 @@ class ConfigValidator:
         for provider_name, provider_config in self.loader._providers.items():
             provider_type = provider_config.get("type")
             
-            if provider_type not in ["azure", "openai"]:
+            if provider_type not in ["azure", "openai", "anthropic"]:
                 self.errors.append(
                     f"Provider '{provider_name}': Invalid type '{provider_type}'. "
-                    f"Must be 'azure' or 'openai'."
+                    f"Must be 'azure', 'openai', or 'anthropic'."
                 )
                 continue
             
@@ -125,6 +125,13 @@ class ConfigValidator:
                 if "api_key" not in config:
                     self.errors.append(
                         f"Provider '{provider_name}' (openai): Missing required field 'api_key'"
+                    )
+            
+            # Validate Anthropic provider
+            elif provider_type == "anthropic":
+                if "api_key" not in config:
+                    self.errors.append(
+                        f"Provider '{provider_name}' (anthropic): Missing required field 'api_key'"
                     )
                 
                 # Check if base_url is set for OpenAI-compatible
@@ -187,6 +194,11 @@ class ConfigValidator:
         elif provider_type == "openai":
             if "model" not in config:
                 self.errors.append(f"Agent '{agent_name}': Missing required field 'model' for OpenAI provider")
+        
+        # Validate Anthropic agent config
+        elif provider_type == "anthropic":
+            if "model" not in config:
+                self.errors.append(f"Agent '{agent_name}': Missing required field 'model' for Anthropic provider")
             
             # Check if model_info is needed
             model = config.get("model")
@@ -332,6 +344,26 @@ class ConfigValidator:
                     print(f"{continuation}  └─ Models defined: {model_list}")
                 else:
                     print(f"{continuation}  └─ No models defined")
+            
+            elif provider_type == "anthropic":
+                api_key = config.get("api_key", "")
+                if api_key.startswith("$"):
+                    print(f"{continuation}  ├─ Credentials: (from env var)")
+                else:
+                    print(f"{continuation}  ├─ Credentials: ✓")
+                
+                # Show optional config
+                if "max_tokens" in config:
+                    print(f"{continuation}  ├─ Max Tokens: {config['max_tokens']}")
+                if "temperature" in config:
+                    print(f"{continuation}  ├─ Temperature: {config['temperature']}")
+                if "base_url" in config:
+                    base_url = config["base_url"]
+                    if len(base_url) > 50:
+                        base_url = base_url[:47] + "..."
+                    print(f"{continuation}  ├─ Base URL: {base_url}")
+                
+                print(f"{continuation}  └─ Model: (configured per agent)")
             
             if not is_last:
                 print(f"{continuation}")

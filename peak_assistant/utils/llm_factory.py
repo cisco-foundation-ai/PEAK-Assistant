@@ -69,9 +69,11 @@ async def get_model_client(agent_name: Optional[str] = None, config_path: Option
             return await _build_azure_client(agent_config, provider_config, loader)
         elif provider_type == "openai":
             return await _build_openai_client(agent_config, provider_config, loader)
+        elif provider_type == "anthropic":
+            return await _build_anthropic_client(agent_config, provider_config, loader)
         else:
             raise ValueError(
-                f"Unsupported provider type '{provider_type}'. Supported: azure, openai."
+                f"Unsupported provider type '{provider_type}'. Supported: azure, openai, anthropic."
             )
     except ModelConfigError:
         raise
@@ -81,10 +83,10 @@ async def get_model_client(agent_name: Optional[str] = None, config_path: Option
         ) from e
 
 
-"""Module-level placeholders for client classes to enable test monkeypatching
-without importing heavy dependencies at import time."""
-AZURE_CLIENT_CLASS: Type[Any] | None = None
-OPENAI_CLIENT_CLASS: Type[Any] | None = None
+# Lazy-loaded client classes
+AZURE_CLIENT_CLASS: Optional[Type] = None
+OPENAI_CLIENT_CLASS: Optional[Type] = None
+ANTHROPIC_CLIENT_CLASS: Optional[Type] = None
 
 
 async def _build_azure_client(agent_config: dict, provider_config: dict, loader: Any):
@@ -196,3 +198,53 @@ async def _build_openai_client(agent_config: dict, provider_config: dict, loader
             )
             raise ModelConfigError(f"{hint}\nOriginal error: {msg}") from e
         raise
+
+
+async def _build_anthropic_client(agent_config: dict, provider_config: dict, loader: Any):
+    """Build Anthropic client from configuration.
+    
+    Args:
+        agent_config: Resolved agent configuration (must include 'model')
+        provider_config: Provider configuration (must include 'config' with connection details)
+        loader: ModelConfigLoader instance
+    
+    Returns:
+        AnthropicChatCompletionClient instance
+    """
+    # Validate required agent fields
+    if "model" not in agent_config:
+        raise ModelConfigError("Anthropic agent configuration must include 'model' field")
+    
+    # Get connection config from provider
+    conn_config = provider_config["config"]
+    
+    # Validate required provider fields
+    if "api_key" not in conn_config:
+        raise ModelConfigError("Anthropic provider configuration missing required 'api_key' field")
+    
+    params = {
+        "model": agent_config["model"],
+        "api_key": conn_config["api_key"],
+    }
+    
+    # Optional parameters
+    if "max_tokens" in conn_config:
+        params["max_tokens"] = conn_config["max_tokens"]
+    if "temperature" in conn_config:
+        params["temperature"] = conn_config["temperature"]
+    if "top_p" in conn_config:
+        params["top_p"] = conn_config["top_p"]
+    if "base_url" in conn_config:
+        params["base_url"] = conn_config["base_url"]
+    if "timeout" in conn_config:
+        params["timeout"] = conn_config["timeout"]
+    if "max_retries" in conn_config:
+        params["max_retries"] = conn_config["max_retries"]
+    
+    global ANTHROPIC_CLIENT_CLASS
+    if ANTHROPIC_CLIENT_CLASS is None:
+        # Lazy import to avoid requiring dependency at module import time
+        from autogen_ext.models.anthropic import AnthropicChatCompletionClient as _AC
+        ANTHROPIC_CLIENT_CLASS = _AC
+    
+    return ANTHROPIC_CLIENT_CLASS(**params)  # type: ignore[misc]

@@ -39,6 +39,13 @@
           }
         }
       }
+    },
+    "anthropic-main": {
+      "type": "anthropic",
+      "config": {
+        "api_key": "${ANTHROPIC_API_KEY}",
+        "max_tokens": 4096
+      }
     }
   },
   "defaults": {

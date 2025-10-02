@@ -205,7 +205,7 @@ class ModelConfigLoader:
         
         Returns:
             Dict with keys:
-                - type: str ("azure" or "openai")
+                - type: str ("azure", "openai", or "anthropic")
                 - config: dict (provider-specific connection config)
                 - models: dict (optional, model_info for OpenAI-compatible)
         
@@ -217,8 +217,7 @@ class ModelConfigLoader:
         
         if provider_name not in self._providers:
             raise ModelConfigError(
-                f"Provider '{provider_name}' not found in providers section. "
-                f"Available providers: {list(self._providers.keys())}"
+                f"Provider '{provider_name}' not found in providers section"
             )
         
         provider_config = self._providers[provider_name]
@@ -228,12 +227,42 @@ class ModelConfigLoader:
                 f"Provider '{provider_name}' missing required 'type' field"
             )
         
+        provider_type = provider_config["type"]
+        
+        if provider_type not in ["azure", "openai", "anthropic"]:
+            raise ModelConfigError(
+                f"Provider '{provider_name}': Invalid type '{provider_type}'. "
+                f"Must be 'azure', 'openai', or 'anthropic'."
+            )
+        
         if "config" not in provider_config:
             raise ModelConfigError(
                 f"Provider '{provider_name}' missing required 'config' field"
             )
         
+        config = provider_config["config"]
+        
+        # Validate provider-specific required fields
+        if provider_type == "azure":
+            required = ["endpoint", "api_key", "api_version"]
+            missing = [f for f in required if f not in config]
+            if missing:
+                raise ModelConfigError(
+                    f"Provider '{provider_name}' (azure): Missing required fields: {', '.join(missing)}"
+                )
+        elif provider_type == "openai":
+            if "api_key" not in config:
+                raise ModelConfigError(
+                    f"Provider '{provider_name}' (openai): Missing required field 'api_key'"
+                )
+        elif provider_type == "anthropic":
+            if "api_key" not in config:
+                raise ModelConfigError(
+                    f"Provider '{provider_name}' (anthropic): Missing required field 'api_key'"
+                )
+        
         return provider_config
+        
     
     def get_model_info(
         self, 

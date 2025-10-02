@@ -3,9 +3,8 @@
 The PEAK Assistant uses a **required** `model_config.json` file to configure LLM providers and models for each AI agent. This file must be placed in the current working directory (the directory from which you run the application).
 
 ## Overview
-
 The configuration system allows you to:
-- Define multiple named provider instances (Azure OpenAI, OpenAI, OpenAI-compatible servers)
+- Define multiple named provider instances (Azure OpenAI, OpenAI, OpenAI-compatible servers, Anthropic)
 - Use multiple instances of the same provider type (e.g., multiple Ollama servers, multiple Azure subscriptions)
 - Assign different models to different agents
 - Group agents with wildcard matching for shared configurations
@@ -300,6 +299,73 @@ When using non-OpenAI model names with OpenAI-compatible servers, you should pro
 ```
 
 The system will automatically look up the `model_info` for each model when creating the client.
+
+### Anthropic Provider Type
+
+**Type:** `"anthropic"`
+
+The Anthropic provider connects to Anthropic's Claude models via their API.
+
+**Required Fields:**
+- `api_key` (string): Your Anthropic API key
+
+**Optional Fields:**
+- `max_tokens` (integer): Maximum tokens in response (default: model-specific)
+- `temperature` (float): Sampling temperature 0.0-1.0 (default: 1.0)
+- `top_p` (float): Nucleus sampling parameter (default: 1.0)
+- `top_k` (integer): Top-k sampling parameter
+- `base_url` (string): Custom API endpoint (for proxies)
+- `timeout` (float): Request timeout in seconds
+- `max_retries` (integer): Number of retry attempts
+
+**Example Configuration:**
+
+```json
+{
+  "providers": {
+    "anthropic-main": {
+      "type": "anthropic",
+      "config": {
+        "api_key": "${ANTHROPIC_API_KEY}",
+        "max_tokens": 4096,
+        "temperature": 0.7
+      }
+    }
+  }
+}
+```
+
+**Agent Configuration:**
+
+Anthropic agents require only the `model` field (no deployment like Azure):
+
+```json
+{
+  "agents": {
+    "summarizer_agent": {
+      "provider": "anthropic-main",
+      "model": "claude-3-5-sonnet-20241022"
+    },
+    "hunt_planner": {
+      "provider": "anthropic-main",
+      "model": "claude-3-5-haiku-20241022"
+    }
+  }
+}
+```
+
+**Popular Models:**
+- `claude-3-5-sonnet-20241022` - Latest Sonnet (most capable, balanced)
+- `claude-3-5-haiku-20241022` - Latest Haiku (fast and efficient)
+- `claude-3-opus-20240229` - Opus (most powerful, slower)
+- `claude-3-sonnet-20240229` - Previous Sonnet
+- `claude-3-haiku-20240307` - Previous Haiku
+
+**Environment Variable:**
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-api03-..."
+```
 
 ## Configuration Examples
 

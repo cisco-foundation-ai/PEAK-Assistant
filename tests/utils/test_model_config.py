@@ -720,25 +720,93 @@ async def test_factory_azure_missing_deployment(temp_config_file, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_factory_openai_missing_model(temp_config_file, monkeypatch):
+async def test_factory_openai_missing_model(temp_config_file):
     """Test that OpenAI config without model raises error."""
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-key")
-    
     config_file = temp_config_file({
         "version": "1",
         "providers": {
-            "openai-native": {
+            "openai-main": {
                 "type": "openai",
                 "config": {
-                    "api_key": "${OPENAI_API_KEY}"
+                    "api_key": "test-key"
                 }
             }
         },
         "defaults": {
-            "provider": "openai-native"
-            # Missing model!
+            "provider": "openai-main"
+            # Missing model
         }
     })
     
-    with pytest.raises(ModelConfigError, match="model"):
+    with pytest.raises(ModelConfigError, match="must include 'model' field"):
+        await llm_factory.get_model_client(config_path=config_file)
+
+
+@pytest.mark.asyncio
+async def test_factory_anthropic(temp_config_file):
+    """Test Anthropic provider configuration."""
+    config_file = temp_config_file({
+        "version": "1",
+        "providers": {
+            "anthropic-test": {
+                "type": "anthropic",
+                "config": {
+                    "api_key": "sk-ant-test-key",
+                    "max_tokens": 4096
+                }
+            }
+        },
+        "defaults": {
+            "provider": "anthropic-test",
+            "model": "claude-3-5-sonnet-20241022"
+        }
+    })
+    
+    # Should create client successfully
+    client = await llm_factory.get_model_client(config_path=config_file)
+    assert client is not None
+    assert client.__class__.__name__ == "AnthropicChatCompletionClient"
+
+
+@pytest.mark.asyncio
+async def test_factory_anthropic_missing_api_key(temp_config_file):
+    """Test Anthropic provider with missing API key."""
+    config_file = temp_config_file({
+        "version": "1",
+        "providers": {
+            "anthropic-test": {
+                "type": "anthropic",
+                "config": {}  # Missing api_key
+            }
+        },
+        "defaults": {
+            "provider": "anthropic-test",
+            "model": "claude-3-5-sonnet-20241022"
+        }
+    })
+    
+    with pytest.raises(ModelConfigError, match="Missing required field.*api_key"):
+        await llm_factory.get_model_client(config_path=config_file)
+
+
+@pytest.mark.asyncio
+async def test_factory_anthropic_missing_model(temp_config_file):
+    """Test Anthropic agent with missing model."""
+    config_file = temp_config_file({
+        "version": "1",
+        "providers": {
+            "anthropic-test": {
+                "type": "anthropic",
+                "config": {
+                    "api_key": "sk-ant-test-key"
+                }
+            }
+        },
+        "defaults": {
+            "provider": "anthropic-test"
+            # Missing model
+        }
+    })
+    
+    with pytest.raises(ModelConfigError, match="must include 'model' field"):
         await llm_factory.get_model_client(config_path=config_file)

@@ -169,7 +169,7 @@ and generate more accurate queries. It's not required, because the automated dat
 The PEAK Assistant requires a `model_config.json` file to configure LLM providers and models. This file must be placed in the current working directory (the directory from which you run the application).
 
 For complete documentation on model configuration, including:
-- Detailed provider setup (Azure OpenAI, OpenAI, OpenAI-compatible)
+- Detailed provider setup (Azure OpenAI, OpenAI, OpenAI-compatible, Anthropic)
 - Per-agent model assignment
 - Multiple configuration examples
 - Environment variable interpolation
