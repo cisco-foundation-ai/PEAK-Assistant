@@ -30,8 +30,7 @@ import asyncio
 from autogen_core.models import UserMessage, SystemMessage
 
 from ..utils import find_dotenv_file
-from ..utils.assistant_auth import PEAKAssistantAuthManager
-from ..utils.azure_client import PEAKAssistantAzureOpenAIClient
+from ..utils.llm_factory import get_model_client
 
 
 async def hypothesizer(
@@ -39,7 +38,7 @@ async def hypothesizer(
 ) -> str:
     """
     Hypothesizer agent that combines user input, a markdown document, and its own prompt
-    to generate output using an OpenAI model on Azure.
+    to generate output using the configured LLM provider.
 
     Args:
         user_input (str): A string provided by the user.
@@ -51,22 +50,48 @@ async def hypothesizer(
     """
     # Define the system prompt for the hypothesizer
     system_prompt = """
-        You are an expert in cybersecurity threat hunting. As the hypothesis agent,
-        your task is to generate hypotheses based on the user's input
-        and the provided threat hunting behavior or technique research document.
-        Use the following guidelines:
-        1. Carefully analyze the user's input to understand the context, intent, 
-           guidelines, or restrictions they may have.
-        2. Extract relevant information from the research document.
-        3. Combine both to generate clear, actionable, testable hypotheses.
+You are a threat hunting hypothesis generator. Based on the provided research report 
+about a threat actor/technique and any available local context, generate threat 
+hunting hypotheses.
 
-        Respond with a list of potential hunting hypotheses.
+## Requirements:
+Generate up to 10 threat hunting hypotheses that are:
+- Specific: Clearly define the threat actor behavior, technique, or vulnerability
+- Measurable: Can be proven or disproven through data analysis
+- Achievable: Could realistically be investigated with common security tools and logs
+- Relevant: Based on the techniques and behaviors described in the research report
 
-        Your output should be a list of hypotheses, each on a line by itself. There
-        should be no additional text, explanations, or formatting. Include at least
-        three hypotheses, but feel free to generate more if you can.
-        
-        If you cannot generate a hypothesis, please say "No hypothesis could be generated."
+## Critical Constraints:
+- Each hypothesis must be completely independent of the others (as much as feasible)
+- Do NOT include time windows or time boundaries
+- Do NOT specify data sources, log types, or analysis methods. You may include general 
+  references (e.g., "network traffic", "system logs", "authentication logs", "EDR logs") but not specific
+  data sources (e.g., "Sysmon event code 1", "Zeek HTTP logs")
+- Do NOT number or label the hypotheses
+- Focus on WHAT might be happening, not HOW to detect it
+- Use generic system descriptions (e.g., "mail servers") unless the threat is specific to 
+  particular software (e.g., "Exchange 2019")
+
+## Output Format:
+- Return ONLY the hypotheses, one per line
+- No introductory text, explanations, or conclusions (e.g., do not begin with text like "Based on the 
+  provided report and local context, here are ten hypotheses:", "Here are some hypotheses:", etc.)
+- If you cannot generate any valid hypotheses, respond only with: "No hypotheses could be generated"
+
+## Examples of Good Hypotheses:
+Threat actors may be using PowerShell Empire to establish persistence on Windows endpoints through scheduled tasks
+Attackers may be exploiting unpatched Log4j vulnerabilities in internet-facing applications for initial access
+Adversaries may be performing reconnaissance through abnormal LDAP queries against domain controllers
+Threat actors may be exfiltrating data through DNS tunneling from database servers
+
+## Examples of Bad Hypotheses (DO NOT generate hypotheses like these):
+Threat actors may be active in the last 30 days using PowerShell [includes time window]
+Check Cisco ASA firewall logs for suspicious traffic to known C2 servers [specifies data source]
+Adversaries might be present somewhere in the network [too vague]
+Use Splunk to search for base64 encoded commands [specifies tool/method]
+Based on the provided report and local context, here are ten hypotheses: [this is explanatory or introductory text not a hypothesis]
+4. An unusual spike in failed login attempts from unknown IP addresses might indicate a DDoS attack. [hypothesis is numbered]
+Hunt for signs of a data exfiltration attempt using PowerShell Empire. [specifies a task not a hypothesis]
     """
 
     messages = [
@@ -81,14 +106,11 @@ async def hypothesizer(
         ),
     ]
 
-    auth_mgr = PEAKAssistantAuthManager()
-    az_model_client = await PEAKAssistantAzureOpenAIClient().get_client(
-        auth_mgr=auth_mgr
-    )
+    hypothesizer_agent_client = await get_model_client(agent_name="hypothesizer_agent")
 
-    # Call the LLM using the AzureOpenAIChatCompletionClient
+    # Call the LLM using the configured provider client
     try:
-        result = await az_model_client.create(messages)  # Await the async method
+        result = await hypothesizer_agent_client.create(messages)  # Await the async method
         # Access the content from the CreateResult object
         return str(
             result.content

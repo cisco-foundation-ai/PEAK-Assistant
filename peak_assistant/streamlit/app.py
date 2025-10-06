@@ -170,6 +170,8 @@ if "local_context" not in st.session_state:
 
 # Use the full page instead of a narrow central column
 st.set_page_config(layout="wide")
+st.set_page_config(page_title="PEAK Assistant")
+
 
 # Reduce the margin above the tabs
 st.markdown("""

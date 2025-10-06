@@ -1,0 +1,76 @@
+{
+  "version": "1",
+  "providers": {
+    "azure-main": {
+      "type": "azure",
+      "config": {
+        "endpoint": "${AZURE_OPENAI_ENDPOINT}",
+        "api_key": "${AZURE_OPENAI_API_KEY}",
+        "api_version": "2025-04-01-preview"
+      }
+    },
+    "openai-native": {
+      "type": "openai",
+      "config": {
+        "api_key": "${OPENAI_API_KEY}"
+      }
+    },
+    "ollama-local": {
+      "type": "openai",
+      "config": {
+        "api_key": "sk-local",
+        "base_url": "http://localhost:11434/v1"
+      },
+      "models": {
+        "llama-3.1-8b": {
+          "model_info": {
+            "id": "llama-3.1-8b",
+            "object": "model",
+            "owned_by": "local",
+            "family": "llama-3",
+            "vision": false,
+            "audio": false,
+            "function_calling": false,
+            "json_output": false,
+            "structured_output": false,
+            "input": { "max_tokens": 131072 },
+            "output": { "max_tokens": 8192 },
+            "tokenizer": "tiktoken-gpt-4o"
+          }
+        }
+      }
+    },
+    "anthropic-main": {
+      "type": "anthropic",
+      "config": {
+        "api_key": "${ANTHROPIC_API_KEY}",
+        "max_tokens": 4096
+      }
+    }
+  },
+  "defaults": {
+    "provider": "azure-main",
+    "model": "gpt-4o",
+    "deployment": "gpt-4o-deployment"
+  },
+  "groups": {
+    "research-team": {
+      "match": ["external_search_*", "internal_search_*", "summarizer_agent", "summary_critic", "research_team_lead"],
+      "provider": "azure-main",
+      "model": "gpt-4o",
+      "deployment": "gpt-4o-deployment"
+    },
+    "reasoning-agents": {
+      "match": ["hunt_planner", "hunt_plan_critic"],
+      "provider": "azure-main",
+      "model": "o4-mini",
+      "deployment": "o4-mini-deployment"
+    }
+  },
+  "agents": {
+    "able_table": {
+      "provider": "openai-native",
+      "model": "gpt-4o-mini"
+    }
+  }
+}

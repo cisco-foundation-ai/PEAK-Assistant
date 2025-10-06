@@ -27,8 +27,7 @@ from autogen_agentchat.ui import Console
 from autogen_agentchat.conditions import TextMentionTermination
 from autogen_agentchat.base import TaskResult
 
-from ..utils.assistant_auth import PEAKAssistantAuthManager
-from ..utils.azure_client import PEAKAssistantAzureOpenAIClient
+from ..utils.llm_factory import get_model_client
 
 
 async def plan_hunt(
@@ -212,21 +211,18 @@ async def plan_hunt(
     if previous_run:
         messages = messages + previous_run
 
-    auth_mgr = PEAKAssistantAuthManager()
-    #    az_model_client = await PEAKAssistantAzureOpenAIClient().get_client(auth_mgr=auth_mgr)
-    az_model_reasoning_client = await PEAKAssistantAzureOpenAIClient().get_client(
-        auth_mgr=auth_mgr, model_type="reasoning"
-    )
+    hunt_planner_client = await get_model_client(agent_name="hunt_planner")
+    hunt_plan_critic_client = await get_model_client(agent_name="hunt_plan_critic")
 
     planning_agent = AssistantAgent(
         "hunt_planner",
-        model_client=az_model_reasoning_client,
+        model_client=hunt_planner_client,
         system_message=planner_prompt,
     )
 
     plan_critic_agent = AssistantAgent(
         "hunt_plan_critic",
-        model_client=az_model_reasoning_client,
+        model_client=hunt_plan_critic_client,
         system_message=plan_critic_prompt,
     )
 

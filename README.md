@@ -164,25 +164,18 @@ We strongly recommend you also include at least some basic information about you
 Splunk indices, sourcetypes, and fields. This will help the AI agents understand your data better
 and generate more accurate queries. It's not required, because the automated data discovery is actually pretty good, but it can be helpful.
 
-## 2. Environment Variables
-The rest of the Assistant configuration has to do with the LLM configuration, and is held in environment variables. Create a `.env` file in the project root with the following variables:
+## Model Configuration
 
-```
-# Note that the PEAK Assistant only supports Azure OpenAI at this time.
-AZURE_OPENAI_API_KEY=your-azure-openai-api-key
-AZURE_OPENAI_ENDPOINT=https://your-azure-endpoint.openai.azure.com/
-AZURE_OPENAI_DEPLOYMENT=your-deployment-name
-AZURE_OPENAI_API_VERSION=2023-05-15
+The PEAK Assistant requires a `model_config.json` file to configure LLM providers and models. This file must be placed in the current working directory (the directory from which you run the application).
 
-# Use this model for most tasks
-AZURE_OPENAI_MODEL=gpt-4o
+For complete documentation on model configuration, including:
+- Detailed provider setup (Azure OpenAI, OpenAI, OpenAI-compatible, Anthropic)
+- Per-agent model assignment
+- Multiple configuration examples
+- Environment variable interpolation
+- Troubleshooting
 
-# Use this model when you need extended thinking (some of the research, data discovery, 
-# and planning tasks benefit from this). If you prefer not to use a reasoning model, simply 
-set these to whatever values you're using above for the non-reasoning model.
-AZURE_OPENAI_REASONING_DEPLOYMENT=your-reasoning-deployment-nameqvi
-AZURE_OPENAI_REASONING_MODEL=o4-mini
-```
+See **[MODEL_CONFIGURATION.md](MODEL_CONFIGURATION.md)** for the full guide.
 
 ## Running the Assistant
 Now that it is configured it's time to run the app. Since you installed this as a module, you can simpley run the assistant:
@@ -206,6 +199,32 @@ The PEAK-Assistant follows a structured workflow that aligns with the PEAK Threa
 4. **ABLE Table Creation**: Develop Actor, Behavior, Location, Evidence tables to scope the hunt
 5. **Data Discovery**: Identify relevant data sources in your Splunk environment for testing hypotheses
 6. **Hunt Planning**: Combine all components into a comprehensive threat hunting plan
+
+## Live Integration Tests (optional)
+
+This repository includes live integration tests that make real calls to the configured LLM provider. These tests are marked with `@pytest.mark.live` and require a properly configured `model_config.json` file in the test directory.
+
+- Run all live tests:
+  ```bash
+  pytest -m live tests/integration -q
+  ```
+
+- OpenAI (native): ensure your `model_config.json` is configured with OpenAI provider and does not set `base_url`.
+  ```bash
+  pytest -m live tests/integration/test_openai_live.py -q
+  ```
+
+- OpenAI-compatible (custom base_url): ensure your `model_config.json` is configured with OpenAI provider and includes `base_url` (e.g., `http://localhost:11434/v1`).
+  ```bash
+  pytest -m live tests/integration/test_openai_base_url_live.py -q
+  ```
+
+- Azure OpenAI: ensure your `model_config.json` is configured with Azure provider.
+  ```bash
+  pytest -m live tests/integration/test_azure_live.py -q
+  ```
+
+Note: These tests make real network calls and may incur costs when using hosted providers.
 
 ## Docker Support
 
@@ -241,11 +260,15 @@ Once you have the image downloaded, you can run the container by running the fol
 
 Note that you will still need to provide the same configuration files as you would if you were running the app natively:
 * `context.txt`
-* `.env`
+* `model_config.json`
 * `mcp_servers.json`
 * `cert.pem` & `key.pem`
 
-The sample command mounts the current directory as `/certs`, and maps the other files into the working directory of the app running in the container. It assumes these files are in the current directory, but you can adjust the paths as needed.
+The sample command mounts the current directory as `/certs`, and maps the other files into the working directory of the app running in the container. It assumes these files are in the current directory, but you can adjust the paths as needed. Don't forget to add a mount for `model_config.json`:
+
+```bash
+--mount "type=bind,src=$(PWD)/model_config.json,target=/home/peakassistant/model_config.json"
+```
 
 ### Accessing the Assistant via Docker
 Once the container is running, you can access it just as though it were running natively. Open `http://127.0.0.1:8501/` (or HTTPS if configured) in your browser.
@@ -255,10 +278,81 @@ Once the container is running, you can access it just as though it were running 
 Podman commands are generally very compatible with Docker commands, so you should be able to use them interchangeably. The only difference is that you will need to use `podman` instead of `docker` in the commands above.
 
 ### What if I want to use a different LLM provider?
-We're working on this. Stay tuned!
+The Assistant supports multiple providers via the `model_config.json` file:
+
+- Azure OpenAI
+- OpenAI (native)
+- OpenAI-compatible servers (e.g., Ollama, vLLM, LM Studio)
+
+You can configure different models for different agents, or use a single model for all agents. See [MODEL_CONFIGURATION.md](MODEL_CONFIGURATION.md) for detailed configuration examples and provider-specific requirements.
 
 ## Troubleshooting
-### The application is working, but I network errors when I try to download any of the files.
+
+### My MCP servers aren't working/can't authenticate. What do I do?
+
+If you're having issues with MCP servers or want to verify your configuration, use the `mcp-status` command to check the status of all configured servers:
+
+```bash
+uv run mcp-status
+```
+
+This command will:
+- Display all configured MCP servers organized by server group
+- Show authentication status for each server
+- Identify missing OAuth2 environment variables
+- Provide exact `export` commands to set required credentials
+
+**Example output:**
+```
+✓ tavily-search
+  Transport: stdio
+  Auth: none
+  Status: Ready
+
+✗ atlassian-remote-mcp
+  Transport: sse
+  Auth: oauth2_authorization_code (requires user authentication)
+  Status: Missing credentials
+  
+  Missing environment variable(s):
+    ✗ PEAK_MCP_ATLASSIAN_REMOTE_MCP_TOKEN
+    ✗ PEAK_MCP_ATLASSIAN_REMOTE_MCP_USER_ID
+  
+  To enable, set:
+    export PEAK_MCP_ATLASSIAN_REMOTE_MCP_TOKEN="your_token_here"
+    export PEAK_MCP_ATLASSIAN_REMOTE_MCP_USER_ID="your_user_id"
+```
+
+**Verbose mode** shows additional details like commands, URLs, and descriptions:
+```bash
+uv run mcp-status --verbose
+# or
+uv run mcp-status -v
+```
+
+**Note:** The `mcp-status` command only checks configuration and environment variables—it does not attempt to connect to servers. This makes it fast and safe to run at any time.
+
+### Using OAuth2 MCP Servers in CLI Mode
+
+OAuth2-authenticated MCP servers require browser-based authentication and are primarily designed for use with the Streamlit web interface. However, you can use them in CLI mode (e.g., with `research-assistant`) by providing OAuth tokens via environment variables:
+
+```bash
+# For servers without user authentication
+export PEAK_MCP_SERVER_NAME_TOKEN="your_access_token"
+
+# For servers requiring user authentication (e.g., Atlassian)
+export PEAK_MCP_ATLASSIAN_REMOTE_MCP_TOKEN="your_access_token"
+export PEAK_MCP_ATLASSIAN_REMOTE_MCP_USER_ID="your_user_id"
+```
+
+**To obtain tokens:**
+1. Authenticate via the Streamlit web interface (`uv run peak-assistant`)
+2. Use the server's developer portal to generate a personal access token
+3. Set the environment variables before running CLI commands
+
+**Note:** OAuth2 servers without environment variables will be automatically skipped in CLI mode with a clear warning message.
+
+### The application is working, but I get network errors when I try to download any of the files.
 The most likely cause is that you are using self-signed TLS certificates and, while Chrome may allow you to access the app's pages, it will not allow you to download any files. If you can, use a recognized certificate authority to issue your TLS certificates. If this isn't feasible (e.g., if you are running on a local development machine), you will need to add your CA to the system's root certificate store as a trusted CA. The easiest way to do this is to use the [mkcert](https://github.com/FiloSottile/mkcert) tool to create the local CA, install it on your system, and then use it to create the TLS certificates for the app.
 
 ## License

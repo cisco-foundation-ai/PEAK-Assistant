@@ -24,8 +24,7 @@ from typing import List
 
 from autogen_core.models import UserMessage, SystemMessage
 
-from ..utils.assistant_auth import PEAKAssistantAuthManager
-from ..utils.azure_client import PEAKAssistantAzureOpenAIClient
+from ..utils.llm_factory import get_model_client
 
 
 async def able_table(
@@ -105,7 +104,8 @@ async def able_table(
 
         The output should be a Markdown document with the following format:
             - Title: 1st level header with the title "PEAK ABLE Table: " followed by the 
-                common name for the technique being hunted for.
+                common name for the technique being hunted for. This should be the first line
+                of your output.
             - Hypothesis: Italic text with the text "Hypothesis: " followed by the user's
                 hunting hypothesis.
             - ABLE Table: An easy-to-read table with the following columns:
@@ -114,6 +114,10 @@ async def able_table(
             - Notes: If there are any notes or additional information that the user should
                 be aware of, include them here. This should be a bulleted list. This is an 
                 option section and should be omitted if there are no notes. 
+
+        Never include any markdown langauage hints (e.g., ```, ```markdown, etc.) or any 
+        other text in the output. The first line should be the title. The very first character 
+        should be the # symbol.
     """
 
     messages: List[SystemMessage | UserMessage] = [
@@ -135,14 +139,11 @@ async def able_table(
     if previous_run:
         messages = messages + previous_run
 
-    auth_mgr = PEAKAssistantAuthManager()
-    az_model_client = await PEAKAssistantAzureOpenAIClient().get_client(
-        auth_mgr=auth_mgr
-    )
+    able_table_client = await get_model_client(agent_name="able_table")
 
-    # Call the LLM using the AzureOpenAIChatCompletionClient
+    # Call the LLM using the configured provider client
     try:
-        result = await az_model_client.create(messages)  # Await the async method
+        result = await able_table_client.create(messages)  # Await the async method
         # Access the content from the CreateResult object
         return str(
             result.content

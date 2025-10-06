@@ -72,12 +72,17 @@ able-assistant = "peak_assistant.able_assistant.__main__:main"
 data-assistant = "peak_assistant.data_assistant.__main__:main"
 hypothesis-assistant = "peak_assistant.hypothesis_assistant.hypothesis_assistant_cli:main"
 hypothesis-refiner = "peak_assistant.hypothesis_assistant.hypothesis_refiner_cli:main"
+mcp-status = "peak_assistant.mcp_status.__main__:main"
 planning-assistant = "peak_assistant.planning_assistant.__main__:main"
 peak-mcp = "peak_assistant.peak_mcp.__main__:main"
 peak-assistant = "peak_assistant.streamlit.__main__:main"
 research-assistant = "peak_assistant.research_assistant.__main__:main"
+validate-config = "peak_assistant.utils.validate_config:main"
 
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "live: marks tests that call external LLM APIs (deselect with '-m \"not live\"')",
+]
