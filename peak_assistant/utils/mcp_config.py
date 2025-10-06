@@ -27,6 +27,7 @@ import concurrent.futures
 import json
 import os
 from pathlib import Path
+import sys
 import weakref
 
 import httpx
@@ -41,6 +42,13 @@ from dotenv import load_dotenv
 from autogen_ext.tools.mcp import McpWorkbench, StdioServerParams
 
 logger = logging.getLogger(__name__)
+
+def _is_streamlit_running() -> bool:
+    """
+    Check if we're running in an active Streamlit session without triggering Streamlit startup.
+    Returns True only if Streamlit is already imported and we're in a script run context.
+    """
+    return 'streamlit.runtime.scriptrunner' in sys.modules
 
 class AuthType(Enum):
     NONE = "none"
@@ -121,13 +129,14 @@ class OAuth2TokenManager:
             return self.auth_config.redirect_uri
         
         # Prefer Streamlit runtime (dynamic port/host) if available
-        try:
-            from peak_assistant.streamlit.util.helpers import get_streamlit_redirect_uri
-            redirect_uri = get_streamlit_redirect_uri()
-            logger.info(f"Using Streamlit redirect URI: {redirect_uri}")
-            return redirect_uri
-        except Exception as e:
-            logger.warning(f"Failed to obtain Streamlit redirect URI: {e}")
+        if _is_streamlit_running():
+            try:
+                from peak_assistant.streamlit.util.helpers import get_streamlit_redirect_uri
+                redirect_uri = get_streamlit_redirect_uri()
+                logger.info(f"Using Streamlit redirect URI: {redirect_uri}")
+                return redirect_uri
+            except Exception as e:
+                logger.warning(f"Failed to obtain Streamlit redirect URI: {e}")
         
         # Environment override
         env_redirect = os.getenv("PEAK_REDIRECT_URI")
@@ -731,6 +740,10 @@ class MCPConfigManager:
     def list_groups(self) -> List[str]:
         """List all configured server groups"""
         return list(self.server_groups.keys())
+    
+    def get_all_groups(self) -> Dict[str, List[str]]:
+        """Get all server groups with their server names"""
+        return dict(self.server_groups)
 
     def _save_config(self):
         """Save the current server configurations back to the file."""
@@ -783,13 +796,17 @@ class MCPConfigManager:
         # Auto-generate redirect_uri if not set
         redirect_uri = config.auth.redirect_uri
         if not redirect_uri:
-            try:
-                # Prefer Streamlit runtime for dynamic URL
-                from peak_assistant.streamlit.util.helpers import get_streamlit_redirect_uri
-                redirect_uri = get_streamlit_redirect_uri()
-                logger.info(f"Auto-generated redirect URI for {server_name}: {redirect_uri}")
-            except Exception:
-                # Environment override, then fallback
+            # Prefer Streamlit runtime for dynamic URL (only if running)
+            if _is_streamlit_running():
+                try:
+                    from peak_assistant.streamlit.util.helpers import get_streamlit_redirect_uri
+                    redirect_uri = get_streamlit_redirect_uri()
+                    logger.info(f"Auto-generated redirect URI for {server_name}: {redirect_uri}")
+                except Exception as e:
+                    logger.warning(f"Failed to get Streamlit redirect URI: {e}")
+            
+            # Environment override or fallback
+            if not redirect_uri:
                 env_redirect = os.getenv("PEAK_REDIRECT_URI")
                 if env_redirect:
                     redirect_uri = env_redirect
@@ -1003,48 +1020,106 @@ class MCPClientManager:
                     return {}
                 headers[config.auth.header_name] = config.auth.api_key
             elif config.auth.type in [AuthType.OAUTH2_CLIENT_CREDENTIALS, AuthType.OAUTH2_AUTHORIZATION_CODE]:
-                # Use Streamlit session state for OAuth authentication
-                logger.debug(f"Getting OAuth headers for {config.name} from Streamlit session state")
-                try:
-                    import streamlit as st
-                    if hasattr(st, 'session_state'):
-                        auth_key = f"MCP.{config.name}"
-                        logger.debug(f"Looking for auth key: {auth_key}")
-                        logger.debug(f"Available MCP session keys: {[k for k in st.session_state.keys() if k.startswith('MCP.')]}")
-                        
-                        if auth_key in st.session_state:
-                            auth_data = st.session_state[auth_key]
-                            access_token = auth_data.get("access_token")
-                            stored_user_id = auth_data.get("user_id")
+                # Priority 1: Check environment variable (for CLI/automation)
+                env_var_name = f"PEAK_MCP_{config.name.upper().replace('-', '_')}_TOKEN"
+                env_token = os.getenv(env_var_name)
+                
+                if env_token:
+                    logger.info(f"Using OAuth token from environment variable for {config.name}")
+                    headers["Authorization"] = f"Bearer {env_token}"
+                    
+                    # Check for user ID if required
+                    if config.auth.requires_user_auth:
+                        user_id_var = f"PEAK_MCP_{config.name.upper().replace('-', '_')}_USER_ID"
+                        env_user_id = os.getenv(user_id_var)
+                        if env_user_id:
+                            headers["X-User-ID"] = env_user_id
+                            logger.info(f"Using user ID from environment variable: {env_user_id}")
+                        else:
+                            # Token provided but user ID missing
+                            logger.warning(
+                                f"OAuth authentication failed for {config.name}:\n"
+                                f"  Missing required environment variable(s):\n"
+                                f"    ✓ {env_var_name} (set)\n"
+                                f"    ✗ {user_id_var} (not set)\n"
+                                f"  \n"
+                                f"  To use this server in CLI mode, set:\n"
+                                f"    export {user_id_var}=\"your_user_id\"\n"
+                                f"  \n"
+                                f"  Alternatively, authenticate via Streamlit web interface.\n"
+                                f"  Server will be skipped."
+                            )
+                            return {}
+                    
+                    return headers
+                
+                # Priority 2: Check Streamlit session state (for web UI)
+                if _is_streamlit_running():
+                    logger.debug(f"Getting OAuth headers for {config.name} from Streamlit session state")
+                    try:
+                        import streamlit as st
+                        if hasattr(st, 'session_state'):
+                            auth_key = f"MCP.{config.name}"
+                            logger.debug(f"Looking for auth key: {auth_key}")
+                            logger.debug(f"Available MCP session keys: {[k for k in st.session_state.keys() if k.startswith('MCP.')]}")
                             
-                            logger.debug(f"Found auth data: access_token={bool(access_token)}, user_id={bool(stored_user_id)}")
-                            
-                            if access_token:
-                                # Always include access token
-                                headers["Authorization"] = f"Bearer {access_token}"
+                            if auth_key in st.session_state:
+                                auth_data = st.session_state[auth_key]
+                                access_token = auth_data.get("access_token")
+                                stored_user_id = auth_data.get("user_id")
                                 
-                                # Include user ID if available and required
-                                if stored_user_id:
-                                    headers["X-User-ID"] = stored_user_id
-                                    logger.info(f"Using Streamlit OAuth headers for {config.name} with user ID: {stored_user_id}")
-                                else:
-                                    logger.info(f"Using Streamlit OAuth headers for {config.name} (no user ID)")
+                                logger.debug(f"Found auth data: access_token={bool(access_token)}, user_id={bool(stored_user_id)}")
+                                
+                                if access_token:
+                                    # Always include access token
+                                    headers["Authorization"] = f"Bearer {access_token}"
                                     
-                                    # Check if user ID is required
-                                    if config.auth.requires_user_auth:
-                                        logger.error(f"User ID is required for user-based OAuth on {config.name}")
-                                        return {}
+                                    # Include user ID if available and required
+                                    if stored_user_id:
+                                        headers["X-User-ID"] = stored_user_id
+                                        logger.info(f"Using Streamlit OAuth headers for {config.name} with user ID: {stored_user_id}")
+                                    else:
+                                        logger.info(f"Using Streamlit OAuth headers for {config.name} (no user ID)")
+                                        
+                                        # Check if user ID is required
+                                        if config.auth.requires_user_auth:
+                                            logger.error(f"User ID is required for user-based OAuth on {config.name}")
+                                            return {}
+                                else:
+                                    logger.error(f"No access token in Streamlit session state for {config.name}")
+                                    return {}
                             else:
-                                logger.error(f"No access token in Streamlit session state for {config.name}")
+                                logger.error(f"No OAuth data found in Streamlit session state for {config.name}")
                                 return {}
                         else:
-                            logger.error(f"No OAuth data found in Streamlit session state for {config.name}")
+                            logger.error(f"Streamlit session state not available")
                             return {}
-                    else:
-                        logger.error(f"Streamlit session state not available")
+                    except Exception as e:
+                        logger.error(f"Failed to get Streamlit OAuth headers for {config.name}: {e}")
                         return {}
-                except Exception as e:
-                    logger.error(f"Failed to get Streamlit OAuth headers for {config.name}: {e}")
+                else:
+                    # Not in Streamlit and no environment variable provided
+                    # Build list of required environment variables
+                    user_id_var = f"PEAK_MCP_{config.name.upper().replace('-', '_')}_USER_ID"
+                    
+                    missing_vars = [f"    ✗ {env_var_name} (not set)"]
+                    export_commands = [f"    export {env_var_name}=\"your_token_here\""]
+                    
+                    if config.auth.requires_user_auth:
+                        missing_vars.append(f"    ✗ {user_id_var} (not set)")
+                        export_commands.append(f"    export {user_id_var}=\"your_user_id\"")
+                    
+                    logger.warning(
+                        f"OAuth authentication failed for {config.name}:\n"
+                        f"  Missing required environment variable(s):\n"
+                        + "\n".join(missing_vars) + "\n"
+                        f"  \n"
+                        f"  To use this server in CLI mode, set:\n"
+                        + "\n".join(export_commands) + "\n"
+                        f"  \n"
+                        f"  Alternatively, authenticate via Streamlit web interface.\n"
+                        f"  Server will be skipped."
+                    )
                     return {}
         
         return headers
@@ -1129,9 +1204,19 @@ class MCPClientManager:
     async def connect_servers(self, server_names: List[str], user_id: Optional[str] = None) -> List[str]:
         """Connect to multiple servers with optional user context, return list of successfully connected servers"""
         connected = []
+        skipped = []
         for server_name in server_names:
             if await self.connect_server(server_name, user_id=user_id):
                 connected.append(server_name)
+            else:
+                skipped.append(server_name)
+        
+        # Log summary
+        if connected:
+            logger.info(f"Successfully connected to {len(connected)} MCP server(s): {', '.join(connected)}")
+        if skipped:
+            logger.warning(f"Skipped {len(skipped)} MCP server(s) due to authentication or configuration issues: {', '.join(skipped)}")
+        
         return connected
     
     async def connect_server_group(self, group_name: str, user_id: Optional[str] = None) -> List[str]:

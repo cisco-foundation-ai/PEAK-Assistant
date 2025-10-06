@@ -287,7 +287,72 @@ The Assistant supports multiple providers via the `model_config.json` file:
 You can configure different models for different agents, or use a single model for all agents. See [MODEL_CONFIGURATION.md](MODEL_CONFIGURATION.md) for detailed configuration examples and provider-specific requirements.
 
 ## Troubleshooting
-### The application is working, but I network errors when I try to download any of the files.
+
+### My MCP servers aren't working/can't authenticate. What do I do?
+
+If you're having issues with MCP servers or want to verify your configuration, use the `mcp-status` command to check the status of all configured servers:
+
+```bash
+uv run mcp-status
+```
+
+This command will:
+- Display all configured MCP servers organized by server group
+- Show authentication status for each server
+- Identify missing OAuth2 environment variables
+- Provide exact `export` commands to set required credentials
+
+**Example output:**
+```
+✓ tavily-search
+  Transport: stdio
+  Auth: none
+  Status: Ready
+
+✗ atlassian-remote-mcp
+  Transport: sse
+  Auth: oauth2_authorization_code (requires user authentication)
+  Status: Missing credentials
+  
+  Missing environment variable(s):
+    ✗ PEAK_MCP_ATLASSIAN_REMOTE_MCP_TOKEN
+    ✗ PEAK_MCP_ATLASSIAN_REMOTE_MCP_USER_ID
+  
+  To enable, set:
+    export PEAK_MCP_ATLASSIAN_REMOTE_MCP_TOKEN="your_token_here"
+    export PEAK_MCP_ATLASSIAN_REMOTE_MCP_USER_ID="your_user_id"
+```
+
+**Verbose mode** shows additional details like commands, URLs, and descriptions:
+```bash
+uv run mcp-status --verbose
+# or
+uv run mcp-status -v
+```
+
+**Note:** The `mcp-status` command only checks configuration and environment variables—it does not attempt to connect to servers. This makes it fast and safe to run at any time.
+
+### Using OAuth2 MCP Servers in CLI Mode
+
+OAuth2-authenticated MCP servers require browser-based authentication and are primarily designed for use with the Streamlit web interface. However, you can use them in CLI mode (e.g., with `research-assistant`) by providing OAuth tokens via environment variables:
+
+```bash
+# For servers without user authentication
+export PEAK_MCP_SERVER_NAME_TOKEN="your_access_token"
+
+# For servers requiring user authentication (e.g., Atlassian)
+export PEAK_MCP_ATLASSIAN_REMOTE_MCP_TOKEN="your_access_token"
+export PEAK_MCP_ATLASSIAN_REMOTE_MCP_USER_ID="your_user_id"
+```
+
+**To obtain tokens:**
+1. Authenticate via the Streamlit web interface (`uv run peak-assistant`)
+2. Use the server's developer portal to generate a personal access token
+3. Set the environment variables before running CLI commands
+
+**Note:** OAuth2 servers without environment variables will be automatically skipped in CLI mode with a clear warning message.
+
+### The application is working, but I get network errors when I try to download any of the files.
 The most likely cause is that you are using self-signed TLS certificates and, while Chrome may allow you to access the app's pages, it will not allow you to download any files. If you can, use a recognized certificate authority to issue your TLS certificates. If this isn't feasible (e.g., if you are running on a local development machine), you will need to add your CA to the system's root certificate store as a trusted CA. The easiest way to do this is to use the [mkcert](https://github.com/FiloSottile/mkcert) tool to create the local CA, install it on your system, and then use it to create the TLS certificates for the app.
 
 ## License
