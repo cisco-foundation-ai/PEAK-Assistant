@@ -1020,41 +1020,12 @@ class MCPClientManager:
                     return {}
                 headers[config.auth.header_name] = config.auth.api_key
             elif config.auth.type in [AuthType.OAUTH2_CLIENT_CREDENTIALS, AuthType.OAUTH2_AUTHORIZATION_CODE]:
-                # Priority 1: Check environment variable (for CLI/automation)
-                env_var_name = f"PEAK_MCP_{config.name.upper().replace('-', '_')}_TOKEN"
-                env_token = os.getenv(env_var_name)
+                # Priority 1: Check Streamlit session state (for web UI)
+                # Streamlit session takes precedence when running in Streamlit to use fresh OAuth tokens
+                streamlit_running = _is_streamlit_running()
+                logger.info(f"[AUTH DEBUG] Streamlit running check for {config.name}: {streamlit_running}")
                 
-                if env_token:
-                    logger.info(f"Using OAuth token from environment variable for {config.name}")
-                    headers["Authorization"] = f"Bearer {env_token}"
-                    
-                    # Check for user ID if required
-                    if config.auth.requires_user_auth:
-                        user_id_var = f"PEAK_MCP_{config.name.upper().replace('-', '_')}_USER_ID"
-                        env_user_id = os.getenv(user_id_var)
-                        if env_user_id:
-                            headers["X-User-ID"] = env_user_id
-                            logger.info(f"Using user ID from environment variable: {env_user_id}")
-                        else:
-                            # Token provided but user ID missing
-                            logger.warning(
-                                f"OAuth authentication failed for {config.name}:\n"
-                                f"  Missing required environment variable(s):\n"
-                                f"    ✓ {env_var_name} (set)\n"
-                                f"    ✗ {user_id_var} (not set)\n"
-                                f"  \n"
-                                f"  To use this server in CLI mode, set:\n"
-                                f"    export {user_id_var}=\"your_user_id\"\n"
-                                f"  \n"
-                                f"  Alternatively, authenticate via Streamlit web interface.\n"
-                                f"  Server will be skipped."
-                            )
-                            return {}
-                    
-                    return headers
-                
-                # Priority 2: Check Streamlit session state (for web UI)
-                if _is_streamlit_running():
+                if streamlit_running:
                     logger.debug(f"Getting OAuth headers for {config.name} from Streamlit session state")
                     try:
                         import streamlit as st
@@ -1098,7 +1069,42 @@ class MCPClientManager:
                         logger.error(f"Failed to get Streamlit OAuth headers for {config.name}: {e}")
                         return {}
                 else:
-                    # Not in Streamlit and no environment variable provided
+                    # Priority 2: Check environment variables (for CLI/automation)
+                    # Only used when NOT running in Streamlit
+                    env_var_name = f"PEAK_MCP_{config.name.upper().replace('-', '_')}_TOKEN"
+                    env_token = os.getenv(env_var_name)
+                    logger.info(f"[AUTH DEBUG] Environment variable check for {config.name}: token={'present' if env_token else 'not set'}")
+                    
+                    if env_token:
+                        logger.info(f"Using OAuth token from environment variable for {config.name}")
+                        headers["Authorization"] = f"Bearer {env_token}"
+                        
+                        # Check for user ID if required
+                        if config.auth.requires_user_auth:
+                            user_id_var = f"PEAK_MCP_{config.name.upper().replace('-', '_')}_USER_ID"
+                            env_user_id = os.getenv(user_id_var)
+                            if env_user_id:
+                                headers["X-User-ID"] = env_user_id
+                                logger.info(f"Using user ID from environment variable: {env_user_id}")
+                            else:
+                                # Token provided but user ID missing
+                                logger.warning(
+                                    f"OAuth authentication failed for {config.name}:\n"
+                                    f"  Missing required environment variable(s):\n"
+                                    f"    ✓ {env_var_name} (set)\n"
+                                    f"    ✗ {user_id_var} (not set)\n"
+                                    f"  \n"
+                                    f"  To use this server in CLI mode, set:\n"
+                                    f"    export {user_id_var}=\"your_user_id\"\n"
+                                    f"  \n"
+                                    f"  Alternatively, authenticate via Streamlit web interface.\n"
+                                    f"  Server will be skipped."
+                                )
+                                return {}
+                        
+                        return headers
+                    
+                    # No credentials available (not in Streamlit and no env vars)
                     # Build list of required environment variables
                     user_id_var = f"PEAK_MCP_{config.name.upper().replace('-', '_')}_USER_ID"
                     

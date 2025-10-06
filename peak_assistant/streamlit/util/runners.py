@@ -60,10 +60,14 @@ async def run_researcher(debug_agents: bool = True):
         content=f"The current report draft is: {st.session_state['Research_document']}\n", source="user"
     ))
 
+    # Get user_id from session state for MCP OAuth authentication
+    user_id = st.session_state.get("user_id", f"streamlit_user_{id(st.session_state)}")
+    
     result = await researcher(
         technique=st.session_state["Research_messages"][0]["content"],
         local_context=st.session_state["local_context"],
         previous_run=previous_messages,
+        user_id=user_id,
         **debug_agents_opts
     )
 
