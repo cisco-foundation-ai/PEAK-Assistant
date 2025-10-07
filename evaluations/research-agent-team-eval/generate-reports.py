@@ -106,6 +106,8 @@ def run_assistant(topic: str, assistant_cmd: str, timeout_seconds: int) -> Tuple
             return False, None, stdout, stderr, f"non-zero exit {proc.returncode}"
         if "Traceback (most recent call last)" in combined:
             return False, None, stdout, stderr, "traceback detected"
+        if "Report:\nno report generated" in combined:
+            return False, None, stdout, stderr, "no report generated"
         saved = parse_saved_filename(stdout) or parse_saved_filename(combined)
         if not saved:
             return False, None, stdout, stderr, "could not parse saved filename"
