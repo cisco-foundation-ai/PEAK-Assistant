@@ -683,7 +683,7 @@ with agent_config_tab:
         # Display the dataframe with nice formatting
         st.dataframe(
             df,
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             column_config={
                 "Agent": st.column_config.TextColumn("Agent", width="medium"),
