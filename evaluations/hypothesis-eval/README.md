@@ -35,29 +35,23 @@ Attackers could be establishing persistence through scheduled tasks that execute
 ### Basic Usage
 
 ```bash
-python hypothesis_evaluator.py run1.txt run2.txt
+python hypothesis_evaluator.py run1.txt run2.txt -c model_config.json
 ```
 
 ### With Options
 
 ```bash
 python hypothesis_evaluator.py run1.txt run2.txt \
+  -c model_config.json \
   --output results.json \
   --log evaluation.log \
-  --json-output detailed.json \
-  --api-key YOUR_API_KEY
-```
-
-### Using Cheap Mode (Lower Cost)
-
-```bash
-python hypothesis_evaluator.py run1.txt run2.txt --cheap
+  --json-output detailed.json
 ```
 
 ### Quiet Mode (JSON Only)
 
 ```bash
-python hypothesis_evaluator.py run1.txt run2.txt -q
+python hypothesis_evaluator.py run1.txt run2.txt -c model_config.json -q
 ```
 
 ## Command Line Options
@@ -65,12 +59,11 @@ python hypothesis_evaluator.py run1.txt run2.txt -q
 | Option | Description | Default |
 |--------|-------------|---------|
 | `files` | One or more text files to evaluate (positional) | Required |
+| `-c, --model-config` | Path to model_config.json (required) | Required |
 | `--output` | Output JSON file with summary results | `hypothesis-eval.json` |
 | `--log` | Log file capturing console output | `hypothesis-eval.log` |
 | `-j, --json-output` | Full JSON with all hypothesis details | `hypothesis-eval.full.json` |
 | `--no-json` | Disable saving the full JSON details file | False |
-| `--api-key` | Anthropic API key (or use `ANTHROPIC_API_KEY` env var) | From environment |
-| `--cheap` | Use cheaper models (Claude 3/3.5 instead of Claude 4) | False |
 | `--raw` | Print raw Markdown instead of rendering with rich | False |
 | `-q, --quiet` | Quiet mode (no console output, JSON only) | False |
 
@@ -233,46 +226,129 @@ Does NOT count generic terms like "custom tools", "suspicious", "various"
 **Score 50:** Minor inconsistencies but generally coherent  
 **Score 0:** Technical impossibilities or clear contradictions
 
-## Model Selection
+## Model Configuration
 
-### Hybrid Mode (Default)
-- **Critical tasks** (Assertion Quality): Claude Opus 4
-- **Complex tasks** (Specificity, Scope, Technical Precision, Observable Focus, Logical Coherence): Claude Sonnet 4
-- **Simple tasks** (Detection Independence, Grammatical Clarity): Claude Haiku 3.5
+The evaluator uses a flexible model configuration system via `model_config.json`. This allows you to:
 
-### Cheap Mode (`--cheap`)
-- **Critical tasks**: Claude Sonnet 3.5
-- **Complex tasks**: Claude Sonnet 3.5
-- **Simple tasks**: Claude Haiku 3
+- Use different LLM providers (Azure OpenAI, OpenAI, Anthropic, etc.)
+- Assign different models to different evaluation criteria
+- Mix providers and models for cost/quality optimization
+- Use environment variables for API keys
+
+### Configuration Structure
+
+The evaluator maps each evaluation criterion to a "judge role" that can be configured independently:
+
+**Judge Roles:**
+- `assertion_quality` - Critical evaluation (recommended: highest quality model)
+- `specificity` - Quality evaluation
+- `scope_appropriateness` - Quality evaluation
+- `technical_precision` - Quality evaluation
+- `observable_focus` - Quality evaluation
+- `logical_coherence` - Quality evaluation
+- `detection_independence` - Fast evaluation (simple check)
+- `grammatical_clarity` - Fast evaluation (simple check)
+
+### Example Configuration
+
+See `model_config.json.example` for a complete example. Key patterns:
+
+```json
+{
+  "providers": {
+    "anthropic-main": {
+      "type": "anthropic",
+      "config": {
+        "api_key": "${ANTHROPIC_API_KEY}"
+      }
+    }
+  },
+  "defaults": {
+    "provider": "anthropic-main",
+    "model": "claude-sonnet-4-20250514"
+  },
+  "groups": {
+    "critical-judges": {
+      "match": ["assertion_quality"],
+      "model": "claude-opus-4-1-20250805"
+    },
+    "fast-judges": {
+      "match": ["detection_independence", "grammatical_clarity"],
+      "model": "claude-3-5-haiku-20241022"
+    }
+  }
+}
+```
+
+### Recommended Model Tiers
+
+**High Quality (Critical):**
+- Anthropic: `claude-opus-4-1-20250805`
+- OpenAI: `gpt-4o` or `o1-preview`
+- Azure: Deploy equivalent models
+
+**Quality (Complex):**
+- Anthropic: `claude-sonnet-4-20250514`
+- OpenAI: `gpt-4o`
+
+**Fast (Simple):**
+- Anthropic: `claude-3-5-haiku-20241022`
+- OpenAI: `gpt-4o-mini`
 
 ## Requirements
 
 ```bash
-pip install anthropic
-pip install tqdm  # Optional, for progress bar
-pip install rich  # Optional, for formatted console output
+# Core dependencies (from PEAK Assistant)
+pip install anthropic openai  # For LLM providers
+pip install python-dotenv     # For .env file support
+pip install tqdm              # Optional, for progress bar
+pip install rich              # Optional, for formatted console output
+
+# The evaluator uses PEAK Assistant's model configuration system
+# Make sure the parent directory is in your Python path
 ```
 
 ## Environment Setup
 
-Set your Anthropic API key:
+1. **Create model_config.json** (see `model_config.json.example`)
+
+2. **Set API keys** (choose one method):
+
+   **Option A: Using .env file (recommended)**
+   
+   Create a `.env` file in your working directory or any parent directory:
+   ```bash
+   # .env file
+   ANTHROPIC_API_KEY=your_api_key_here
+   OPENAI_API_KEY=your_api_key_here
+   AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com
+   AZURE_OPENAI_API_KEY=your_api_key_here
+   ```
+   
+   The evaluator will automatically find and load this file.
+
+   **Option B: Export environment variables**
+   ```bash
+   export ANTHROPIC_API_KEY=your_api_key_here
+   export OPENAI_API_KEY=your_api_key_here
+   export AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com
+   export AZURE_OPENAI_API_KEY=your_api_key_here
+   ```
+
+3. **Run the evaluator:**
 
 ```bash
-export ANTHROPIC_API_KEY=your_api_key_here
+python hypothesis_evaluator.py hypotheses.txt -c model_config.json
 ```
 
-Or pass it via command line:
-
-```bash
-python hypothesis_evaluator.py run1.txt --api-key your_api_key_here
-```
+The evaluator will search for a `.env` file in the current directory and parent directories, loading any environment variables it finds. This makes it easy to use `${ENV_VAR}` interpolation in your `model_config.json`.
 
 ## Examples
 
 ### Example 1: Single File Evaluation
 
 ```bash
-python hypothesis_evaluator.py hypotheses.txt
+python hypothesis_evaluator.py hypotheses.txt -c model_config.json
 ```
 
 Output shows score distribution, aggregates, and per-criterion averages for the single file.
@@ -280,7 +356,7 @@ Output shows score distribution, aggregates, and per-criterion averages for the 
 ### Example 2: Comparing Two Runs
 
 ```bash
-python hypothesis_evaluator.py baseline.txt improved.txt
+python hypothesis_evaluator.py baseline.txt improved.txt -c model_config.json
 ```
 
 Output shows evaluation for each file plus a comparison section identifying the winner and key differences.
@@ -289,6 +365,7 @@ Output shows evaluation for each file plus a comparison section identifying the 
 
 ```bash
 python hypothesis_evaluator.py run*.txt \
+  -c model_config.json \
   --output comparison.json \
   --log detailed.log \
   --json-output full-results.json
@@ -299,14 +376,39 @@ Evaluates all files matching `run*.txt`, saves summary to `comparison.json`, ful
 ### Example 4: Quiet Mode for Automation
 
 ```bash
-python hypothesis_evaluator.py run1.txt run2.txt -q --output results.json
+python hypothesis_evaluator.py run1.txt run2.txt -c model_config.json -q --output results.json
 ```
 
 No console output, only JSON files created. Useful for CI/CD pipelines.
 
+### Example 5: Using Different Providers
+
+```json
+{
+  "providers": {
+    "openai-main": {
+      "type": "openai",
+      "config": {"api_key": "${OPENAI_API_KEY}"}
+    }
+  },
+  "defaults": {
+    "provider": "openai-main",
+    "model": "gpt-4o"
+  },
+  "agents": {
+    "assertion_quality": {
+      "provider": "openai-main",
+      "model": "o1-preview"
+    }
+  }
+}
+```
+
+This uses OpenAI's `o1-preview` for critical evaluation and `gpt-4o` for everything else.
+
 ## Tips
 
-1. **Use cheap mode for iteration**: When developing hypotheses, use `--cheap` to reduce costs during rapid iteration.
+1. **Mix models for cost optimization**: Use expensive models only for critical evaluations (assertion_quality) and cheaper models for simple checks (grammatical_clarity, detection_independence).
 
 2. **Review outliers**: Pay special attention to hypotheses flagged as outliers - they often reveal systematic issues.
 
@@ -315,6 +417,8 @@ No console output, only JSON files created. Useful for CI/CD pipelines.
 4. **Batch processing**: Evaluate multiple runs at once to get comparative rankings automatically.
 
 5. **Log files**: Keep log files for debugging LLM evaluation issues or understanding scoring decisions.
+
+6. **Provider flexibility**: Try different providers (Anthropic, OpenAI, Azure) to find the best balance of cost, speed, and quality for your use case.
 
 ## Troubleshooting
 

@@ -29,12 +29,12 @@ Hypothesis Evaluator – Evaluates threat hunting hypotheses using 8 criteria.
   * JSON with comparison results
   * optional full JSON with all hypothesis details
   * log file capturing console output
-- Models: Anthropic, with hybrid/cheap switches
+- Models: Configured via model_config.json (supports Azure, OpenAI, Anthropic, etc.)
 
 Usage:
-  hypothesis-eval file1.txt [file2.txt ...]
+  hypothesis-eval file1.txt [file2.txt ...] -c model_config.json
   [--output results.json] [--log eval.log] [--json-output full.json] [--no-json]
-  [--cheap] [--raw] [-q] [--api-key KEY]
+  [--raw] [-q]
 """
 
 from __future__ import annotations
@@ -49,20 +49,12 @@ import statistics
 import math
 from dataclasses import dataclass, field
 from io import StringIO
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from anthropic import Anthropic
-
-# ===================== Model Configuration =====================
-# Higher quality (hybrid) models
-ANTHROPIC_MODEL_CRITICAL = "claude-opus-4-1-20250805"  # For critical evaluation tasks
-ANTHROPIC_MODEL_QUALITY = "claude-sonnet-4-20250514"   # For complex evaluation
-ANTHROPIC_MODEL_FAST = "claude-3-5-haiku-20241022"     # For simple checks
-
-# Cheaper alternatives
-ANTHROPIC_MODEL_CRITICAL_CHEAP = "claude-3-5-sonnet-20241022"
-ANTHROPIC_MODEL_QUALITY_CHEAP = "claude-3-5-sonnet-20241022"
-ANTHROPIC_MODEL_FAST_CHEAP = "claude-3-haiku-20240307"
+# Add parent directory to path to import evaluation utilities
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from utils import EvaluatorModelClient, load_environment
 
 # Score interpretation thresholds
 SCORE_EXCELLENT = 90
@@ -169,19 +161,17 @@ class RunMetrics:
 class HypothesisEvaluator:
     def __init__(
         self,
-        api_key: str,
+        model_config_path: Path,
         quiet: bool = False,
         log_file: Optional[str] = None,
         json_output_file: Optional[str] = None,
-        cheap_mode: bool = False,
         rich_mode: bool = False,
     ):
-        self.client = Anthropic(api_key=api_key)
+        self.model_client = EvaluatorModelClient(model_config_path)
         self.quiet = quiet
         self.log_file = log_file
         self.log_buffer = StringIO() if log_file else None
         self.json_output_file = json_output_file
-        self.cheap_mode = cheap_mode
         self.rich_mode = rich_mode
         self.console = None
         self._Markdown = None
@@ -197,33 +187,32 @@ class HypothesisEvaluator:
                 if not self.quiet:
                     print("Warning: rich is not installed. Falling back to plain console output.", file=sys.stderr)
 
-        # Model selection
-        if cheap_mode:
-            self.model_critical = ANTHROPIC_MODEL_CRITICAL_CHEAP
-            self.model_quality = ANTHROPIC_MODEL_QUALITY_CHEAP
-            self.model_fast = ANTHROPIC_MODEL_FAST_CHEAP
-        else:
-            self.model_critical = ANTHROPIC_MODEL_CRITICAL
-            self.model_quality = ANTHROPIC_MODEL_QUALITY
-            self.model_fast = ANTHROPIC_MODEL_FAST
-
-        # Metric registry: (function, model_to_use)
+        # Metric registry: (function, judge_role)
+        # Judge roles map to agent names in model_config.json
         self.metric_functions: Dict[str, Tuple[Any, str]] = {
-            "assertion_quality": (self.evaluate_assertion_quality, self.model_critical),
-            "specificity": (self.evaluate_specificity, self.model_quality),
-            "scope_appropriateness": (self.evaluate_scope_appropriateness, self.model_quality),
-            "technical_precision": (self.evaluate_technical_precision, self.model_quality),
-            "observable_focus": (self.evaluate_observable_focus, self.model_quality),
-            "detection_independence": (self.evaluate_detection_independence, self.model_fast),
-            "grammatical_clarity": (self.evaluate_grammatical_clarity, self.model_fast),
-            "logical_coherence": (self.evaluate_logical_coherence, self.model_quality),
+            "assertion_quality": (self.evaluate_assertion_quality, "assertion_quality"),
+            "specificity": (self.evaluate_specificity, "specificity"),
+            "scope_appropriateness": (self.evaluate_scope_appropriateness, "scope_appropriateness"),
+            "technical_precision": (self.evaluate_technical_precision, "technical_precision"),
+            "observable_focus": (self.evaluate_observable_focus, "observable_focus"),
+            "detection_independence": (self.evaluate_detection_independence, "detection_independence"),
+            "grammatical_clarity": (self.evaluate_grammatical_clarity, "grammatical_clarity"),
+            "logical_coherence": (self.evaluate_logical_coherence, "logical_coherence"),
         }
+
+        # Collect model info for metadata
+        model_info = {}
+        for metric_name, (_, judge_role) in self.metric_functions.items():
+            model_name = self.model_client.get_model_name(judge_role)
+            provider = self.model_client.get_provider_type(judge_role)
+            model_info[metric_name] = f"{provider}:{model_name}"
 
         # Full JSON object we can optionally save
         self.full_data: Dict[str, Any] = {
             "metadata": {
                 "evaluation_date": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "model_mode": "cheap" if cheap_mode else "hybrid",
+                "model_config": str(model_config_path),
+                "models_used": model_info,
                 "files": [],
             },
             "evaluations": [],
@@ -266,7 +255,7 @@ class HypothesisEvaluator:
         self,
         prompt: str,
         metric_name: str,
-        model: str,
+        judge_role: str,
         max_retries: int = 2,
         max_tokens: int = 300,
     ) -> Optional[int]:
@@ -281,13 +270,12 @@ class HypothesisEvaluator:
 
         for attempt in range(max_retries + 1):
             try:
-                response = self.client.messages.create(
-                    model=model,
+                text = self.model_client.call_llm(
+                    judge_role=judge_role,
+                    prompt=full_prompt,
                     max_tokens=max_tokens,
-                    temperature=0,
-                    messages=[{"role": "user", "content": full_prompt}],
+                    temperature=0.0,
                 )
-                text = response.content[0].text.strip()
                 
                 # Extract first integer from response
                 match = re.search(r'\b(\d+)\b', text)
@@ -337,7 +325,7 @@ Score 0 if ANY of these are true:
 
 Output only: 0 or 100"""
 
-        result = self.evaluate_with_llm_retry(prompt, "assertion_quality", self.model_critical)
+        result = self.evaluate_with_llm_retry(prompt, "assertion_quality", "assertion_quality")
         return result if result in [0, 100] else 0
 
     def evaluate_specificity(self, hypothesis: str) -> int:
@@ -362,7 +350,7 @@ Do NOT count:
 Count the qualifiers (0-5), then multiply by 20 for final score.
 Output only: 0, 20, 40, 60, 80, or 100"""
 
-        result = self.evaluate_with_llm_retry(prompt, "specificity", self.model_quality)
+        result = self.evaluate_with_llm_retry(prompt, "specificity", "specificity")
         return result if result in [0, 20, 40, 60, 80, 100] else 0
 
     def evaluate_scope_appropriateness(self, hypothesis: str) -> int:
@@ -387,7 +375,7 @@ Score 0 if:
 
 Output only: 0, 50, or 100"""
 
-        result = self.evaluate_with_llm_retry(prompt, "scope_appropriateness", self.model_quality)
+        result = self.evaluate_with_llm_retry(prompt, "scope_appropriateness", "scope_appropriateness")
         return result if result in [0, 50, 100] else 0
 
     def evaluate_technical_precision(self, hypothesis: str) -> int:
@@ -414,7 +402,7 @@ Score 0 if hypothesis contains vague terms like:
 
 Output only: 0, 50, or 100"""
 
-        result = self.evaluate_with_llm_retry(prompt, "technical_precision", self.model_quality)
+        result = self.evaluate_with_llm_retry(prompt, "technical_precision", "technical_precision")
         return result if result in [0, 50, 100] else 0
 
     def evaluate_observable_focus(self, hypothesis: str) -> int:
@@ -442,7 +430,7 @@ Score 0 if the hypothesis:
 
 Output only: 0, 50, or 100"""
 
-        result = self.evaluate_with_llm_retry(prompt, "observable_focus", self.model_quality)
+        result = self.evaluate_with_llm_retry(prompt, "observable_focus", "observable_focus")
         return result if result in [0, 50, 100] else 0
 
     def evaluate_detection_independence(self, hypothesis: str) -> int:
@@ -465,7 +453,7 @@ Score 0 if:
 
 Output only: 0 or 100"""
 
-        result = self.evaluate_with_llm_retry(prompt, "detection_independence", self.model_fast)
+        result = self.evaluate_with_llm_retry(prompt, "detection_independence", "detection_independence")
         return result if result in [0, 100] else 0
 
     def evaluate_grammatical_clarity(self, hypothesis: str) -> int:
@@ -494,7 +482,7 @@ Score 0 if:
 
 Output only: 0, 50, or 100"""
 
-        result = self.evaluate_with_llm_retry(prompt, "grammatical_clarity", self.model_fast)
+        result = self.evaluate_with_llm_retry(prompt, "grammatical_clarity", "grammatical_clarity")
         return result if result in [0, 50, 100] else 0
 
     def evaluate_logical_coherence(self, hypothesis: str) -> int:
@@ -523,7 +511,7 @@ Score 0 if:
 
 Output only: 0, 50, or 100"""
 
-        result = self.evaluate_with_llm_retry(prompt, "logical_coherence", self.model_quality)
+        result = self.evaluate_with_llm_retry(prompt, "logical_coherence", "logical_coherence")
         return result if result in [0, 50, 100] else 0
 
     # --------------- Orchestration ---------------
@@ -802,16 +790,18 @@ Output only: 0, 50, or 100"""
 
 # ===================== CLI =====================
 def main() -> int:
+    # Load environment variables from .env file
+    load_environment()
+    
     ap = argparse.ArgumentParser(
         description="Evaluate threat hunting hypotheses from text files (one hypothesis per line)"
     )
     ap.add_argument("files", nargs="+", help="One or more text files to evaluate")
+    ap.add_argument("-c", "--model-config", type=Path, required=True, help="Path to model_config.json")
     ap.add_argument("--output", default="hypothesis-eval.json", help="Output JSON file (summary)")
     ap.add_argument("--log", default="hypothesis-eval.log", help="Log file capturing console output")
     ap.add_argument("-j", "--json-output", default="hypothesis-eval.full.json", help="Full JSON with all hypothesis details")
     ap.add_argument("--no-json", action="store_true", help="Disable saving the full JSON details file")
-    ap.add_argument("--api-key", help="Anthropic API key (or ANTHROPIC_API_KEY env)")
-    ap.add_argument("--cheap", action="store_true", help="Use cheaper models (Claude 3/3.5)")
     ap.add_argument("--raw", action="store_true", help="Print raw Markdown instead of rendering it")
     ap.add_argument("-q", "--quiet", action="store_true", help="Quiet mode (no console output)")
     args = ap.parse_args()
@@ -826,26 +816,28 @@ def main() -> int:
         print(f"Error: missing files: {', '.join(missing)}", file=sys.stderr)
         return 1
 
-    # API key
-    api_key = args.api_key or os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        print("Error: Anthropic API key required (use --api-key or ANTHROPIC_API_KEY)", file=sys.stderr)
+    # Verify model config exists
+    if not args.model_config.exists():
+        print(f"Error: model_config.json not found at {args.model_config}", file=sys.stderr)
         return 1
 
     # Determine full JSON setting
     json_output_file = None if args.no_json else args.json_output
 
-    evaluator = HypothesisEvaluator(
-        api_key=api_key,
-        quiet=args.quiet,
-        log_file=args.log,
-        json_output_file=json_output_file,
-        cheap_mode=args.cheap,
-        rich_mode=(not args.raw),
-    )
+    try:
+        evaluator = HypothesisEvaluator(
+            model_config_path=args.model_config,
+            quiet=args.quiet,
+            log_file=args.log,
+            json_output_file=json_output_file,
+            rich_mode=(not args.raw),
+        )
 
-    evaluator.process_files(args.files, args.output)
-    return 0
+        evaluator.process_files(args.files, args.output)
+        return 0
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

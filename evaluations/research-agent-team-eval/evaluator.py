@@ -23,7 +23,12 @@
 
 """
 Modular LLM-Based Threat Hunting Report Evaluator
-Compares and evaluates cybersecurity threat hunting reports using Claude for intelligent assessment.
+Compares and evaluates cybersecurity threat hunting reports using flexible LLM configuration.
+
+Usage:
+  evaluator.py file1.md [file2.md ...] -c model_config.json
+  [--output results.json] [--log eval.log] [--json-output full.json]
+  [-q] [--verbose]
 """
 
 import json
@@ -37,21 +42,15 @@ from dataclasses import dataclass, field
 from urllib.parse import urlparse
 import sys
 import os
-from anthropic import Anthropic
 import time
 import statistics
 import math
 from io import StringIO
+from pathlib import Path
 
-# Configuration - Default models (higher quality, higher cost)
-ANTHROPIC_MODEL_CRITICAL = "claude-opus-4-1-20250805"  # For critical evaluation tasks
-ANTHROPIC_MODEL_QUALITY = "claude-sonnet-4-20250514"  # For complex evaluation
-ANTHROPIC_MODEL_FAST = "claude-3-5-haiku-20241022"  # For simple pattern matching
-
-# Cheap mode models (original configuration)
-ANTHROPIC_MODEL_CRITICAL_CHEAP = "claude-3-5-sonnet-20241022"
-ANTHROPIC_MODEL_QUALITY_CHEAP = "claude-3-5-sonnet-20241022"
-ANTHROPIC_MODEL_FAST_CHEAP = "claude-3-haiku-20240307"
+# Add parent directory to path to import evaluation utilities
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from utils import EvaluatorModelClient, load_environment
 
 REQUIRED_SECTIONS = [
     "Overview",
@@ -115,34 +114,45 @@ class ReportEvaluator:
 
     def __init__(
         self,
-        api_key: str,
+        model_config_path: Path,
         verbose: bool = False,
         quiet: bool = False,
         log_file: str = "",
         json_output_file: str = "",
-        cheap_mode: bool = False,
     ):
-        self.client = Anthropic(api_key=api_key)
+        self.model_client = EvaluatorModelClient(model_config_path)
         self.verbose = verbose
         self.quiet = quiet
         self.log_file = log_file
         self.log_buffer = StringIO() if log_file else None
         self.json_output_file = json_output_file
-        self.cheap_mode = cheap_mode
 
-        # Set models based on mode
-        if cheap_mode:
-            self.model_critical = ANTHROPIC_MODEL_CRITICAL_CHEAP
-            self.model_quality = ANTHROPIC_MODEL_QUALITY_CHEAP
-            self.model_fast = ANTHROPIC_MODEL_FAST_CHEAP
-            if not quiet:
-                print("Using cheap mode (original models) for evaluation")
-        else:
-            self.model_critical = ANTHROPIC_MODEL_CRITICAL
-            self.model_quality = ANTHROPIC_MODEL_QUALITY
-            self.model_fast = ANTHROPIC_MODEL_FAST
-            if not quiet:
-                print("Using hybrid mode (Claude 4 models) for better accuracy")
+        # Cache for extracted sections to avoid redundant LLM calls
+        self.section_cache: Dict[str, Any] = {}
+
+        # Define all metric functions, judge roles, and their weights
+        self.metric_functions = {
+            "structure_compliance": (self.evaluate_structure_compliance, "structure_compliance", 1.5),
+            "technical_depth": (self.evaluate_technical_depth, "technical_depth", 2.0),
+            "technical_accuracy": (self.evaluate_technical_accuracy, "technical_accuracy", 2.0),
+            "mitre_coverage": (self.evaluate_mitre_coverage, "mitre_coverage", 1.5),
+            "detection_quality": (self.evaluate_detection_quality, "detection_quality", 2.0),
+            "dataset_documentation": (self.evaluate_dataset_documentation, "dataset_documentation", 1.8),
+            "threat_actor_specificity": (self.evaluate_threat_actor_specificity, "threat_actor_specificity", 1.0),
+            "reference_quality": (self.evaluate_reference_quality, "reference_quality", 1.3),
+            "url_validity": (self.evaluate_url_validity, "url_validity", 1.5),
+            "log_example_quality": (self.evaluate_log_example_quality, "log_example_quality", 1.7),
+            "instruction_clarity": (self.evaluate_instruction_clarity, "instruction_clarity", 1.8),
+            "cross_section_consistency": (self.evaluate_cross_section_consistency, "cross_section_consistency", 1.2),
+            "tool_documentation": (self.evaluate_tool_documentation, "tool_documentation", 1.0),
+        }
+
+        # Collect model info for metadata
+        model_info = {}
+        for metric_name, (_, judge_role, _) in self.metric_functions.items():
+            model_name = self.model_client.get_model_name(judge_role)
+            provider = self.model_client.get_provider_type(judge_role)
+            model_info[metric_name] = f"{provider}:{model_name}"
 
         self.full_evaluation_data = {
             "metadata": {
@@ -150,31 +160,12 @@ class ReportEvaluator:
                 "total_reports": 0,
                 "evaluation_mode": None,
                 "backends": [],
-                "model_mode": "cheap" if cheap_mode else "hybrid",
+                "model_config": str(model_config_path),
+                "models_used": model_info,
             },
             "evaluations": [],
             "comparisons": [],
             "summary": {},
-        }
-
-        # Cache for extracted sections to avoid redundant LLM calls
-        self.section_cache: Dict[str, Any] = {}
-
-        # Define all metric functions and their weights
-        self.metric_functions = {
-            "structure_compliance": (self.evaluate_structure_compliance, 1.5),
-            "technical_depth": (self.evaluate_technical_depth, 2.0),
-            "technical_accuracy": (self.evaluate_technical_accuracy, 2.0),
-            "mitre_coverage": (self.evaluate_mitre_coverage, 1.5),
-            "detection_quality": (self.evaluate_detection_quality, 2.0),
-            "dataset_documentation": (self.evaluate_dataset_documentation, 1.8),
-            "threat_actor_specificity": (self.evaluate_threat_actor_specificity, 1.0),
-            "reference_quality": (self.evaluate_reference_quality, 1.3),
-            "url_validity": (self.evaluate_url_validity, 1.5),
-            "log_example_quality": (self.evaluate_log_example_quality, 1.7),
-            "instruction_clarity": (self.evaluate_instruction_clarity, 1.8),
-            "cross_section_consistency": (self.evaluate_cross_section_consistency, 1.2),
-            "tool_documentation": (self.evaluate_tool_documentation, 1.0),
         }
 
     def print_output(self, message: str = "", end: str = "\n"):
@@ -206,7 +197,7 @@ class ReportEvaluator:
         self,
         prompt: str,
         metric_name: str,
-        model: str,
+        judge_role: str,
         max_retries: int = 2,
         max_tokens: int = 500,
     ) -> Optional[Dict]:
@@ -227,14 +218,12 @@ Your JSON response:"""
 
         for attempt in range(max_retries + 1):
             try:
-                response = self.client.messages.create(
-                    model=model,
+                response_text = self.model_client.call_llm(
+                    judge_role=judge_role,
+                    prompt=full_prompt,
                     max_tokens=max_tokens,
-                    temperature=0,
-                    messages=[{"role": "user", "content": full_prompt}],
+                    temperature=0.0,
                 )
-
-                response_text = response.content[0].text.strip()
 
                 # Try to parse the JSON directly
                 result = json.loads(response_text)
@@ -310,14 +299,12 @@ Report:
 Return the extracted section content:"""
 
         try:
-            response = self.client.messages.create(
-                model=self.model_quality,  # Use quality model for better semantic understanding
+            extracted_content = self.model_client.call_llm(
+                judge_role="section_extractor",
+                prompt=prompt,
                 max_tokens=4000,
-                temperature=0,
-                messages=[{"role": "user", "content": prompt}],
+                temperature=0.0,
             )
-
-            extracted_content = response.content[0].text.strip()
 
             if extracted_content == "SECTION_NOT_FOUND":
                 extracted_content = ""
@@ -529,9 +516,7 @@ Respond with ONLY a JSON object in this exact format:
     "confidence": 0.9
 }}"""
 
-        # Use quality model for technical depth evaluation in hybrid mode
-        model = self.model_quality if not self.cheap_mode else self.model_fast
-        result = self.evaluate_with_llm_retry(prompt, "technical_depth", model)
+        result = self.evaluate_with_llm_retry(prompt, "technical_depth", "technical_depth")
 
         if result:
             return MetricResult(
@@ -614,9 +599,8 @@ Respond with ONLY a JSON object in this exact format:
     "confidence": 0.85
 }}"""
 
-        # Always use critical model for technical accuracy
         result = self.evaluate_with_llm_retry(
-            prompt, "technical_accuracy", self.model_critical, max_tokens=800
+            prompt, "technical_accuracy", "technical_accuracy", max_tokens=800
         )
 
         if result:
@@ -673,7 +657,7 @@ Respond with ONLY a JSON object in this exact format:
     "confidence": 0.8
 }}"""
 
-        result = self.evaluate_with_llm_retry(prompt, "mitre_coverage", self.model_fast)
+        result = self.evaluate_with_llm_retry(prompt, "mitre_coverage", "mitre_coverage")
 
         if result:
             return MetricResult(
@@ -742,9 +726,7 @@ Respond with ONLY a JSON object in this exact format:
     "confidence": 0.9
 }}"""
 
-        # Use critical model for detection quality in hybrid mode
-        model = self.model_critical if not self.cheap_mode else self.model_quality
-        result = self.evaluate_with_llm_retry(prompt, "detection_quality", model)
+        result = self.evaluate_with_llm_retry(prompt, "detection_quality", "detection_quality")
 
         if result:
             return MetricResult(
@@ -818,7 +800,7 @@ Respond with ONLY a JSON object in this exact format:
 }}"""
 
         result = self.evaluate_with_llm_retry(
-            prompt, "dataset_documentation", self.model_quality
+            prompt, "dataset_documentation", "dataset_documentation"
         )
 
         if result:
@@ -882,7 +864,7 @@ Respond with ONLY a JSON object in this exact format:
 }}"""
 
         result = self.evaluate_with_llm_retry(
-            prompt, "threat_actor_specificity", self.model_fast
+            prompt, "threat_actor_specificity", "threat_actor_specificity"
         )
 
         if result:
@@ -1077,7 +1059,7 @@ Respond with ONLY a JSON object in this exact format:
 }}"""
 
         result = self.evaluate_with_llm_retry(
-            prompt, "log_example_quality", self.model_quality
+            prompt, "log_example_quality", "log_example_quality"
         )
 
         if result:
@@ -1145,7 +1127,7 @@ Respond with ONLY a JSON object in this exact format:
 }}"""
 
         result = self.evaluate_with_llm_retry(
-            prompt, "instruction_clarity", self.model_quality
+            prompt, "instruction_clarity", "instruction_clarity"
         )
 
         if result:
@@ -1194,7 +1176,7 @@ Respond with ONLY a JSON object in this exact format:
 }}"""
 
         result = self.evaluate_with_llm_retry(
-            prompt, "cross_section_consistency", self.model_quality
+            prompt, "cross_section_consistency", "cross_section_consistency"
         )
 
         if result:
@@ -1279,7 +1261,7 @@ Respond with ONLY a JSON object in this exact format:
             self.print_output(f"  {'-' * 30} {'-' * 8} {'-' * 8} {'-' * 40}")
 
         # Run each metric function
-        for metric_name, (metric_func, weight) in self.metric_functions.items():
+        for metric_name, (metric_func, judge_role, weight) in self.metric_functions.items():
             try:
                 result = metric_func(report, topic)
                 result.weight = weight
@@ -1933,6 +1915,9 @@ Respond with ONLY a JSON object in this exact format:
 
 
 def main():
+    # Load environment variables from .env file
+    load_environment()
+    
     parser = argparse.ArgumentParser(
         description="Evaluate and compare threat hunting reports"
     )
@@ -1949,13 +1934,17 @@ def main():
         help="Output JSON lines file with comparisons (default: output_results.jsonl)",
     )
     parser.add_argument(
+        "-c",
+        "--model-config",
+        type=Path,
+        required=True,
+        help="Path to model_config.json",
+    )
+    parser.add_argument(
         "-l",
         "--log",
         default="evaluation_log.txt",
         help="Log file for console output (default: evaluation_log.txt)",
-    )
-    parser.add_argument(
-        "--api-key", help="Anthropic API key (or set ANTHROPIC_API_KEY env var)"
     )
     parser.add_argument(
         "--verbose",
@@ -1983,22 +1972,12 @@ def main():
     parser.add_argument(
         "--no-json", action="store_true", help="Disable full JSON output file"
     )
-    parser.add_argument(
-        "--cheap",
-        action="store_true",
-        help="Use cheaper models (original Claude 3/3.5) instead of Claude 4 models",
-    )
 
     args = parser.parse_args()
 
-    # Get API key from args or environment
-    api_key = args.api_key or os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        print("Error: Anthropic API key required!", file=sys.stderr)
-        print(
-            "Set it via --api-key or ANTHROPIC_API_KEY environment variable",
-            file=sys.stderr,
-        )
+    # Verify model config exists
+    if not args.model_config.exists():
+        print(f"Error: model_config.json not found at {args.model_config}", file=sys.stderr)
         sys.exit(1)
 
     # Check if input file exists
@@ -2013,31 +1992,34 @@ def main():
     log_file = None if args.no_log else args.log
     json_output_file = None if args.no_json else args.json_output
 
-    # Create evaluator with quiet and log settings
-    evaluator = ReportEvaluator(
-        api_key=api_key,
-        verbose=args.verbose,
-        quiet=args.quiet,
-        log_file=log_file,
-        json_output_file=json_output_file,
-        cheap_mode=args.cheap,
-    )
+    try:
+        # Create evaluator with quiet and log settings
+        evaluator = ReportEvaluator(
+            model_config_path=args.model_config,
+            verbose=args.verbose,
+            quiet=args.quiet,
+            log_file=log_file,
+            json_output_file=json_output_file,
+        )
 
-    if not args.quiet:
-        print(f"Reading reports from: {args.input}")
-        print(f"Writing results to: {args.output}")
-        if log_file:
-            print(f"Logging output to: {log_file}")
-        if json_output_file:
-            print(f"JSON output to: {json_output_file}")
-        if args.verbose:
-            print("Verbose mode: ON (showing detailed comparisons)")
-        print()
+        if not args.quiet:
+            print(f"Reading reports from: {args.input}")
+            print(f"Writing results to: {args.output}")
+            if log_file:
+                print(f"Logging output to: {log_file}")
+            if json_output_file:
+                print(f"JSON output to: {json_output_file}")
+            if args.verbose:
+                print("Verbose mode: ON (showing detailed comparisons)")
+            print()
 
-    evaluator.process_reports(args.input, args.output)
+        evaluator.process_reports(args.input, args.output)
 
-    if not args.quiet:
-        print(f"\nResults written to: {args.output}")
+        if not args.quiet:
+            print(f"\nResults written to: {args.output}")
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
