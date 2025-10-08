@@ -56,42 +56,101 @@ hunting hypotheses.
 
 ## Requirements:
 Generate up to 10 threat hunting hypotheses that are:
-- Specific: Clearly define the threat actor behavior, technique, or vulnerability
-- Measurable: Can be proven or disproven through data analysis
+- Specific: Include concrete technique names, tool names, protocols, target systems, or file patterns
+- Testable: Can be proven or disproven through data analysis
 - Achievable: Could realistically be investigated with common security tools and logs
 - Relevant: Based on the techniques and behaviors described in the research report
+- Behavioral: Describe what adversaries ARE DOING, not what detection might show
 
-## Critical Constraints:
-- Each hypothesis must be completely independent of the others (as much as feasible)
-- Do NOT include time windows or time boundaries
-- Do NOT specify data sources, log types, or analysis methods. You may include general 
-  references (e.g., "network traffic", "system logs", "authentication logs", "EDR logs") but not specific
-  data sources (e.g., "Sysmon event code 1", "Zeek HTTP logs")
-- Do NOT number or label the hypotheses
-- Focus on WHAT might be happening, not HOW to detect it
-- Use generic system descriptions (e.g., "mail servers") unless the threat is specific to 
-  particular software (e.g., "Exchange 2019")
+## Critical Constraints - Hypothesis Structure:
+
+### DO:
+- State what adversaries/attackers/threat actors "may be," "are," or "might be" DOING
+- Describe observable adversary actions (process execution, file creation, network traffic, authentication attempts)
+- Include 3-5 specific details per hypothesis (technique names, tool names, protocols, system types, indicators)
+- Focus on 1-2 related behaviors per hypothesis
+- Use clear, concise sentences (generally under 35 words)
+- Use precise technical terminology (process names, protocol names, specific techniques)
+
+### DO NOT:
+- Use detection-focused language: "could indicate," "might suggest," "may reveal," "evidence of"
+- Describe investigation activities: "hunt for," "search for," "cross-reference," "systematic review"
+- Include time windows or time boundaries (e.g., "in the last 30 days," "during off-hours")
+- Specify data sources or log types (e.g., "Sysmon EventID 1," "Windows Event 4688")
+- Mention detection products/platforms (e.g., "Splunk," "Zeek," "CrowdStrike," "QRadar")
+- Use vague security terms: "suspicious activity," "anomalous behavior," "unusual patterns," "various methods"
+- Number or label the hypotheses
+- Include explanatory or introductory text
+
+### System References:
+- Use generic descriptions (e.g., "domain controllers," "web servers," "endpoints")
+- Exception: Specific software names are allowed when the threat targets particular products 
+  (e.g., "Exchange 2019," "Apache Log4j," "Confluence")
+
+## Each Hypothesis Must Be:
+1. **Independent**: Not dependent on or overlapping with other hypotheses
+2. **Behavioral**: Describes adversary actions, not detection outcomes
+3. **Observable**: Focuses on activities that leave evidence
+4. **Platform-agnostic**: No mention of specific detection tools
+5. **Grammatically clear**: One straightforward sentence
 
 ## Output Format:
 - Return ONLY the hypotheses, one per line
-- No introductory text, explanations, or conclusions (e.g., do not begin with text like "Based on the 
-  provided report and local context, here are ten hypotheses:", "Here are some hypotheses:", etc.)
+- No introductory text, explanations, or conclusions
+- No numbering or labeling
 - If you cannot generate any valid hypotheses, respond only with: "No hypotheses could be generated"
 
 ## Examples of Good Hypotheses:
-Threat actors may be using PowerShell Empire to establish persistence on Windows endpoints through scheduled tasks
-Attackers may be exploiting unpatched Log4j vulnerabilities in internet-facing applications for initial access
-Adversaries may be performing reconnaissance through abnormal LDAP queries against domain controllers
-Threat actors may be exfiltrating data through DNS tunneling from database servers
+
+Threat actors may be using PowerShell Empire to establish persistence through scheduled tasks on domain-joined Windows endpoints
+Attackers may be exploiting unpatched Log4j vulnerabilities in internet-facing Java applications to execute remote commands
+Adversaries may be performing reconnaissance by executing abnormal LDAP queries against domain controllers to enumerate privileged accounts
+Threat actors may be exfiltrating sensitive data through DNS tunneling using encoded queries to external resolvers
+Attackers may be leveraging WMI for lateral movement between workstations by executing remote commands via DCOM
+Adversaries may be dumping LSASS process memory using built-in Windows utilities such as rundll32.exe or comsvcs.dll to harvest credentials
+Threat actors may be establishing encrypted C2 channels over HTTPS to cloud storage services for command execution and data staging
 
 ## Examples of Bad Hypotheses (DO NOT generate hypotheses like these):
-Threat actors may be active in the last 30 days using PowerShell [includes time window]
-Check Cisco ASA firewall logs for suspicious traffic to known C2 servers [specifies data source]
-Adversaries might be present somewhere in the network [too vague]
-Use Splunk to search for base64 encoded commands [specifies tool/method]
-Based on the provided report and local context, here are ten hypotheses: [this is explanatory or introductory text not a hypothesis]
-4. An unusual spike in failed login attempts from unknown IP addresses might indicate a DDoS attack. [hypothesis is numbered]
-Hunt for signs of a data exfiltration attempt using PowerShell Empire. [specifies a task not a hypothesis]
+
+Threat actors may be active in the last 30 days using PowerShell
+[WRONG: Includes time window]
+
+Evidence of PowerShell Empire in EDR logs could indicate persistence mechanisms
+[WRONG: Detection-focused language ("could indicate") and mentions specific tool (EDR)]
+
+Check Cisco ASA firewall logs for suspicious traffic to known C2 servers
+[WRONG: Specifies data source and describes investigation activity]
+
+Adversaries might be present somewhere in the network doing suspicious things
+[WRONG: Too vague, no specific behaviors, uses "suspicious"]
+
+Use Splunk to search for base64 encoded commands in Windows Event Logs
+[WRONG: Mentions detection platform and describes hunting method]
+
+Based on the provided report, here are ten hypotheses:
+[WRONG: Introductory text, not a hypothesis]
+
+Hunt for signs of credential dumping using Mimikatz on critical servers
+[WRONG: Describes hunting task, not adversary behavior]
+
+Unusual spikes in authentication failures might suggest brute force attacks
+[WRONG: Detection-focused language ("might suggest") and vague term ("unusual")]
+
+Cross-referencing Sysmon Event 1 with known malware hashes may uncover malicious process execution
+[WRONG: Describes investigation methodology, mentions specific log source]
+
+Threat actors could be leveraging various techniques for lateral movement across different systems
+[WRONG: Too vague with "various techniques" and "different systems"]
+
+## Quality Checklist (Internal - Do Not Output):
+Before generating each hypothesis, verify:
+- [ ] States what adversaries ARE DOING (not what detection shows)
+- [ ] Includes 3-5 specific technical details
+- [ ] Uses precise terminology (no "suspicious," "unusual," "various")
+- [ ] Describes observable activities that leave evidence
+- [ ] No detection products, log sources, or investigation methods mentioned
+- [ ] Clear sentence structure under 35 words
+- [ ] Focuses on 1-2 related behaviors
     """
 
     messages = [
