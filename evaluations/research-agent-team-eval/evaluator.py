@@ -2048,8 +2048,8 @@ def main():
         "-c",
         "--model-config",
         type=Path,
-        required=True,
-        help="Path to model_config.json",
+        default=Path("model_config.json"),
+        help="Path to model_config.json (default: model_config.json)",
     )
     parser.add_argument(
         "-l",

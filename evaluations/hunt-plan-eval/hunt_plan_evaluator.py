@@ -912,16 +912,17 @@ def main() -> int:
     # Load environment variables from .env file
     load_environment()
     
-    ap = argparse.ArgumentParser(description="Evaluate and compare hunt plan Markdown files")
-    ap.add_argument("files", nargs="+", help="One or more Markdown files to evaluate")
-    ap.add_argument("-c", "--model-config", type=Path, required=True, help="Path to model_config.json")
-    ap.add_argument("--output", default="hunt-plan-compare.json", help="Output JSON file (single object)")
-    ap.add_argument("--log", default="hunt-plan-compare.log", help="Log file capturing console output")
-    ap.add_argument("-j", "--json-output", default="hunt-plan-compare.full.json", help="Full JSON with complete evaluation details")
-    ap.add_argument("--no-json", action="store_true", help="Disable saving the full JSON details file")
-    ap.add_argument("--raw", action="store_true", help="Print raw Markdown instead of rendering it")
-    ap.add_argument("-q", "--quiet", action="store_true", help="Quiet mode (no console output)")
-    args = ap.parse_args()
+    parser = argparse.ArgumentParser(description="Evaluate and compare hunt plan Markdown files")
+    parser.add_argument("files", nargs="+", help="Markdown files to evaluate (1 or 2)")
+    parser.add_argument("-c", "--model-config", type=Path, default=Path("model_config.json"), help="Path to model_config.json (default: model_config.json)")
+    parser.add_argument("--output", default="hunt-plan-compare.json", help="Output JSON file (single object)")
+    parser.add_argument("--log", default="hunt-plan-compare.log", help="Log file capturing console output")
+    parser.add_argument("-j", "--json-output", default="hunt-plan-compare.full.json", help="Full JSON with complete evaluation details")
+    parser.add_argument("--no-json", action="store_true", help="Disable saving the full JSON details file")
+    parser.add_argument("--raw", action="store_true", help="Print raw Markdown instead of rendering it")
+    parser.add_argument("-q", "--quiet", action="store_true", help="Quiet mode (no console output)")
+    
+    args = parser.parse_args()
 
     if not args.files:
         print("Error: at least one Markdown file is required", file=sys.stderr)

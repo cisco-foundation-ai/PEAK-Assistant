@@ -790,7 +790,7 @@ def main() -> int:
         description="Evaluate threat hunting hypotheses from text files (one hypothesis per line)"
     )
     ap.add_argument("files", nargs="+", help="One or more text files to evaluate")
-    ap.add_argument("-c", "--model-config", type=Path, required=True, help="Path to model_config.json")
+    ap.add_argument("-c", "--model-config", type=Path, default=Path("model_config.json"), help="Path to model_config.json (default: model_config.json)")
     ap.add_argument("--output", default="hypothesis-eval.json", help="Output JSON file (summary)")
     ap.add_argument("--log", default="hypothesis-eval.log", help="Log file capturing console output")
     ap.add_argument("-j", "--json-output", default="hypothesis-eval.full.json", help="Full JSON with all hypothesis details")
