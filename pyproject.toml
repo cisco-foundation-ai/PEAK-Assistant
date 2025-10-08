@@ -46,6 +46,7 @@ dependencies = [
     "streamlit-option-menu>=0.4.0",
     "watchdog>=6.0.0",
     "streamlit-extras>=0.7.8",
+    "rich>=14.1.0",
 ]
 
 [dependency-groups]
