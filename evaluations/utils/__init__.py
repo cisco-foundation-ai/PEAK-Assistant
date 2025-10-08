@@ -25,5 +25,12 @@ Shared utilities for PEAK Assistant evaluation scripts.
 
 from .eval_model_client import EvaluatorModelClient
 from .env_loader import load_environment, find_dotenv_file
+from .output_helpers import print_markdown, setup_rich_rendering
 
-__all__ = ["EvaluatorModelClient", "load_environment", "find_dotenv_file"]
+__all__ = [
+    "EvaluatorModelClient",
+    "load_environment",
+    "find_dotenv_file",
+    "print_markdown",
+    "setup_rich_rendering",
+]

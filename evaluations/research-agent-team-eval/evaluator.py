@@ -50,7 +50,7 @@ from pathlib import Path
 
 # Add parent directory to path to import evaluation utilities
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from utils import EvaluatorModelClient, load_environment
+from utils import EvaluatorModelClient, load_environment, print_markdown as print_md, setup_rich_rendering
 
 REQUIRED_SECTIONS = [
     "Overview",
@@ -119,6 +119,7 @@ class ReportEvaluator:
         quiet: bool = False,
         log_file: str = "",
         json_output_file: str = "",
+        rich_mode: bool = True,
     ):
         self.model_client = EvaluatorModelClient(model_config_path)
         self.verbose = verbose
@@ -127,8 +128,17 @@ class ReportEvaluator:
         self.log_buffer = StringIO() if log_file else None
         self.json_output_file = json_output_file
 
+        # Setup rich rendering
+        self.rich_mode, self.console, self._Markdown = setup_rich_rendering(quiet=quiet)
+        if not rich_mode:
+            # User explicitly disabled rich mode
+            self.rich_mode = False
+
         # Cache for extracted sections to avoid redundant LLM calls
         self.section_cache: Dict[str, Any] = {}
+        
+        # Buffer for verbose output (printed at end)
+        self._verbose_buffer: List[str] = []
 
         # Define all metric functions, judge roles, and their weights
         self.metric_functions = {
@@ -174,6 +184,17 @@ class ReportEvaluator:
             self.log_buffer.write(message + end)
         if not self.quiet:
             print(message, end=end)
+    
+    def print_markdown(self, markdown_text: str) -> None:
+        """Print markdown-formatted text (renders with rich if available)"""
+        print_md(
+            markdown_text,
+            log_buffer=self.log_buffer,
+            quiet=self.quiet,
+            rich_mode=self.rich_mode,
+            console=self.console,
+            markdown_class=self._Markdown,
+        )
 
     def save_log_file(self):
         """Save the log buffer to file if specified"""
@@ -241,6 +262,8 @@ Your JSON response:"""
                         + '\n\nRETRY: Previous response was not valid JSON. Return ONLY a JSON object like {"score": 50, "feedback": "example"}'
                         + json_instructions
                     )
+                    # Brief delay before retry
+                    time.sleep(1)
                 else:
                     if self.verbose:
                         self.print_output(
@@ -248,10 +271,26 @@ Your JSON response:"""
                         )
 
             except Exception as e:
-                if self.verbose and attempt == max_retries:
-                    self.print_output(
-                        f"    LLM API error for {metric_name}: {str(e)[:50]}"
-                    )
+                if attempt < max_retries:
+                    # Exponential backoff with more conservative timing for rate limits
+                    if "429" in str(e):
+                        wait_time = 5 * (2 ** attempt)  # 5s, 10s, 20s for rate limits
+                    else:
+                        wait_time = 2 ** attempt  # 1s, 2s, 4s for other errors
+                    
+                    if self.verbose:
+                        self.print_output(
+                            f"    ⚠️ {metric_name} error (attempt {attempt + 1}/{max_retries + 1}): {str(e)[:50]}"
+                        )
+                        self.print_output(f"    Retrying in {wait_time}s...")
+                    
+                    time.sleep(wait_time)
+                else:
+                    # Final attempt failed
+                    if self.verbose:
+                        self.print_output(
+                            f"    ⚠️ LLM API error for {metric_name} after {max_retries + 1} attempts: {str(e)[:50]}"
+                        )
 
         return None
 
@@ -1242,8 +1281,16 @@ Respond with ONLY a JSON object in this exact format:
 
     # ============== Main Evaluation Methods ==============
 
-    def evaluate_report(self, report_data: Dict) -> ReportMetrics:
-        """Evaluate a single report using all metrics"""
+    def evaluate_report(self, report_data: Dict, pbar=None) -> ReportMetrics:
+        """Evaluate a single report using all metrics
+        
+        Args:
+            report_data: Dictionary with 'topic', 'backend', and 'report' keys
+            pbar: Optional progress bar to update after each metric
+        
+        Returns:
+            ReportMetrics with all evaluation results
+        """
         topic = report_data["topic"]
         backend = report_data["backend"]
         report = report_data["report"]
@@ -1253,12 +1300,11 @@ Respond with ONLY a JSON object in this exact format:
 
         metrics = ReportMetrics(topic=topic, backend=backend)
 
+        # Buffer verbose header for this report
         if self.verbose:
-            self.print_output(f"\n  Evaluating {backend} report for '{topic}':")
-            self.print_output(
-                f"  {'Metric':<30} {'Score':>8} {'Weight':>8} {'Feedback'}"
-            )
-            self.print_output(f"  {'-' * 30} {'-' * 8} {'-' * 8} {'-' * 40}")
+            self._verbose_buffer.append(f"\n## Evaluating {backend} report for '{topic}':")
+            self._verbose_buffer.append(f"{'Metric':<30} {'Score':>8} {'Weight':>8} {'Feedback'}")
+            self._verbose_buffer.append(f"{'-' * 30} {'-' * 8} {'-' * 8} {'-' * 40}")
 
         # Run each metric function
         for metric_name, (metric_func, judge_role, weight) in self.metric_functions.items():
@@ -1267,8 +1313,8 @@ Respond with ONLY a JSON object in this exact format:
                 result.weight = weight
                 metrics.metric_results[metric_name] = result
 
+                # Buffer verbose output instead of printing
                 if self.verbose:
-                    # Show score immediately after completion
                     score_str = f"{result.score:.1f}"
                     weight_str = f"x{weight:.1f}"
                     feedback_str = (
@@ -1276,9 +1322,13 @@ Respond with ONLY a JSON object in this exact format:
                         if len(result.feedback) > 40
                         else result.feedback
                     )
-                    self.print_output(
-                        f"  {metric_name:<30} {score_str:>8} {weight_str:>8} {feedback_str}"
+                    self._verbose_buffer.append(
+                        f"{metric_name:<30} {score_str:>8} {weight_str:>8} {feedback_str}"
                     )
+                
+                # Update progress bar after each metric
+                if pbar:
+                    pbar.update(1)
 
             except Exception as e:
                 error_result = MetricResult(
@@ -1289,18 +1339,22 @@ Respond with ONLY a JSON object in this exact format:
                 )
                 metrics.metric_results[metric_name] = error_result
 
+                # Buffer error message
                 if self.verbose:
-                    self.print_output(
-                        f"  {metric_name:<30} {'ERROR':>8} {f'x{weight:.1f}':>8} Failed: {str(e)[:35]}..."
+                    self._verbose_buffer.append(
+                        f"{metric_name:<30} {'ERROR':>8} {f'x{weight:.1f}':>8} Failed: {str(e)[:35]}..."
                     )
-                else:
-                    self.print_output(f"Error in {metric_name}: {e}")
+                
+                # Update progress bar even on error
+                if pbar:
+                    pbar.update(1)
 
         metrics.calculate_total_score()
 
+        # Buffer total score
         if self.verbose:
-            self.print_output(f"  {'-' * 30} {'-' * 8} {'-' * 8} {'-' * 40}")
-            self.print_output(f"  {'TOTAL SCORE':<30} {metrics.total_score:>8.1f}")
+            self._verbose_buffer.append(f"{'-' * 30} {'-' * 8} {'-' * 8} {'-' * 40}")
+            self._verbose_buffer.append(f"{'TOTAL SCORE':<30} {metrics.total_score:>8.1f}")
 
         return metrics
 
@@ -1446,21 +1500,30 @@ Respond with ONLY a JSON object in this exact format:
         reports_by_backend = defaultdict(list)
         all_metrics = []
 
-        self.print_output(f"\nEvaluating {len(all_reports)} report(s)...")
+        # Setup progress bar
+        total_metrics = len(all_reports) * len(self.metric_functions)
+        pbar = None
+        try:
+            from tqdm.auto import tqdm as _tqdm  # type: ignore
+            if not self.quiet:
+                pbar = _tqdm(total=total_metrics, desc="Evaluating", unit="metric", dynamic_ncols=True)
+        except Exception:
+            if not self.quiet:
+                self.print_output("(Tip: install tqdm for a progress bar: pip install tqdm)")
 
+        # Evaluate all reports
         for report_data in all_reports:
             topic = report_data["topic"]
             backend = report_data["backend"]
 
+            # Buffer verbose header
             if self.verbose:
-                self.print_output(f"\n{'=' * 90}")
-                self.print_output(f"Topic: {topic} | Backend: {backend}")
-                self.print_output(f"{'=' * 90}")
-            else:
-                self.print_output(f"Evaluating: {topic} ({backend})")
+                self._verbose_buffer.append(f"\n{'=' * 90}")
+                self._verbose_buffer.append(f"Topic: {topic} | Backend: {backend}")
+                self._verbose_buffer.append(f"{'=' * 90}")
 
-            # Evaluate the report
-            metrics = self.evaluate_report(report_data)
+            # Evaluate the report (updates progress bar internally)
+            metrics = self.evaluate_report(report_data, pbar=pbar)
             all_metrics.append(metrics)
             reports_by_backend[backend].append(metrics.total_score)
 
@@ -1486,35 +1549,59 @@ Respond with ONLY a JSON object in this exact format:
             with open(output_file, "a") as f:
                 f.write(json.dumps(output_data) + "\n")
 
-            if not self.verbose:
-                self.print_output(f"  → Total score: {metrics.total_score:.1f}")
+        # Close progress bar
+        if pbar:
+            pbar.close()
 
-        # Print summary statistics
-        self.print_output("\n" + "=" * 60)
-        self.print_output("EVALUATION SUMMARY")
-        self.print_output("=" * 60)
-        self.print_output(f"Total reports evaluated: {len(all_reports)}")
+        # Now print the complete report
+        self._print_final_report_single(all_reports, all_metrics, reports_by_backend)
 
+    def _print_final_report_single(self, all_reports: List[Dict], all_metrics: List[ReportMetrics], reports_by_backend: Dict):
+        """Print the final evaluation report for single mode"""
+        # Build markdown report
+        md_lines = []
+        
+        md_lines.append("# Evaluation Complete")
+        md_lines.append("")
+        
+        # Print verbose details if requested
+        if self.verbose and self._verbose_buffer:
+            md_lines.append("## Detailed Evaluation Results")
+            md_lines.append("")
+            md_lines.extend(self._verbose_buffer)
+            md_lines.append("")
+        
+        # Summary statistics
+        md_lines.append("## Evaluation Summary")
+        md_lines.append("")
+        md_lines.append(f"**Total reports evaluated:** {len(all_reports)}")
+        md_lines.append("")
+        
         for backend, scores in reports_by_backend.items():
-            self.print_output(f"\nBackend: {backend}")
-            self.print_output(f"  Reports: {len(scores)}")
-            self.print_output(f"  Average score: {statistics.mean(scores):.1f}")
-            self.print_output(f"  Min score: {min(scores):.1f}")
-            self.print_output(f"  Max score: {max(scores):.1f}")
+            md_lines.append(f"### Backend: {backend}")
+            md_lines.append(f"- Reports: {len(scores)}")
+            md_lines.append(f"- Average score: {statistics.mean(scores):.1f}")
+            md_lines.append(f"- Min score: {min(scores):.1f}")
+            md_lines.append(f"- Max score: {max(scores):.1f}")
             if len(scores) > 1:
-                self.print_output(f"  Std deviation: {statistics.stdev(scores):.1f}")
-
+                md_lines.append(f"- Std deviation: {statistics.stdev(scores):.1f}")
+            md_lines.append("")
+        
         # Metric-level summary
         if all_metrics:
-            self.print_output("\nMetric Performance Across All Reports:")
+            md_lines.append("### Metric Performance Across All Reports")
+            md_lines.append("")
             metric_scores = defaultdict(list)
             for m in all_metrics:
                 for metric_name, result in m.metric_results.items():
                     metric_scores[metric_name].append(result.score)
-
-            for metric_name, scores in metric_scores.items():
+            
+            for metric_name, scores in sorted(metric_scores.items()):
                 avg_score = statistics.mean(scores)
-                self.print_output(f"  {metric_name:<30} Avg: {avg_score:>5.1f}")
+                md_lines.append(f"- **{metric_name}**: {avg_score:.1f}")
+        
+        # Print the complete markdown report
+        self.print_markdown("\n".join(md_lines))
 
     def _process_comparison_mode(self, all_reports: List[Dict], output_file: str):
         """Process reports in comparison mode (2 or more backends)"""
@@ -1530,19 +1617,29 @@ Respond with ONLY a JSON object in this exact format:
         backend_rankings = defaultdict(lambda: {"first": 0, "second": 0, "third": 0})
         metric_scores_by_backend = defaultdict(lambda: defaultdict(list))
 
+        # Setup progress bar
+        total_metrics = len(all_reports) * len(self.metric_functions)
+        pbar = None
+        try:
+            from tqdm.auto import tqdm as _tqdm  # type: ignore
+            if not self.quiet:
+                pbar = _tqdm(total=total_metrics, desc="Evaluating", unit="metric", dynamic_ncols=True)
+        except Exception:
+            if not self.quiet:
+                self.print_output("(Tip: install tqdm for a progress bar: pip install tqdm)")
+
         # Process each topic
         for topic, reports in reports_by_topic.items():
+            # Buffer verbose header
             if self.verbose:
-                self.print_output(f"\n{'=' * 90}")
-                self.print_output(f"Topic: {topic}")
-                self.print_output(f"{'=' * 90}")
-            else:
-                self.print_output(f"\nEvaluating topic: {topic}")
+                self._verbose_buffer.append(f"\n{'=' * 90}")
+                self._verbose_buffer.append(f"Topic: {topic}")
+                self._verbose_buffer.append(f"{'=' * 90}")
 
             # Evaluate all reports for this topic
             topic_metrics = []
             for report in reports:
-                metrics = self.evaluate_report(report)
+                metrics = self.evaluate_report(report, pbar=pbar)
                 topic_metrics.append(metrics)
                 backend_scores[metrics.backend].append(metrics.total_score)
                 backend_topic_scores[metrics.backend][topic] = metrics.total_score
@@ -1567,8 +1664,8 @@ Respond with ONLY a JSON object in this exact format:
                 elif i == 2:
                     backend_rankings[metrics.backend]["third"] += 1
 
-            # Display results
-            self._display_topic_comparison(topic, topic_metrics)
+            # Don't display results during evaluation - will show at end
+            # self._display_topic_comparison(topic, topic_metrics)
 
             # Write to output file
             output_data = {
@@ -1590,7 +1687,11 @@ Respond with ONLY a JSON object in this exact format:
             with open(output_file, "a") as f:
                 f.write(json.dumps(output_data) + "\n")
 
-        # Display overall summary with enhanced statistics
+        # Close progress bar
+        if pbar:
+            pbar.close()
+
+        # Display overall summary with enhanced statistics (this will be buffered too)
         self._display_overall_comparison_summary_enhanced(
             backend_wins,
             backend_scores,
@@ -1746,6 +1847,16 @@ Respond with ONLY a JSON object in this exact format:
         total_topics,
     ):
         """Display overall summary with statistical robustness measures"""
+        
+        # Print verbose details first if requested
+        if self.verbose and self._verbose_buffer:
+            self.print_output("\n" + "=" * 60)
+            self.print_output("DETAILED EVALUATION RESULTS")
+            self.print_output("=" * 60)
+            for line in self._verbose_buffer:
+                self.print_output(line)
+            self.print_output("")
+        
         self.print_output("\n" + "=" * 60)
         self.print_output("OVERALL RANKINGS")
         self.print_output("=" * 60)
@@ -1972,6 +2083,11 @@ def main():
     parser.add_argument(
         "--no-json", action="store_true", help="Disable full JSON output file"
     )
+    parser.add_argument(
+        "--raw",
+        action="store_true",
+        help="Print raw Markdown instead of rendering with rich",
+    )
 
     args = parser.parse_args()
 
@@ -2000,6 +2116,7 @@ def main():
             quiet=args.quiet,
             log_file=log_file,
             json_output_file=json_output_file,
+            rich_mode=(not args.raw),
         )
 
         if not args.quiet:

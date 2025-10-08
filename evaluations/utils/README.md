@@ -4,6 +4,38 @@ Shared utilities for PEAK Assistant evaluation scripts.
 
 ## Modules
 
+### `output_helpers.py`
+
+Provides consistent output formatting and markdown rendering for evaluation scripts.
+
+**Functions:**
+- `print_markdown()` - Print markdown with optional rich rendering
+- `setup_rich_rendering()` - Setup rich Console and Markdown classes
+
+**Usage:**
+```python
+from utils import print_markdown, setup_rich_rendering
+
+# Setup rich rendering
+rich_mode, console, Markdown = setup_rich_rendering(quiet=False)
+
+# Print markdown (with or without rich)
+print_markdown(
+    "# My Report\n\n- Item 1\n- Item 2",
+    log_buffer=log_buffer,
+    quiet=False,
+    rich_mode=rich_mode,
+    console=console,
+    markdown_class=Markdown,
+)
+```
+
+**Features:**
+- Automatic rich library detection with graceful fallback
+- Consistent markdown rendering across all evaluators
+- Writes to both console and log buffer
+- Respects quiet mode
+
 ### `env_loader.py`
 
 Provides environment variable loading utilities for evaluation scripts.

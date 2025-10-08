@@ -54,7 +54,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 # Add parent directory to path to import evaluation utilities
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from utils import EvaluatorModelClient, load_environment
+from utils import EvaluatorModelClient, load_environment, print_markdown as print_md, setup_rich_rendering
 
 # Score interpretation thresholds
 SCORE_EXCELLENT = 90
@@ -172,20 +172,12 @@ class HypothesisEvaluator:
         self.log_file = log_file
         self.log_buffer = StringIO() if log_file else None
         self.json_output_file = json_output_file
-        self.rich_mode = rich_mode
-        self.console = None
-        self._Markdown = None
-
-        if self.rich_mode:
-            try:
-                from rich.console import Console  # type: ignore
-                from rich.markdown import Markdown  # type: ignore
-                self.console = Console()
-                self._Markdown = Markdown
-            except Exception:
-                self.rich_mode = False
-                if not self.quiet:
-                    print("Warning: rich is not installed. Falling back to plain console output.", file=sys.stderr)
+        
+        # Setup rich rendering
+        self.rich_mode, self.console, self._Markdown = setup_rich_rendering(quiet=quiet)
+        if not rich_mode:
+            # User explicitly disabled rich mode
+            self.rich_mode = False
 
         # Metric registry: (function, judge_role)
         # Judge roles map to agent names in model_config.json
@@ -229,13 +221,14 @@ class HypothesisEvaluator:
     
     def print_markdown(self, markdown_text: str) -> None:
         """Print markdown-formatted text (renders with rich if available)"""
-        if self.log_buffer is not None:
-            self.log_buffer.write(markdown_text + "\n")
-        if not self.quiet:
-            if self.rich_mode and self.console and self._Markdown:
-                self.console.print(self._Markdown(markdown_text))
-            else:
-                print(markdown_text)
+        print_md(
+            markdown_text,
+            log_buffer=self.log_buffer,
+            quiet=self.quiet,
+            rich_mode=self.rich_mode,
+            console=self.console,
+            markdown_class=self._Markdown,
+        )
 
     def save_log_file(self) -> None:
         if self.log_file and self.log_buffer is not None:

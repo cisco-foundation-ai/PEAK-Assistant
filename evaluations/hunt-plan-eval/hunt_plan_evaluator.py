@@ -52,7 +52,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 # Add parent directory to path to import evaluation utilities
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from utils import EvaluatorModelClient, load_environment
+from utils import EvaluatorModelClient, load_environment, setup_rich_rendering
 
 # Required sections for planner template conformance
 REQUIRED_SECTIONS = [
@@ -104,21 +104,12 @@ class HuntPlanEvaluator:
         self.log_file = log_file
         self.log_buffer = StringIO() if log_file else None
         self.json_output_file = json_output_file
-        self.rich_mode = rich_mode
-        self.console = None
-        self._Markdown = None
-        if self.rich_mode:
-            try:
-                # Import lazily so users without rich can still run without --rich
-                from rich.console import Console  # type: ignore
-                from rich.markdown import Markdown  # type: ignore
-                self.console = Console()
-                self._Markdown = Markdown
-            except Exception:
-                # Fallback to plain output if rich is unavailable
-                self.rich_mode = False
-                if not self.quiet:
-                    print("Warning: rich is not installed. Falling back to plain console output.", file=sys.stderr)
+        
+        # Setup rich rendering
+        self.rich_mode, self.console, self._Markdown = setup_rich_rendering(quiet=quiet)
+        if not rich_mode:
+            # User explicitly disabled rich mode
+            self.rich_mode = False
 
         # Cache for extracted sections
         self.section_cache: Dict[str, str] = {}
