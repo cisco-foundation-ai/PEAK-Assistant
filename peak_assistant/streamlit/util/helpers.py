@@ -1011,3 +1011,87 @@ def exchange_oauth_code_for_token(server_name: str, auth_code: str) -> bool:
     except Exception as e:
         logger.error(f"Error exchanging OAuth code for token: {e}")
         return False
+
+
+def get_agent_config_data() -> List[Dict[str, str]]:
+    """
+    Get agent configuration data for all known agents.
+    
+    Returns:
+        List of dicts with keys: agent, provider, provider_type, model, deployment, source
+    """
+    from peak_assistant.utils.model_config_loader import get_loader, ModelConfigError
+    from peak_assistant.utils.validate_config import KNOWN_AGENTS
+    from fnmatch import fnmatch
+    
+    try:
+        loader = get_loader()
+        agent_data = []
+        
+        for agent_name in KNOWN_AGENTS:
+            try:
+                agent_config = loader.resolve_agent_config(agent_name)
+                provider_name = agent_config.get("provider", "N/A")
+                model = agent_config.get("model", "N/A")
+                deployment = agent_config.get("deployment", "")
+                
+                # Determine source
+                config = loader._config
+                if "agents" in config and agent_name in config["agents"]:
+                    source = "agent"
+                elif "groups" in config:
+                    # Check if any group matches
+                    matched_group = None
+                    for group_name, group_config in config["groups"].items():
+                        if "match" not in group_config:
+                            continue
+                        patterns = group_config["match"]
+                        if not isinstance(patterns, list):
+                            patterns = [patterns]
+                        
+                        for pattern in patterns:
+                            if fnmatch(agent_name, pattern):
+                                matched_group = group_name
+                                break
+                        if matched_group:
+                            break
+                    
+                    if matched_group:
+                        source = f"group:{matched_group}"
+                    else:
+                        source = "defaults"
+                else:
+                    source = "defaults"
+                
+                # Get provider type
+                try:
+                    provider_config = loader.get_provider_config(provider_name)
+                    provider_type = provider_config["type"]
+                except:
+                    provider_type = "unknown"
+                
+                agent_data.append({
+                    "agent": agent_name,
+                    "provider": provider_name,
+                    "provider_type": provider_type,
+                    "model": model,
+                    "deployment": deployment,
+                    "source": source
+                })
+            except Exception as e:
+                agent_data.append({
+                    "agent": agent_name,
+                    "provider": "ERROR",
+                    "provider_type": "error",
+                    "model": str(e)[:30],
+                    "deployment": "",
+                    "source": "error"
+                })
+        
+        return agent_data
+    except ModelConfigError as e:
+        logger.error(f"Model config error: {e}")
+        return []
+    except Exception as e:
+        logger.error(f"Error loading agent config data: {e}")
+        return []

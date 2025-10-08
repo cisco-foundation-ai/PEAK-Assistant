@@ -42,7 +42,8 @@ from peak_assistant.streamlit.util.helpers import (
     initiate_oauth_flow,
     restore_session_from_oauth,
     exchange_oauth_code_for_token,
-    get_asset_path
+    get_asset_path,
+    get_agent_config_data
 )
 #############################
 ## LOGGING SETUP
@@ -209,6 +210,7 @@ able_tab, \
 data_discovery_tab, \
 hunt_plan_tab, \
 status_tab, \
+agent_config_tab, \
 debug_tab = st.tabs(
     [
         "Research", 
@@ -218,6 +220,7 @@ debug_tab = st.tabs(
         "Data Discovery",
         "Hunt Plan",
         "Status",
+        "Agent Config",
         "Debug"
     ]
 )
@@ -628,6 +631,87 @@ with status_tab:
                     st.write(f"- {server_name}: {status} (checked at {check_time})")
             else:
                 st.write("No OAuth2 discovery performed yet.")
+
+with agent_config_tab:
+    st.header("Agent Model Configuration")
+    st.write("View the model and provider configuration for all agents in the system.")
+    
+    # Get agent configuration data
+    agent_data = get_agent_config_data()
+    
+    if not agent_data:
+        st.error("Unable to load agent configuration. Please ensure `model_config.json` exists and is valid.")
+        st.info("Run `python scripts/validate_model_config.py` to validate your configuration.")
+    else:
+        # Display summary statistics
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Agents", len(agent_data))
+        with col2:
+            unique_providers = len(set(item["provider"] for item in agent_data if item["provider"] != "ERROR"))
+            st.metric("Providers", unique_providers)
+        with col3:
+            unique_models = len(set(item["model"] for item in agent_data if item["model"] != "N/A"))
+            st.metric("Models", unique_models)
+        
+        st.divider()
+        
+        # Create a nice table using Streamlit's dataframe
+        import pandas as pd
+        
+        # Prepare data for display
+        display_data = []
+        for item in agent_data:
+            row = {
+                "Agent": item["agent"],
+                "Provider": item["provider"],
+                "Type": item["provider_type"].title(),
+                "Model": item["model"],
+                "Source": item["source"]
+            }
+            
+            # Add deployment column only for Azure providers
+            if item["provider_type"] == "azure" and item["deployment"]:
+                row["Deployment"] = item["deployment"]
+            else:
+                row["Deployment"] = ""
+            
+            display_data.append(row)
+        
+        df = pd.DataFrame(display_data)
+        
+        # Display the dataframe with nice formatting
+        st.dataframe(
+            df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Agent": st.column_config.TextColumn("Agent", width="medium"),
+                "Provider": st.column_config.TextColumn("Provider", width="medium"),
+                "Type": st.column_config.TextColumn("Type", width="small"),
+                "Model": st.column_config.TextColumn("Model", width="medium"),
+                "Deployment": st.column_config.TextColumn("Deployment", width="medium"),
+                "Source": st.column_config.TextColumn("Source", width="medium")
+            }
+        )
+        
+        # Add legend for source column
+        with st.expander("ℹ️ About the Source Column"):
+            st.markdown("""
+            The **Source** column indicates where each agent's configuration comes from:
+            - **agent**: Explicitly configured in the `agents` section
+            - **group:[name]**: Matched by a wildcard pattern in the `groups` section
+            - **defaults**: Using the default configuration
+            """)
+        
+        # Add helpful links
+        st.divider()
+        st.markdown("""
+        **Configuration Management:**
+        - Edit your configuration in `model_config.json`
+        - Run `python scripts/validate_model_config.py` to validate changes
+        - See `MODEL_CONFIGURATION.md` for documentation
+        """)
 
 with debug_tab:
     with st.expander("Environment Variables"):
