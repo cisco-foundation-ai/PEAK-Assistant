@@ -1,10 +1,12 @@
 # Hypothesis Evaluator
 
-Evaluates threat hunting hypotheses using 8 criteria with LLM-based scoring.
+Evaluation system for threat hunting hypotheses using LLM-based scoring across 8 quality criteria.
 
 ## Overview
 
-This evaluator assesses threat hunting hypotheses against a comprehensive framework of 8 criteria:
+The Hypothesis Evaluator assesses threat hunting hypotheses against a comprehensive framework of 8 criteria, providing detailed scoring and comparison capabilities for batch evaluation.
+
+### Evaluation Criteria (Brief)
 
 1. **Assertion Quality** (0 or 100) - Clear, testable assertion vs question/investigation plan
 2. **Specificity** (0-100) - Count of specific qualifiers (technique names, tools, protocols, etc.)
@@ -14,8 +16,6 @@ This evaluator assesses threat hunting hypotheses against a comprehensive framew
 6. **Detection Independence** (0 or 100) - Platform-agnostic vs mentions specific tools
 7. **Grammatical Clarity** (0, 50, or 100) - Clear structure vs run-on/convoluted
 8. **Logical Coherence** (0, 50, or 100) - Technically compatible vs contradictory
-
-Each hypothesis receives a score (0-100) for each criterion, and the average determines its overall quality.
 
 ## Input Format
 
@@ -30,46 +30,59 @@ Threat actors might be dumping LSASS memory using procdump.exe to extract creden
 Attackers could be establishing persistence through scheduled tasks that execute malicious PowerShell scripts.
 ```
 
-## Usage
+## Usage Examples
 
 ### Basic Usage
 
+Evaluate hypotheses from one or more files:
+
 ```bash
-python hypothesis_evaluator.py run1.txt run2.txt -c model_config.json
+python hypothesis_evaluator.py hypotheses.txt
 ```
 
-### With Options
+### Compare Multiple Runs
+
+```bash
+python hypothesis_evaluator.py run1.txt run2.txt run3.txt
+```
+
+### Custom Output Files
 
 ```bash
 python hypothesis_evaluator.py run1.txt run2.txt \
-  -c model_config.json \
   --output results.json \
   --log evaluation.log \
-  --json-output detailed.json
+  -j detailed.json
 ```
 
 ### Quiet Mode (JSON Only)
 
 ```bash
-python hypothesis_evaluator.py run1.txt run2.txt -c model_config.json -q
+python hypothesis_evaluator.py run1.txt run2.txt -q
 ```
 
-## Command Line Options
+### Disable Rich Rendering
+
+```bash
+python hypothesis_evaluator.py hypotheses.txt --raw
+```
+
+## Command-Line Options
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `files` | One or more text files to evaluate (positional) | Required |
-| `-c, --model-config` | Path to model_config.json (required) | Required |
-| `--output` | Output JSON file with summary results | `hypothesis-eval.json` |
-| `--log` | Log file capturing console output | `hypothesis-eval.log` |
-| `-j, --json-output` | Full JSON with all hypothesis details | `hypothesis-eval.full.json` |
-| `--no-json` | Disable saving the full JSON details file | False |
-| `--raw` | Print raw Markdown instead of rendering with rich | False |
-| `-q, --quiet` | Quiet mode (no console output, JSON only) | False |
+| `files` | One or more text files to evaluate (positional) | **Required** |
+| `-c, --model-config FILE` | Path to model_config.json | `model_config.json` |
+| `--output FILE` | Output JSON file with summary results | `hypothesis-eval.json` |
+| `--log FILE` | Log file capturing console output | `hypothesis-eval.log` |
+| `-j, --json-output FILE` | Full JSON with all hypothesis details | `hypothesis-eval.full.json` |
+| `--no-json` | Disable saving the full JSON details file | `False` |
+| `--raw` | Print raw Markdown (disable rich rendering) | `False` |
+| `-q, --quiet` | Quiet mode (no console output) | `False` |
 
 ## Output Formats
 
-### Console Output (Markdown)
+### Console Output
 
 For each file:
 - Total hypotheses evaluated
@@ -228,26 +241,22 @@ Does NOT count generic terms like "custom tools", "suspicious", "various"
 
 ## Model Configuration
 
-The evaluator uses a flexible model configuration system via `model_config.json`. This allows you to:
+See the [main evaluations README](../README.md#common-configuration) for detailed configuration information.
 
-- Use different LLM providers (Azure OpenAI, OpenAI, Anthropic, etc.)
-- Assign different models to different evaluation criteria
-- Mix providers and models for cost/quality optimization
-- Use environment variables for API keys
+### Judge Roles
 
-### Configuration Structure
+The hypothesis evaluator uses 8 judge roles:
 
-The evaluator maps each evaluation criterion to a "judge role" that can be configured independently:
-
-**Judge Roles:**
-- `assertion_quality` - Critical evaluation (recommended: highest quality model)
-- `specificity` - Quality evaluation
-- `scope_appropriateness` - Quality evaluation
-- `technical_precision` - Quality evaluation
-- `observable_focus` - Quality evaluation
-- `logical_coherence` - Quality evaluation
-- `detection_independence` - Fast evaluation (simple check)
-- `grammatical_clarity` - Fast evaluation (simple check)
+| Judge Role | Category | Recommended Model |
+|------------|----------|-------------------|
+| `assertion_quality` | Critical | Highest quality (e.g., Claude Opus) |
+| `specificity` | Quality | Quality model (e.g., Claude Sonnet) |
+| `scope_appropriateness` | Quality | Quality model |
+| `technical_precision` | Quality | Quality model |
+| `observable_focus` | Quality | Quality model |
+| `logical_coherence` | Quality | Quality model |
+| `detection_independence` | Fast | Fast model (e.g., Haiku) |
+| `grammatical_clarity` | Fast | Fast model |
 
 ### Example Configuration
 
@@ -406,38 +415,105 @@ No console output, only JSON files created. Useful for CI/CD pipelines.
 
 This uses OpenAI's `o1-preview` for critical evaluation and `gpt-4o` for everything else.
 
-## Tips
-
-1. **Mix models for cost optimization**: Use expensive models only for critical evaluations (assertion_quality) and cheaper models for simple checks (grammatical_clarity, detection_independence).
-
-2. **Review outliers**: Pay special attention to hypotheses flagged as outliers - they often reveal systematic issues.
-
-3. **Compare criterion averages**: When comparing runs, look at per-criterion averages to identify specific areas of improvement.
-
-4. **Batch processing**: Evaluate multiple runs at once to get comparative rankings automatically.
-
-5. **Log files**: Keep log files for debugging LLM evaluation issues or understanding scoring decisions.
-
-6. **Provider flexibility**: Try different providers (Anthropic, OpenAI, Azure) to find the best balance of cost, speed, and quality for your use case.
-
 ## Troubleshooting
+
+### "model_config.json not found"
+
+**Solution:** Create a `model_config.json` file in your working directory or specify path with `-c`
 
 ### "No integer found in response"
 
-The LLM returned text instead of a number. The evaluator will retry automatically. If this persists, check your API key and model availability.
+**Solution:** The LLM returned text instead of a number. The evaluator will retry automatically. If this persists:
+- Check your API key is valid
+- Verify model availability
+- Try a different model
 
 ### "Error reading file"
 
-Ensure your input files are UTF-8 encoded text files with one hypothesis per line.
+**Solution:** Ensure your input files are:
+- UTF-8 encoded text files
+- One hypothesis per line
+- Accessible and readable
 
-### High standard deviation
+### High standard deviation in scores
 
-Indicates inconsistent hypothesis quality within a run. Review outliers to identify problematic hypotheses.
+**Solution:** This indicates inconsistent hypothesis quality within a run:
+- Review outliers to identify problematic hypotheses
+- Check if some hypotheses are malformed
+- Consider refining hypothesis generation process
 
 ### All scores are 0
 
-Check that your API key is valid and you have sufficient credits. Review the log file for detailed error messages.
+**Solution:**
+- Check that your API key is valid and has sufficient credits
+- Review the log file for detailed error messages
+- Verify your model configuration is correct
 
-## License
+### "429 Rate Limit" errors
 
-MIT License - See LICENSE file for details.
+**Solution:** The evaluator will automatically retry with backoff. If persistent:
+- Wait a few minutes
+- Use cheaper/faster models
+- Check your API tier limits
+
+## Advanced Usage
+
+### Batch Evaluation
+
+Evaluate multiple hypothesis sets:
+
+```bash
+for file in hypotheses/*.txt; do
+  python hypothesis_evaluator.py "$file" --output "results/$(basename $file .txt).json"
+done
+```
+
+### A/B Testing Hypothesis Generation
+
+Compare hypotheses generated by different models or prompts:
+
+```bash
+# Generate with different configs
+generate_hypotheses --config config-a.json > run-a.txt
+generate_hypotheses --config config-b.json > run-b.txt
+
+# Compare
+python hypothesis_evaluator.py run-a.txt run-b.txt -v
+```
+
+### Integration with CI/CD
+
+```bash
+#!/bin/bash
+# Validate hypothesis quality in CI pipeline
+
+python hypothesis_evaluator.py hypotheses.txt --output results.json -q
+
+# Extract mean score and fail if below threshold
+mean=$(jq '.evaluations[0].mean_score' results.json)
+if (( $(echo "$mean < 75" | bc -l) )); then
+  echo "Hypothesis quality too low: $mean"
+  exit 1
+fi
+```
+
+### Analyzing Trends
+
+Track hypothesis quality over time:
+
+```bash
+# Evaluate daily hypothesis generation
+python hypothesis_evaluator.py daily-$(date +%Y-%m-%d).txt \
+  --output results/daily-$(date +%Y-%m-%d).json
+
+# Aggregate results
+jq -s '[.[] | {date: .metadata.evaluation_date, mean: .evaluations[0].mean_score}]' \
+  results/*.json > trend.json
+```
+
+## See Also
+
+- [Main Evaluations README](../README.md) - Common configuration and setup
+- [Hunt Plan Evaluator](../hunt-plan-eval/README.md) - Evaluate hunt plans
+- [Research Evaluator](../research-agent-team-eval/README.md) - Evaluate research reports
+- `model_config.json.example` - Example configuration file
