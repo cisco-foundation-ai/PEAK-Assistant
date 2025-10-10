@@ -1,39 +1,57 @@
 # Security Policies and Procedures
 
 This document outlines security procedures and general policies for the
-`PEAK Assistant` project.
+the `PEAK Assistant` project.
 
-- [Reporting a Bug](#reporting-a-bug)
-- [Disclosure Policy](#disclosure-policy)
-- [Comments on this Policy](#comments-on-this-policy)
+- [Disclosing a security issue](#disclosing-a-security-issue)
+- [Vulnerability management](#vulnerability-management)
+- [Suggesting changes](#suggesting-changes)
 
-## Reporting a Bug
+## Disclosing a security issue
 
-The `PEAK Assistant` team and community take all security bugs in
-`PEAK Assistant` seriously. Thank you for improving the security of
-`PEAK Assistant`. We appreciate your efforts and responsible disclosure and
-will make every effort to acknowledge your contributions.
+The `PEAK Assistant` maintainers take all security issues in the project
+seriously. Thank you for improving the security of the `PEAK Assistant`. We
+appreciate your dedication to responsible disclosure and will make every effort
+to acknowledge your contributions.
 
-Report security bugs by emailing `oss-security@cisco.com`.
+The `PEAK Assistant` leverages GitHub's private vulnerability reporting.
 
-The lead maintainer will acknowledge your email within 48 hours, and will send a
-more detailed response within 48 hours indicating the next steps in handling
-your report. After the initial reply to your report, the security team will
-endeavor to keep you informed of the progress towards a fix and full
-announcement, and may ask for additional information or guidance.
+To learn more about this feature and how to submit a vulnerability report,
+review [GitHub's documentation on private reporting](https://docs.github.com/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability).
 
-## Disclosure Policy
+Here are some helpful details to include in your report:
 
-When the security team receives a security bug report, they will assign it to a
-primary handler. This person will coordinate the fix and release process,
-involving the following steps:
+- a detailed description of the issue
+- the steps required to reproduce the issue
+- versions of the project that may be affected by the issue
+- if known, any mitigations for the issue
 
-- Confirm the problem and determine the affected versions.
-- Audit code to find any potential similar problems.
-- Prepare fixes for all releases still under maintenance. These fixes will be
-  released as quickly as possible.
+A maintainer will acknowledge the report within three (3) business days, and
+will send a more detailed response within an additional three (3) business days
+indicating the next steps in handling your report.
 
-## Comments on this Policy
+If you've been unable to successfully draft a vulnerability report via GitHub
+or have not received a response during the alloted response window, please
+reach out via the [Cisco Open Source security contact email](mailto:oss-security@cisco.com).
 
-If you have suggestions on how this process could be improved please submit a
-pull request.
+After the initial reply to your report, the maintainers will endeavor to keep
+you informed of the progress towards a fix and full announcement, and may ask
+for additional information or guidance.
+
+## Vulnerability management
+
+When the maintainers receive a disclosure report, they will assign it to a
+primary handler.
+
+This person will coordinate the fix and release process, which involves the
+following steps:
+
+- confirming the issue
+- determining affected versions of the project
+- auditing code to find any potential similar problems
+- preparing fixes for all releases under maintenance
+
+## Suggesting changes
+
+If you have suggestions on how this process could be improved please submit an
+issue or pull request.
