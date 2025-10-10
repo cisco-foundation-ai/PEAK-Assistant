@@ -29,12 +29,12 @@ Hunt Plan Evaluator (Markdown) – Evaluates 1..N hunt plan reports and compares
   * JSON with the same data as console (single JSON object)
   * optional full JSON with all details
   * log file capturing console output
-- Models: Anthropic, with hybrid/cheap switches mirroring research report evaluator
+- Models: Configured via model_config.json (supports Azure, OpenAI, Anthropic, etc.)
 
 Usage:
-  hunt-plan-eval fileA.md [fileB.md ...]
+  hunt-plan-eval fileA.md [fileB.md ...] -c model_config.json
   [--output results.json] [--log eval.log] [--json-output full.json] [--no-json]
-  [--cheap] [--raw] [-q] [--api-key KEY]
+  [--raw] [-q]
 """
 
 from __future__ import annotations
@@ -47,20 +47,12 @@ import sys
 import time
 from dataclasses import dataclass, field
 from io import StringIO
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from anthropic import Anthropic
-
-# ===================== Model Configuration =====================
-# Higher quality (hybrid) models
-ANTHROPIC_MODEL_CRITICAL = "claude-opus-4-1-20250805"  # For critical evaluation tasks
-ANTHROPIC_MODEL_QUALITY = "claude-sonnet-4-20250514"   # For complex evaluation
-ANTHROPIC_MODEL_FAST = "claude-3-5-haiku-20241022"     # For simple checks
-
-# Cheaper alternatives
-ANTHROPIC_MODEL_CRITICAL_CHEAP = "claude-3-5-sonnet-20241022"
-ANTHROPIC_MODEL_QUALITY_CHEAP = "claude-3-5-sonnet-20241022"
-ANTHROPIC_MODEL_FAST_CHEAP = "claude-3-haiku-20240307"
+# Add parent directory to path to import evaluation utilities
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from utils import EvaluatorModelClient, load_environment, setup_rich_rendering
 
 # Required sections for planner template conformance
 REQUIRED_SECTIONS = [
@@ -101,68 +93,55 @@ class PlanMetrics:
 class HuntPlanEvaluator:
     def __init__(
         self,
-        api_key: str,
+        model_config_path: Path,
         quiet: bool = False,
         log_file: Optional[str] = None,
         json_output_file: Optional[str] = None,
-        cheap_mode: bool = False,
         rich_mode: bool = False,
     ):
-        self.client = Anthropic(api_key=api_key)
+        self.model_client = EvaluatorModelClient(model_config_path)
         self.quiet = quiet
         self.log_file = log_file
         self.log_buffer = StringIO() if log_file else None
         self.json_output_file = json_output_file
-        self.cheap_mode = cheap_mode
-        self.rich_mode = rich_mode
-        self.console = None
-        self._Markdown = None
-        if self.rich_mode:
-            try:
-                # Import lazily so users without rich can still run without --rich
-                from rich.console import Console  # type: ignore
-                from rich.markdown import Markdown  # type: ignore
-                self.console = Console()
-                self._Markdown = Markdown
-            except Exception:
-                # Fallback to plain output if rich is unavailable
-                self.rich_mode = False
-                if not self.quiet:
-                    print("Warning: rich is not installed. Falling back to plain console output.", file=sys.stderr)
-
-        # Model selection
-        if cheap_mode:
-            self.model_critical = ANTHROPIC_MODEL_CRITICAL_CHEAP
-            self.model_quality = ANTHROPIC_MODEL_QUALITY_CHEAP
-            self.model_fast = ANTHROPIC_MODEL_FAST_CHEAP
-        else:
-            self.model_critical = ANTHROPIC_MODEL_CRITICAL
-            self.model_quality = ANTHROPIC_MODEL_QUALITY
-            self.model_fast = ANTHROPIC_MODEL_FAST
+        
+        # Setup rich rendering
+        self.rich_mode, self.console, self._Markdown = setup_rich_rendering(quiet=quiet)
+        if not rich_mode:
+            # User explicitly disabled rich mode
+            self.rich_mode = False
 
         # Cache for extracted sections
         self.section_cache: Dict[str, str] = {}
 
-        # Metric registry with weights
+        # Metric registry with weights and judge roles
         # Tier 1: 2.5 | Tier 2: 2.0 | Tier 3: 1.5 | Tier 4: 1.2
-        self.metric_functions: Dict[str, Tuple[Any, float]] = {
-            "technical_accuracy": (self.evaluate_technical_accuracy, 2.5),                          # Tier 1
-            "query_efficiency": (self.evaluate_query_efficiency, 2.5),                              # Tier 1
-            "organization_progression": (self.evaluate_organization_progression, 2.5),             # Tier 1
-            "template_conformance": (self.evaluate_template_conformance, 2.5),                     # Tier 1
-            "hypothesis_alignment": (self.evaluate_hypothesis_alignment, 2.0),                     # Tier 2
-            "actionability_clarity": (self.evaluate_actionability_clarity, 2.0),                   # Tier 2
-            "environmental_integration": (self.evaluate_environmental_integration, 2.0),           # Tier 2
-            "operational_practicality": (self.evaluate_operational_practicality, 1.5),             # Tier 3
-            "comprehensiveness": (self.evaluate_comprehensiveness, 1.2),                           # Tier 4
-            "threat_intel_integration": (self.evaluate_threat_intel_integration, 1.2),             # Tier 4
+        self.metric_functions: Dict[str, Tuple[Any, str, float]] = {
+            "technical_accuracy": (self.evaluate_technical_accuracy, "technical_accuracy", 2.5),                          # Tier 1
+            "query_efficiency": (self.evaluate_query_efficiency, "query_efficiency", 2.5),                              # Tier 1
+            "organization_progression": (self.evaluate_organization_progression, "organization_progression", 2.5),             # Tier 1
+            "template_conformance": (self.evaluate_template_conformance, "template_conformance", 2.5),                     # Tier 1
+            "hypothesis_alignment": (self.evaluate_hypothesis_alignment, "hypothesis_alignment", 2.0),                     # Tier 2
+            "actionability_clarity": (self.evaluate_actionability_clarity, "actionability_clarity", 2.0),                   # Tier 2
+            "environmental_integration": (self.evaluate_environmental_integration, "environmental_integration", 2.0),           # Tier 2
+            "operational_practicality": (self.evaluate_operational_practicality, "operational_practicality", 1.5),             # Tier 3
+            "comprehensiveness": (self.evaluate_comprehensiveness, "comprehensiveness", 1.2),                           # Tier 4
+            "threat_intel_integration": (self.evaluate_threat_intel_integration, "threat_intel_integration", 1.2),             # Tier 4
         }
+
+        # Collect model info for metadata
+        model_info = {}
+        for metric_name, (_, judge_role, _) in self.metric_functions.items():
+            model_name = self.model_client.get_model_name(judge_role)
+            provider = self.model_client.get_provider_type(judge_role)
+            model_info[metric_name] = f"{provider}:{model_name}"
 
         # Full JSON object we can optionally save
         self.full_data: Dict[str, Any] = {
             "metadata": {
                 "evaluation_date": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "model_mode": "cheap" if cheap_mode else "hybrid",
+                "model_config": str(model_config_path),
+                "models_used": model_info,
                 "files": [],
             },
             "evaluations": [],
@@ -202,7 +181,7 @@ class HuntPlanEvaluator:
         self,
         prompt: str,
         metric_name: str,
-        model: str,
+        judge_role: str,
         max_retries: int = 2,
         max_tokens: int = 700,
     ) -> Optional[Dict[str, Any]]:
@@ -216,13 +195,12 @@ class HuntPlanEvaluator:
 
         for attempt in range(max_retries + 1):
             try:
-                response = self.client.messages.create(
-                    model=model,
+                text = self.model_client.call_llm(
+                    judge_role=judge_role,
+                    prompt=full_prompt,
                     max_tokens=max_tokens,
-                    temperature=0,
-                    messages=[{"role": "user", "content": full_prompt}],
+                    temperature=0.0,
                 )
-                text = response.content[0].text.strip()
                 return json.loads(text)
             except json.JSONDecodeError:
                 if attempt < max_retries:
@@ -278,13 +256,12 @@ Plan:
 Return the extracted section content:
 """
         try:
-            response = self.client.messages.create(
-                model=self.model_quality,
+            content = self.model_client.call_llm(
+                judge_role="section_extractor",
+                prompt=prompt,
                 max_tokens=3000,
-                temperature=0,
-                messages=[{"role": "user", "content": prompt}],
+                temperature=0.0,
             )
-            content = response.content[0].text.strip()
             if content == "SECTION_NOT_FOUND":
                 content = ""
             self.section_cache[key] = content
@@ -358,7 +335,7 @@ Respond with ONLY JSON:
   "feedback": "...",
   "confidence": 0.9
 }}"""
-        result = self.evaluate_with_llm_retry(prompt, "organization_progression", self.model_quality)
+        result = self.evaluate_with_llm_retry(prompt, "organization_progression", "organization_progression")
         if result:
             return MetricResult(
                 score=result.get("score", 0),
@@ -417,7 +394,7 @@ Respond with ONLY JSON:
   "feedback": "...",
   "confidence": 0.9
 }}"""
-        result = self.evaluate_with_llm_retry(prompt, "technical_accuracy", self.model_critical, max_tokens=900)
+        result = self.evaluate_with_llm_retry(prompt, "technical_accuracy", "technical_accuracy", max_tokens=900)
         if result:
             return MetricResult(
                 score=result.get("score", 0),
@@ -467,7 +444,7 @@ Respond with ONLY JSON:
   "feedback": "...",
   "confidence": 0.9
 }}"""
-        result = self.evaluate_with_llm_retry(prompt, "query_efficiency", self.model_critical, max_tokens=900)
+        result = self.evaluate_with_llm_retry(prompt, "query_efficiency", "query_efficiency", max_tokens=900)
         if result:
             return MetricResult(
                 score=result.get("score", 0),
@@ -521,7 +498,7 @@ Respond with ONLY JSON:
   "feedback": "...",
   "confidence": 0.85
 }}"""
-        result = self.evaluate_with_llm_retry(prompt, "hypothesis_alignment", self.model_quality)
+        result = self.evaluate_with_llm_retry(prompt, "hypothesis_alignment", "hypothesis_alignment")
         if result:
             return MetricResult(
                 score=result.get("score", 0),
@@ -565,7 +542,7 @@ Respond with ONLY JSON:
   "feedback": "...",
   "confidence": 0.85
 }}"""
-        result = self.evaluate_with_llm_retry(prompt, "actionability_clarity", self.model_quality)
+        result = self.evaluate_with_llm_retry(prompt, "actionability_clarity", "actionability_clarity")
         if result:
             return MetricResult(
                 score=result.get("score", 0),
@@ -604,7 +581,7 @@ Respond with ONLY JSON:
   "feedback": "...",
   "confidence": 0.8
 }}"""
-        result = self.evaluate_with_llm_retry(prompt, "environmental_integration", self.model_fast)
+        result = self.evaluate_with_llm_retry(prompt, "environmental_integration", "environmental_integration")
         if result:
             return MetricResult(
                 score=result.get("score", 0),
@@ -653,7 +630,7 @@ Respond with ONLY JSON:
   "feedback": "...",
   "confidence": 0.8
 }}"""
-        result = self.evaluate_with_llm_retry(prompt, "operational_practicality", self.model_quality)
+        result = self.evaluate_with_llm_retry(prompt, "operational_practicality", "operational_practicality")
         if result:
             return MetricResult(
                 score=result.get("score", 0),
@@ -690,7 +667,7 @@ Respond with ONLY JSON:
   "feedback": "...",
   "confidence": 0.8
 }}"""
-        result = self.evaluate_with_llm_retry(prompt, "comprehensiveness", self.model_quality)
+        result = self.evaluate_with_llm_retry(prompt, "comprehensiveness", "comprehensiveness")
         if result:
             return MetricResult(
                 score=result.get("score", 0),
@@ -728,7 +705,7 @@ Respond with ONLY JSON:
   "feedback": "...",
   "confidence": 0.8
 }}"""
-        result = self.evaluate_with_llm_retry(prompt, "threat_intel_integration", self.model_fast)
+        result = self.evaluate_with_llm_retry(prompt, "threat_intel_integration", "threat_intel_integration")
         if result:
             return MetricResult(
                 score=result.get("score", 0),
@@ -754,7 +731,7 @@ Respond with ONLY JSON:
         # Build Markdown table for this file
         md_lines: List[str] = [f"## Evaluating: {filename}", "", "| Metric | Score | Weight | Feedback |", "| :-- | --: | --: | :-- |"]
 
-        for name, (func, weight) in self.metric_functions.items():
+        for name, (func, judge_role, weight) in self.metric_functions.items():
             try:
                 res: MetricResult = func(report_text)
                 res.weight = weight
@@ -932,17 +909,20 @@ Respond with ONLY JSON:
 # ===================== CLI =====================
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Evaluate and compare hunt plan Markdown files")
-    ap.add_argument("files", nargs="+", help="One or more Markdown files to evaluate")
-    ap.add_argument("--output", default="hunt-plan-compare.json", help="Output JSON file (single object)")
-    ap.add_argument("--log", default="hunt-plan-compare.log", help="Log file capturing console output")
-    ap.add_argument("-j", "--json-output", default="hunt-plan-compare.full.json", help="Full JSON with complete evaluation details")
-    ap.add_argument("--no-json", action="store_true", help="Disable saving the full JSON details file")
-    ap.add_argument("--api-key", help="Anthropic API key (or ANTHROPIC_API_KEY env)")
-    ap.add_argument("--cheap", action="store_true", help="Use cheaper models (Claude 3/3.5)")
-    ap.add_argument("--raw", action="store_true", help="Print raw Markdown instead of rendering it")
-    ap.add_argument("-q", "--quiet", action="store_true", help="Quiet mode (no console output)")
-    args = ap.parse_args()
+    # Load environment variables from .env file
+    load_environment()
+    
+    parser = argparse.ArgumentParser(description="Evaluate and compare hunt plan Markdown files")
+    parser.add_argument("files", nargs="+", help="Markdown files to evaluate (1 or 2)")
+    parser.add_argument("-c", "--model-config", type=Path, default=Path("model_config.json"), help="Path to model_config.json (default: model_config.json)")
+    parser.add_argument("--output", default="hunt-plan-compare.json", help="Output JSON file (single object)")
+    parser.add_argument("--log", default="hunt-plan-compare.log", help="Log file capturing console output")
+    parser.add_argument("-j", "--json-output", default="hunt-plan-compare.full.json", help="Full JSON with complete evaluation details")
+    parser.add_argument("--no-json", action="store_true", help="Disable saving the full JSON details file")
+    parser.add_argument("--raw", action="store_true", help="Print raw Markdown instead of rendering it")
+    parser.add_argument("-q", "--quiet", action="store_true", help="Quiet mode (no console output)")
+    
+    args = parser.parse_args()
 
     if not args.files:
         print("Error: at least one Markdown file is required", file=sys.stderr)
@@ -954,27 +934,29 @@ def main() -> int:
         print(f"Error: missing files: {', '.join(missing)}", file=sys.stderr)
         return 1
 
-    # API key
-    api_key = args.api_key or os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        print("Error: Anthropic API key required (use --api-key or ANTHROPIC_API_KEY)", file=sys.stderr)
+    # Verify model config exists
+    if not args.model_config.exists():
+        print(f"Error: model_config.json not found at {args.model_config}", file=sys.stderr)
         return 1
 
     # Determine full JSON setting
     json_output_file = None if args.no_json else args.json_output
 
-    evaluator = HuntPlanEvaluator(
-        api_key=api_key,
-        quiet=args.quiet,
-        log_file=args.log,
-        json_output_file=json_output_file,
-        cheap_mode=args.cheap,
-        rich_mode=(not args.raw),
-    )
+    try:
+        evaluator = HuntPlanEvaluator(
+            model_config_path=args.model_config,
+            quiet=args.quiet,
+            log_file=args.log,
+            json_output_file=json_output_file,
+            rich_mode=(not args.raw),
+        )
 
-    # Route print_output through evaluator so logs are captured
-    evaluator.process_files(args.files, args.output)
-    return 0
+        # Route print_output through evaluator so logs are captured
+        evaluator.process_files(args.files, args.output)
+        return 0
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

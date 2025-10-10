@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright (c) 2025 Cisco Systems, Inc. and its affiliates
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -20,24 +19,18 @@
 # SOFTWARE.
 #
 # SPDX-License-Identifier: MIT
-
 """
-Command-line tool to validate model_config.json.
-
-Usage:
-    python scripts/validate_model_config.py
-    python scripts/validate_model_config.py --config /path/to/model_config.json
-    python scripts/validate_model_config.py --check-env
-    python scripts/validate_model_config.py --quiet
+Shared utilities for PEAK Assistant evaluation scripts.
 """
 
-import sys
-from pathlib import Path
+from .eval_model_client import EvaluatorModelClient
+from .env_loader import load_environment, find_dotenv_file
+from .output_helpers import print_markdown, setup_rich_rendering
 
-# Add parent directory to path to import peak_assistant
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from peak_assistant.utils.validate_config import main
-
-if __name__ == "__main__":
-    main()
+__all__ = [
+    "EvaluatorModelClient",
+    "load_environment",
+    "find_dotenv_file",
+    "print_markdown",
+    "setup_rich_rendering",
+]

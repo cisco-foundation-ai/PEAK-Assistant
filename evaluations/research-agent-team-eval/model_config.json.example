@@ -1,0 +1,77 @@
+{
+  "version": "1",
+  "providers": {
+    "anthropic-main": {
+      "type": "anthropic",
+      "config": {
+        "api_key": "${ANTHROPIC_API_KEY}",
+        "max_tokens": 4096
+      }
+    },
+    "openai-main": {
+      "type": "openai",
+      "config": {
+        "api_key": "${OPENAI_API_KEY}"
+      }
+    },
+    "azure-main": {
+      "type": "azure",
+      "config": {
+        "endpoint": "${AZURE_OPENAI_ENDPOINT}",
+        "api_key": "${AZURE_OPENAI_API_KEY}",
+        "api_version": "2025-04-01-preview"
+      }
+    }
+  },
+  "defaults": {
+    "provider": "anthropic-main",
+    "model": "claude-sonnet-4-20250514"
+  },
+  "groups": {
+    "high-weight-metrics": {
+      "match": ["technical_depth", "technical_accuracy", "detection_quality"],
+      "provider": "anthropic-main",
+      "model": "claude-opus-4-1-20250805",
+      "comment": "Weight 2.0 metrics - use highest quality model"
+    },
+    "medium-weight-metrics": {
+      "match": ["dataset_documentation", "instruction_clarity", "log_example_quality"],
+      "provider": "anthropic-main",
+      "model": "claude-sonnet-4-20250514",
+      "comment": "Weight 1.7-1.8 metrics - use quality model"
+    },
+    "standard-metrics": {
+      "match": ["structure_compliance", "mitre_coverage", "url_validity", "reference_quality", "cross_section_consistency"],
+      "provider": "anthropic-main",
+      "model": "claude-sonnet-4-20250514",
+      "comment": "Weight 1.2-1.5 metrics - use quality model"
+    },
+    "fast-metrics": {
+      "match": ["threat_actor_specificity", "tool_documentation"],
+      "provider": "anthropic-main",
+      "model": "claude-3-5-haiku-20241022",
+      "comment": "Weight 1.0 metrics - use fast model"
+    },
+    "utility": {
+      "match": ["section_extractor"],
+      "provider": "anthropic-main",
+      "model": "claude-sonnet-4-20250514",
+      "comment": "Section extraction utility - use quality model"
+    }
+  },
+  "agents": {
+    "_comment": "You can override specific judges here if needed",
+    "technical_accuracy": {
+      "provider": "anthropic-main",
+      "model": "claude-opus-4-1-20250805"
+    },
+    "technical_depth": {
+      "provider": "anthropic-main",
+      "model": "claude-opus-4-1-20250805"
+    },
+    "detection_quality": {
+      "provider": "anthropic-main",
+      "model": "claude-opus-4-1-20250805"
+    }
+  }
+}

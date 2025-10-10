@@ -23,7 +23,12 @@
 
 """
 Modular LLM-Based Threat Hunting Report Evaluator
-Compares and evaluates cybersecurity threat hunting reports using Claude for intelligent assessment.
+Compares and evaluates cybersecurity threat hunting reports using flexible LLM configuration.
+
+Usage:
+  evaluator.py file1.md [file2.md ...] -c model_config.json
+  [--output results.json] [--log eval.log] [--json-output full.json]
+  [-q] [--verbose]
 """
 
 import json
@@ -37,21 +42,15 @@ from dataclasses import dataclass, field
 from urllib.parse import urlparse
 import sys
 import os
-from anthropic import Anthropic
 import time
 import statistics
 import math
 from io import StringIO
+from pathlib import Path
 
-# Configuration - Default models (higher quality, higher cost)
-ANTHROPIC_MODEL_CRITICAL = "claude-opus-4-1-20250805"  # For critical evaluation tasks
-ANTHROPIC_MODEL_QUALITY = "claude-sonnet-4-20250514"  # For complex evaluation
-ANTHROPIC_MODEL_FAST = "claude-3-5-haiku-20241022"  # For simple pattern matching
-
-# Cheap mode models (original configuration)
-ANTHROPIC_MODEL_CRITICAL_CHEAP = "claude-3-5-sonnet-20241022"
-ANTHROPIC_MODEL_QUALITY_CHEAP = "claude-3-5-sonnet-20241022"
-ANTHROPIC_MODEL_FAST_CHEAP = "claude-3-haiku-20240307"
+# Add parent directory to path to import evaluation utilities
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from utils import EvaluatorModelClient, load_environment, print_markdown as print_md, setup_rich_rendering
 
 REQUIRED_SECTIONS = [
     "Overview",
@@ -115,34 +114,55 @@ class ReportEvaluator:
 
     def __init__(
         self,
-        api_key: str,
+        model_config_path: Path,
         verbose: bool = False,
         quiet: bool = False,
         log_file: str = "",
         json_output_file: str = "",
-        cheap_mode: bool = False,
+        rich_mode: bool = True,
     ):
-        self.client = Anthropic(api_key=api_key)
+        self.model_client = EvaluatorModelClient(model_config_path)
         self.verbose = verbose
         self.quiet = quiet
         self.log_file = log_file
         self.log_buffer = StringIO() if log_file else None
         self.json_output_file = json_output_file
-        self.cheap_mode = cheap_mode
 
-        # Set models based on mode
-        if cheap_mode:
-            self.model_critical = ANTHROPIC_MODEL_CRITICAL_CHEAP
-            self.model_quality = ANTHROPIC_MODEL_QUALITY_CHEAP
-            self.model_fast = ANTHROPIC_MODEL_FAST_CHEAP
-            if not quiet:
-                print("Using cheap mode (original models) for evaluation")
-        else:
-            self.model_critical = ANTHROPIC_MODEL_CRITICAL
-            self.model_quality = ANTHROPIC_MODEL_QUALITY
-            self.model_fast = ANTHROPIC_MODEL_FAST
-            if not quiet:
-                print("Using hybrid mode (Claude 4 models) for better accuracy")
+        # Setup rich rendering
+        self.rich_mode, self.console, self._Markdown = setup_rich_rendering(quiet=quiet)
+        if not rich_mode:
+            # User explicitly disabled rich mode
+            self.rich_mode = False
+
+        # Cache for extracted sections to avoid redundant LLM calls
+        self.section_cache: Dict[str, Any] = {}
+        
+        # Buffer for verbose output (printed at end)
+        self._verbose_buffer: List[str] = []
+
+        # Define all metric functions, judge roles, and their weights
+        self.metric_functions = {
+            "structure_compliance": (self.evaluate_structure_compliance, "structure_compliance", 1.5),
+            "technical_depth": (self.evaluate_technical_depth, "technical_depth", 2.0),
+            "technical_accuracy": (self.evaluate_technical_accuracy, "technical_accuracy", 2.0),
+            "mitre_coverage": (self.evaluate_mitre_coverage, "mitre_coverage", 1.5),
+            "detection_quality": (self.evaluate_detection_quality, "detection_quality", 2.0),
+            "dataset_documentation": (self.evaluate_dataset_documentation, "dataset_documentation", 1.8),
+            "threat_actor_specificity": (self.evaluate_threat_actor_specificity, "threat_actor_specificity", 1.0),
+            "reference_quality": (self.evaluate_reference_quality, "reference_quality", 1.3),
+            "url_validity": (self.evaluate_url_validity, "url_validity", 1.5),
+            "log_example_quality": (self.evaluate_log_example_quality, "log_example_quality", 1.7),
+            "instruction_clarity": (self.evaluate_instruction_clarity, "instruction_clarity", 1.8),
+            "cross_section_consistency": (self.evaluate_cross_section_consistency, "cross_section_consistency", 1.2),
+            "tool_documentation": (self.evaluate_tool_documentation, "tool_documentation", 1.0),
+        }
+
+        # Collect model info for metadata
+        model_info = {}
+        for metric_name, (_, judge_role, _) in self.metric_functions.items():
+            model_name = self.model_client.get_model_name(judge_role)
+            provider = self.model_client.get_provider_type(judge_role)
+            model_info[metric_name] = f"{provider}:{model_name}"
 
         self.full_evaluation_data = {
             "metadata": {
@@ -150,31 +170,12 @@ class ReportEvaluator:
                 "total_reports": 0,
                 "evaluation_mode": None,
                 "backends": [],
-                "model_mode": "cheap" if cheap_mode else "hybrid",
+                "model_config": str(model_config_path),
+                "models_used": model_info,
             },
             "evaluations": [],
             "comparisons": [],
             "summary": {},
-        }
-
-        # Cache for extracted sections to avoid redundant LLM calls
-        self.section_cache: Dict[str, Any] = {}
-
-        # Define all metric functions and their weights
-        self.metric_functions = {
-            "structure_compliance": (self.evaluate_structure_compliance, 1.5),
-            "technical_depth": (self.evaluate_technical_depth, 2.0),
-            "technical_accuracy": (self.evaluate_technical_accuracy, 2.0),
-            "mitre_coverage": (self.evaluate_mitre_coverage, 1.5),
-            "detection_quality": (self.evaluate_detection_quality, 2.0),
-            "dataset_documentation": (self.evaluate_dataset_documentation, 1.8),
-            "threat_actor_specificity": (self.evaluate_threat_actor_specificity, 1.0),
-            "reference_quality": (self.evaluate_reference_quality, 1.3),
-            "url_validity": (self.evaluate_url_validity, 1.5),
-            "log_example_quality": (self.evaluate_log_example_quality, 1.7),
-            "instruction_clarity": (self.evaluate_instruction_clarity, 1.8),
-            "cross_section_consistency": (self.evaluate_cross_section_consistency, 1.2),
-            "tool_documentation": (self.evaluate_tool_documentation, 1.0),
         }
 
     def print_output(self, message: str = "", end: str = "\n"):
@@ -183,6 +184,17 @@ class ReportEvaluator:
             self.log_buffer.write(message + end)
         if not self.quiet:
             print(message, end=end)
+    
+    def print_markdown(self, markdown_text: str) -> None:
+        """Print markdown-formatted text (renders with rich if available)"""
+        print_md(
+            markdown_text,
+            log_buffer=self.log_buffer,
+            quiet=self.quiet,
+            rich_mode=self.rich_mode,
+            console=self.console,
+            markdown_class=self._Markdown,
+        )
 
     def save_log_file(self):
         """Save the log buffer to file if specified"""
@@ -206,7 +218,7 @@ class ReportEvaluator:
         self,
         prompt: str,
         metric_name: str,
-        model: str,
+        judge_role: str,
         max_retries: int = 2,
         max_tokens: int = 500,
     ) -> Optional[Dict]:
@@ -227,14 +239,12 @@ Your JSON response:"""
 
         for attempt in range(max_retries + 1):
             try:
-                response = self.client.messages.create(
-                    model=model,
+                response_text = self.model_client.call_llm(
+                    judge_role=judge_role,
+                    prompt=full_prompt,
                     max_tokens=max_tokens,
-                    temperature=0,
-                    messages=[{"role": "user", "content": full_prompt}],
+                    temperature=0.0,
                 )
-
-                response_text = response.content[0].text.strip()
 
                 # Try to parse the JSON directly
                 result = json.loads(response_text)
@@ -252,6 +262,8 @@ Your JSON response:"""
                         + '\n\nRETRY: Previous response was not valid JSON. Return ONLY a JSON object like {"score": 50, "feedback": "example"}'
                         + json_instructions
                     )
+                    # Brief delay before retry
+                    time.sleep(1)
                 else:
                     if self.verbose:
                         self.print_output(
@@ -259,10 +271,26 @@ Your JSON response:"""
                         )
 
             except Exception as e:
-                if self.verbose and attempt == max_retries:
-                    self.print_output(
-                        f"    LLM API error for {metric_name}: {str(e)[:50]}"
-                    )
+                if attempt < max_retries:
+                    # Exponential backoff with more conservative timing for rate limits
+                    if "429" in str(e):
+                        wait_time = 5 * (2 ** attempt)  # 5s, 10s, 20s for rate limits
+                    else:
+                        wait_time = 2 ** attempt  # 1s, 2s, 4s for other errors
+                    
+                    if self.verbose:
+                        self.print_output(
+                            f"    ⚠️ {metric_name} error (attempt {attempt + 1}/{max_retries + 1}): {str(e)[:50]}"
+                        )
+                        self.print_output(f"    Retrying in {wait_time}s...")
+                    
+                    time.sleep(wait_time)
+                else:
+                    # Final attempt failed
+                    if self.verbose:
+                        self.print_output(
+                            f"    ⚠️ LLM API error for {metric_name} after {max_retries + 1} attempts: {str(e)[:50]}"
+                        )
 
         return None
 
@@ -310,14 +338,12 @@ Report:
 Return the extracted section content:"""
 
         try:
-            response = self.client.messages.create(
-                model=self.model_quality,  # Use quality model for better semantic understanding
+            extracted_content = self.model_client.call_llm(
+                judge_role="section_extractor",
+                prompt=prompt,
                 max_tokens=4000,
-                temperature=0,
-                messages=[{"role": "user", "content": prompt}],
+                temperature=0.0,
             )
-
-            extracted_content = response.content[0].text.strip()
 
             if extracted_content == "SECTION_NOT_FOUND":
                 extracted_content = ""
@@ -529,9 +555,7 @@ Respond with ONLY a JSON object in this exact format:
     "confidence": 0.9
 }}"""
 
-        # Use quality model for technical depth evaluation in hybrid mode
-        model = self.model_quality if not self.cheap_mode else self.model_fast
-        result = self.evaluate_with_llm_retry(prompt, "technical_depth", model)
+        result = self.evaluate_with_llm_retry(prompt, "technical_depth", "technical_depth")
 
         if result:
             return MetricResult(
@@ -614,9 +638,8 @@ Respond with ONLY a JSON object in this exact format:
     "confidence": 0.85
 }}"""
 
-        # Always use critical model for technical accuracy
         result = self.evaluate_with_llm_retry(
-            prompt, "technical_accuracy", self.model_critical, max_tokens=800
+            prompt, "technical_accuracy", "technical_accuracy", max_tokens=800
         )
 
         if result:
@@ -673,7 +696,7 @@ Respond with ONLY a JSON object in this exact format:
     "confidence": 0.8
 }}"""
 
-        result = self.evaluate_with_llm_retry(prompt, "mitre_coverage", self.model_fast)
+        result = self.evaluate_with_llm_retry(prompt, "mitre_coverage", "mitre_coverage")
 
         if result:
             return MetricResult(
@@ -742,9 +765,7 @@ Respond with ONLY a JSON object in this exact format:
     "confidence": 0.9
 }}"""
 
-        # Use critical model for detection quality in hybrid mode
-        model = self.model_critical if not self.cheap_mode else self.model_quality
-        result = self.evaluate_with_llm_retry(prompt, "detection_quality", model)
+        result = self.evaluate_with_llm_retry(prompt, "detection_quality", "detection_quality")
 
         if result:
             return MetricResult(
@@ -818,7 +839,7 @@ Respond with ONLY a JSON object in this exact format:
 }}"""
 
         result = self.evaluate_with_llm_retry(
-            prompt, "dataset_documentation", self.model_quality
+            prompt, "dataset_documentation", "dataset_documentation"
         )
 
         if result:
@@ -882,7 +903,7 @@ Respond with ONLY a JSON object in this exact format:
 }}"""
 
         result = self.evaluate_with_llm_retry(
-            prompt, "threat_actor_specificity", self.model_fast
+            prompt, "threat_actor_specificity", "threat_actor_specificity"
         )
 
         if result:
@@ -1077,7 +1098,7 @@ Respond with ONLY a JSON object in this exact format:
 }}"""
 
         result = self.evaluate_with_llm_retry(
-            prompt, "log_example_quality", self.model_quality
+            prompt, "log_example_quality", "log_example_quality"
         )
 
         if result:
@@ -1145,7 +1166,7 @@ Respond with ONLY a JSON object in this exact format:
 }}"""
 
         result = self.evaluate_with_llm_retry(
-            prompt, "instruction_clarity", self.model_quality
+            prompt, "instruction_clarity", "instruction_clarity"
         )
 
         if result:
@@ -1194,7 +1215,7 @@ Respond with ONLY a JSON object in this exact format:
 }}"""
 
         result = self.evaluate_with_llm_retry(
-            prompt, "cross_section_consistency", self.model_quality
+            prompt, "cross_section_consistency", "cross_section_consistency"
         )
 
         if result:
@@ -1260,8 +1281,16 @@ Respond with ONLY a JSON object in this exact format:
 
     # ============== Main Evaluation Methods ==============
 
-    def evaluate_report(self, report_data: Dict) -> ReportMetrics:
-        """Evaluate a single report using all metrics"""
+    def evaluate_report(self, report_data: Dict, pbar=None) -> ReportMetrics:
+        """Evaluate a single report using all metrics
+        
+        Args:
+            report_data: Dictionary with 'topic', 'backend', and 'report' keys
+            pbar: Optional progress bar to update after each metric
+        
+        Returns:
+            ReportMetrics with all evaluation results
+        """
         topic = report_data["topic"]
         backend = report_data["backend"]
         report = report_data["report"]
@@ -1271,22 +1300,21 @@ Respond with ONLY a JSON object in this exact format:
 
         metrics = ReportMetrics(topic=topic, backend=backend)
 
+        # Buffer verbose header for this report
         if self.verbose:
-            self.print_output(f"\n  Evaluating {backend} report for '{topic}':")
-            self.print_output(
-                f"  {'Metric':<30} {'Score':>8} {'Weight':>8} {'Feedback'}"
-            )
-            self.print_output(f"  {'-' * 30} {'-' * 8} {'-' * 8} {'-' * 40}")
+            self._verbose_buffer.append(f"\n## Evaluating {backend} report for '{topic}':")
+            self._verbose_buffer.append(f"{'Metric':<30} {'Score':>8} {'Weight':>8} {'Feedback'}")
+            self._verbose_buffer.append(f"{'-' * 30} {'-' * 8} {'-' * 8} {'-' * 40}")
 
         # Run each metric function
-        for metric_name, (metric_func, weight) in self.metric_functions.items():
+        for metric_name, (metric_func, judge_role, weight) in self.metric_functions.items():
             try:
                 result = metric_func(report, topic)
                 result.weight = weight
                 metrics.metric_results[metric_name] = result
 
+                # Buffer verbose output instead of printing
                 if self.verbose:
-                    # Show score immediately after completion
                     score_str = f"{result.score:.1f}"
                     weight_str = f"x{weight:.1f}"
                     feedback_str = (
@@ -1294,9 +1322,13 @@ Respond with ONLY a JSON object in this exact format:
                         if len(result.feedback) > 40
                         else result.feedback
                     )
-                    self.print_output(
-                        f"  {metric_name:<30} {score_str:>8} {weight_str:>8} {feedback_str}"
+                    self._verbose_buffer.append(
+                        f"{metric_name:<30} {score_str:>8} {weight_str:>8} {feedback_str}"
                     )
+                
+                # Update progress bar after each metric
+                if pbar:
+                    pbar.update(1)
 
             except Exception as e:
                 error_result = MetricResult(
@@ -1307,18 +1339,22 @@ Respond with ONLY a JSON object in this exact format:
                 )
                 metrics.metric_results[metric_name] = error_result
 
+                # Buffer error message
                 if self.verbose:
-                    self.print_output(
-                        f"  {metric_name:<30} {'ERROR':>8} {f'x{weight:.1f}':>8} Failed: {str(e)[:35]}..."
+                    self._verbose_buffer.append(
+                        f"{metric_name:<30} {'ERROR':>8} {f'x{weight:.1f}':>8} Failed: {str(e)[:35]}..."
                     )
-                else:
-                    self.print_output(f"Error in {metric_name}: {e}")
+                
+                # Update progress bar even on error
+                if pbar:
+                    pbar.update(1)
 
         metrics.calculate_total_score()
 
+        # Buffer total score
         if self.verbose:
-            self.print_output(f"  {'-' * 30} {'-' * 8} {'-' * 8} {'-' * 40}")
-            self.print_output(f"  {'TOTAL SCORE':<30} {metrics.total_score:>8.1f}")
+            self._verbose_buffer.append(f"{'-' * 30} {'-' * 8} {'-' * 8} {'-' * 40}")
+            self._verbose_buffer.append(f"{'TOTAL SCORE':<30} {metrics.total_score:>8.1f}")
 
         return metrics
 
@@ -1464,21 +1500,30 @@ Respond with ONLY a JSON object in this exact format:
         reports_by_backend = defaultdict(list)
         all_metrics = []
 
-        self.print_output(f"\nEvaluating {len(all_reports)} report(s)...")
+        # Setup progress bar
+        total_metrics = len(all_reports) * len(self.metric_functions)
+        pbar = None
+        try:
+            from tqdm.auto import tqdm as _tqdm  # type: ignore
+            if not self.quiet:
+                pbar = _tqdm(total=total_metrics, desc="Evaluating", unit="metric", dynamic_ncols=True)
+        except Exception:
+            if not self.quiet:
+                self.print_output("(Tip: install tqdm for a progress bar: pip install tqdm)")
 
+        # Evaluate all reports
         for report_data in all_reports:
             topic = report_data["topic"]
             backend = report_data["backend"]
 
+            # Buffer verbose header
             if self.verbose:
-                self.print_output(f"\n{'=' * 90}")
-                self.print_output(f"Topic: {topic} | Backend: {backend}")
-                self.print_output(f"{'=' * 90}")
-            else:
-                self.print_output(f"Evaluating: {topic} ({backend})")
+                self._verbose_buffer.append(f"\n{'=' * 90}")
+                self._verbose_buffer.append(f"Topic: {topic} | Backend: {backend}")
+                self._verbose_buffer.append(f"{'=' * 90}")
 
-            # Evaluate the report
-            metrics = self.evaluate_report(report_data)
+            # Evaluate the report (updates progress bar internally)
+            metrics = self.evaluate_report(report_data, pbar=pbar)
             all_metrics.append(metrics)
             reports_by_backend[backend].append(metrics.total_score)
 
@@ -1504,35 +1549,59 @@ Respond with ONLY a JSON object in this exact format:
             with open(output_file, "a") as f:
                 f.write(json.dumps(output_data) + "\n")
 
-            if not self.verbose:
-                self.print_output(f"  → Total score: {metrics.total_score:.1f}")
+        # Close progress bar
+        if pbar:
+            pbar.close()
 
-        # Print summary statistics
-        self.print_output("\n" + "=" * 60)
-        self.print_output("EVALUATION SUMMARY")
-        self.print_output("=" * 60)
-        self.print_output(f"Total reports evaluated: {len(all_reports)}")
+        # Now print the complete report
+        self._print_final_report_single(all_reports, all_metrics, reports_by_backend)
 
+    def _print_final_report_single(self, all_reports: List[Dict], all_metrics: List[ReportMetrics], reports_by_backend: Dict):
+        """Print the final evaluation report for single mode"""
+        # Build markdown report
+        md_lines = []
+        
+        md_lines.append("# Evaluation Complete")
+        md_lines.append("")
+        
+        # Print verbose details if requested
+        if self.verbose and self._verbose_buffer:
+            md_lines.append("## Detailed Evaluation Results")
+            md_lines.append("")
+            md_lines.extend(self._verbose_buffer)
+            md_lines.append("")
+        
+        # Summary statistics
+        md_lines.append("## Evaluation Summary")
+        md_lines.append("")
+        md_lines.append(f"**Total reports evaluated:** {len(all_reports)}")
+        md_lines.append("")
+        
         for backend, scores in reports_by_backend.items():
-            self.print_output(f"\nBackend: {backend}")
-            self.print_output(f"  Reports: {len(scores)}")
-            self.print_output(f"  Average score: {statistics.mean(scores):.1f}")
-            self.print_output(f"  Min score: {min(scores):.1f}")
-            self.print_output(f"  Max score: {max(scores):.1f}")
+            md_lines.append(f"### Backend: {backend}")
+            md_lines.append(f"- Reports: {len(scores)}")
+            md_lines.append(f"- Average score: {statistics.mean(scores):.1f}")
+            md_lines.append(f"- Min score: {min(scores):.1f}")
+            md_lines.append(f"- Max score: {max(scores):.1f}")
             if len(scores) > 1:
-                self.print_output(f"  Std deviation: {statistics.stdev(scores):.1f}")
-
+                md_lines.append(f"- Std deviation: {statistics.stdev(scores):.1f}")
+            md_lines.append("")
+        
         # Metric-level summary
         if all_metrics:
-            self.print_output("\nMetric Performance Across All Reports:")
+            md_lines.append("### Metric Performance Across All Reports")
+            md_lines.append("")
             metric_scores = defaultdict(list)
             for m in all_metrics:
                 for metric_name, result in m.metric_results.items():
                     metric_scores[metric_name].append(result.score)
-
-            for metric_name, scores in metric_scores.items():
+            
+            for metric_name, scores in sorted(metric_scores.items()):
                 avg_score = statistics.mean(scores)
-                self.print_output(f"  {metric_name:<30} Avg: {avg_score:>5.1f}")
+                md_lines.append(f"- **{metric_name}**: {avg_score:.1f}")
+        
+        # Print the complete markdown report
+        self.print_markdown("\n".join(md_lines))
 
     def _process_comparison_mode(self, all_reports: List[Dict], output_file: str):
         """Process reports in comparison mode (2 or more backends)"""
@@ -1548,19 +1617,29 @@ Respond with ONLY a JSON object in this exact format:
         backend_rankings = defaultdict(lambda: {"first": 0, "second": 0, "third": 0})
         metric_scores_by_backend = defaultdict(lambda: defaultdict(list))
 
+        # Setup progress bar
+        total_metrics = len(all_reports) * len(self.metric_functions)
+        pbar = None
+        try:
+            from tqdm.auto import tqdm as _tqdm  # type: ignore
+            if not self.quiet:
+                pbar = _tqdm(total=total_metrics, desc="Evaluating", unit="metric", dynamic_ncols=True)
+        except Exception:
+            if not self.quiet:
+                self.print_output("(Tip: install tqdm for a progress bar: pip install tqdm)")
+
         # Process each topic
         for topic, reports in reports_by_topic.items():
+            # Buffer verbose header
             if self.verbose:
-                self.print_output(f"\n{'=' * 90}")
-                self.print_output(f"Topic: {topic}")
-                self.print_output(f"{'=' * 90}")
-            else:
-                self.print_output(f"\nEvaluating topic: {topic}")
+                self._verbose_buffer.append(f"\n{'=' * 90}")
+                self._verbose_buffer.append(f"Topic: {topic}")
+                self._verbose_buffer.append(f"{'=' * 90}")
 
             # Evaluate all reports for this topic
             topic_metrics = []
             for report in reports:
-                metrics = self.evaluate_report(report)
+                metrics = self.evaluate_report(report, pbar=pbar)
                 topic_metrics.append(metrics)
                 backend_scores[metrics.backend].append(metrics.total_score)
                 backend_topic_scores[metrics.backend][topic] = metrics.total_score
@@ -1585,8 +1664,8 @@ Respond with ONLY a JSON object in this exact format:
                 elif i == 2:
                     backend_rankings[metrics.backend]["third"] += 1
 
-            # Display results
-            self._display_topic_comparison(topic, topic_metrics)
+            # Don't display results during evaluation - will show at end
+            # self._display_topic_comparison(topic, topic_metrics)
 
             # Write to output file
             output_data = {
@@ -1608,7 +1687,11 @@ Respond with ONLY a JSON object in this exact format:
             with open(output_file, "a") as f:
                 f.write(json.dumps(output_data) + "\n")
 
-        # Display overall summary with enhanced statistics
+        # Close progress bar
+        if pbar:
+            pbar.close()
+
+        # Display overall summary with enhanced statistics (this will be buffered too)
         self._display_overall_comparison_summary_enhanced(
             backend_wins,
             backend_scores,
@@ -1764,6 +1847,16 @@ Respond with ONLY a JSON object in this exact format:
         total_topics,
     ):
         """Display overall summary with statistical robustness measures"""
+        
+        # Print verbose details first if requested
+        if self.verbose and self._verbose_buffer:
+            self.print_output("\n" + "=" * 60)
+            self.print_output("DETAILED EVALUATION RESULTS")
+            self.print_output("=" * 60)
+            for line in self._verbose_buffer:
+                self.print_output(line)
+            self.print_output("")
+        
         self.print_output("\n" + "=" * 60)
         self.print_output("OVERALL RANKINGS")
         self.print_output("=" * 60)
@@ -1933,6 +2026,9 @@ Respond with ONLY a JSON object in this exact format:
 
 
 def main():
+    # Load environment variables from .env file
+    load_environment()
+    
     parser = argparse.ArgumentParser(
         description="Evaluate and compare threat hunting reports"
     )
@@ -1949,13 +2045,17 @@ def main():
         help="Output JSON lines file with comparisons (default: output_results.jsonl)",
     )
     parser.add_argument(
+        "-c",
+        "--model-config",
+        type=Path,
+        default=Path("model_config.json"),
+        help="Path to model_config.json (default: model_config.json)",
+    )
+    parser.add_argument(
         "-l",
         "--log",
         default="evaluation_log.txt",
         help="Log file for console output (default: evaluation_log.txt)",
-    )
-    parser.add_argument(
-        "--api-key", help="Anthropic API key (or set ANTHROPIC_API_KEY env var)"
     )
     parser.add_argument(
         "--verbose",
@@ -1984,21 +2084,16 @@ def main():
         "--no-json", action="store_true", help="Disable full JSON output file"
     )
     parser.add_argument(
-        "--cheap",
+        "--raw",
         action="store_true",
-        help="Use cheaper models (original Claude 3/3.5) instead of Claude 4 models",
+        help="Print raw Markdown instead of rendering with rich",
     )
 
     args = parser.parse_args()
 
-    # Get API key from args or environment
-    api_key = args.api_key or os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        print("Error: Anthropic API key required!", file=sys.stderr)
-        print(
-            "Set it via --api-key or ANTHROPIC_API_KEY environment variable",
-            file=sys.stderr,
-        )
+    # Verify model config exists
+    if not args.model_config.exists():
+        print(f"Error: model_config.json not found at {args.model_config}", file=sys.stderr)
         sys.exit(1)
 
     # Check if input file exists
@@ -2013,31 +2108,35 @@ def main():
     log_file = None if args.no_log else args.log
     json_output_file = None if args.no_json else args.json_output
 
-    # Create evaluator with quiet and log settings
-    evaluator = ReportEvaluator(
-        api_key=api_key,
-        verbose=args.verbose,
-        quiet=args.quiet,
-        log_file=log_file,
-        json_output_file=json_output_file,
-        cheap_mode=args.cheap,
-    )
+    try:
+        # Create evaluator with quiet and log settings
+        evaluator = ReportEvaluator(
+            model_config_path=args.model_config,
+            verbose=args.verbose,
+            quiet=args.quiet,
+            log_file=log_file,
+            json_output_file=json_output_file,
+            rich_mode=(not args.raw),
+        )
 
-    if not args.quiet:
-        print(f"Reading reports from: {args.input}")
-        print(f"Writing results to: {args.output}")
-        if log_file:
-            print(f"Logging output to: {log_file}")
-        if json_output_file:
-            print(f"JSON output to: {json_output_file}")
-        if args.verbose:
-            print("Verbose mode: ON (showing detailed comparisons)")
-        print()
+        if not args.quiet:
+            print(f"Reading reports from: {args.input}")
+            print(f"Writing results to: {args.output}")
+            if log_file:
+                print(f"Logging output to: {log_file}")
+            if json_output_file:
+                print(f"JSON output to: {json_output_file}")
+            if args.verbose:
+                print("Verbose mode: ON (showing detailed comparisons)")
+            print()
 
-    evaluator.process_reports(args.input, args.output)
+        evaluator.process_reports(args.input, args.output)
 
-    if not args.quiet:
-        print(f"\nResults written to: {args.output}")
+        if not args.quiet:
+            print(f"\nResults written to: {args.output}")
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

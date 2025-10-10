@@ -1,0 +1,57 @@
+{
+  "version": "1",
+  "providers": {
+    "anthropic-main": {
+      "type": "anthropic",
+      "config": {
+        "api_key": "${ANTHROPIC_API_KEY}",
+        "max_tokens": 4096
+      }
+    },
+    "openai-main": {
+      "type": "openai",
+      "config": {
+        "api_key": "${OPENAI_API_KEY}"
+      }
+    },
+    "azure-main": {
+      "type": "azure",
+      "config": {
+        "endpoint": "${AZURE_OPENAI_ENDPOINT}",
+        "api_key": "${AZURE_OPENAI_API_KEY}",
+        "api_version": "2025-04-01-preview"
+      }
+    }
+  },
+  "defaults": {
+    "provider": "anthropic-main",
+    "model": "claude-sonnet-4-20250514"
+  },
+  "groups": {
+    "critical-judges": {
+      "match": ["assertion_quality"],
+      "provider": "anthropic-main",
+      "model": "claude-opus-4-1-20250805",
+      "comment": "Use highest quality model for critical evaluation"
+    },
+    "quality-judges": {
+      "match": ["specificity", "scope_appropriateness", "technical_precision", "observable_focus", "logical_coherence"],
+      "provider": "anthropic-main",
+      "model": "claude-sonnet-4-20250514",
+      "comment": "Use quality model for complex evaluation"
+    },
+    "fast-judges": {
+      "match": ["detection_independence", "grammatical_clarity"],
+      "provider": "anthropic-main",
+      "model": "claude-3-5-haiku-20241022",
+      "comment": "Use fast model for simple checks"
+    }
+  },
+  "agents": {
+    "_comment": "You can override specific judges here if needed",
+    "assertion_quality": {
+      "provider": "anthropic-main",
+      "model": "claude-opus-4-1-20250805"
+    }
+  }
+}

@@ -1,41 +1,57 @@
-# Introduction
+# How to Contribute
 
-Thank you for considering helping out with the PEAK Assistant. The more ideas and input we have from the threat hunting community, the better the assistant can be!
+Thanks for your interest in contributing to the PEAK Assistant! Here are a few
+general guidelines on contributing and reporting bugs that we ask you to review.
+Following these guidelines helps to communicate that you respect the time of the
+contributors managing and developing this open source project. In return, they
+should reciprocate that respect in addressing your issue, assessing changes, and
+helping you finalize your pull requests. In that spirit of mutual respect, we
+endeavor to review incoming issues and pull requests within 10 days, and will
+close any lingering issues or pull requests after 60 days of inactivity.
 
-This file contains some general guidelines for how to interact with and contribute to the project. We ask that you follow them as closely as possible in order to help the contribution process go as smoothly as possible. 
+Please note that all of your interactions in the project are subject to our
+[Code of Conduct](/CODE_OF_CONDUCT.md). This includes creation of issues or pull
+requests, commenting on issues or pull requests, and extends to all interactions
+in any real-time space e.g., Slack, Discord, etc.
 
-As an application created by threat hunters for other threat hunters, the Assistant can greatly benefit from all different types of contributions. Some examples of contributions include:
+## Reporting Issues
 
-* Reporting bugs
-* Fixing bugs
-* Adding new features
-* Improving the prompts
-* Adding to or clarifying the documentation
-* Publishing tutorial or "HOWTO" information
+Before reporting a new issue, please ensure that the issue was not already
+reported or fixed by searching through our [issues
+list](https://github.com/cisco-foundation-ai/PEAK-Assistant/issues).
 
-Notice that not everything on that list has to do with coding or AI. Even if your talents lay elsewhere, if you're hunting at all, you have the skills needed to make a contribution! 
+When creating a new issue, please be sure to include a **title and clear
+description**, as much relevant information as possible, and, if possible, a
+test case.
 
-That said, please don't use our contribution processes or GitHub issue trackers to ask for support. At this time, we are still investigating how best to provide support. 
+**If you discover a security bug, please do not report it through GitHub.
+Instead, please see security procedures in [SECURITY.md](/SECURITY.md).**
 
-# Contribution Rules
+## Sending Pull Requests
 
-The most important rule of all is *be respectful*. Bullying, name calling, bigotry, or other forms of harassment will not be tolerated. 
+Before sending a new pull request, take a look at existing pull requests and
+issues to see if the proposed change or fix has been discussed in the past, or
+if the change was already implemented but not yet released.
 
-Other key rules:
+We expect new pull requests to include tests for any affected behavior, and, as
+we follow semantic versioning, we may reserve breaking changes until the next
+major version release.
 
-* The project is written in Python, so please try to stick to that language for new contributions. Anything that requires adding a new language, framework, or technology to the stack is going to be viewed with skepticism at best.
-* Our primary development platform is MacOS, though the Assistant runs on both Linux and Windows as well. Please try to be cognizant of the multi-platform compatibility of any contribution. We'd hate to reject something just because it only works on certain platforms.
-* If you're considering contributing a new feature or fixing a complex bug, please open a discussion in the issue tracker first. Explain what you intend to do and why, and let's talk about it. There's nothing more discouraging than pouring your soul into a PR only to have it rejected.
-* Please try to limit the number of bug fixes or features to one per PR where feasible. Combining several into one PR may make sense if they are closely related, but otherwise it's best for all concerned if we can accept, revise, or reject them on their individual merits.
+## Other Ways to Contribute
 
-# Unsure how to contribute?
+We welcome anyone that wants to contribute to the PEAK Assistant to triage and
+reply to open issues to help troubleshoot and fix existing bugs. Here is what
+you can do:
 
-If you'd like to help out but are unsure where to start, reporting bugs with enough details to enable us to reproduce them is always a great way to start! Other options include:
+- Help ensure that existing issues follows the recommendations from the
+  _[Reporting Issues](#reporting-issues)_ section, providing feedback to the
+  issue's author on what might be missing.
+- Review and update the existing content of our
+  [Wiki](https://github.com/org_name/repo_name/wiki) with up-to-date
+  instructions and code samples.
+- Review existing pull requests, and testing patches against the PEAK Assistant.
+- Write a test, or add a missing test case to an existing test.
 
-* Fixing the bug you just reporting and submitting a PR
-* Suggesting rewrites to parts of the documentation that didn't seem clear to you
-* Adding FAQ or Troubleshooting entries to README.md
-* Participating in the discussion on existing issues
+Thanks again for your interest on contributing to the PEAK Assistant!
 
-A project like the PEAK Assistant relies on good interaction with and feedback from its users, so don't be shy to engage us!
-
+:heart:

@@ -1,0 +1,73 @@
+{
+  "version": "1",
+  "providers": {
+    "anthropic-main": {
+      "type": "anthropic",
+      "config": {
+        "api_key": "${ANTHROPIC_API_KEY}",
+        "max_tokens": 4096
+      }
+    },
+    "openai-main": {
+      "type": "openai",
+      "config": {
+        "api_key": "${OPENAI_API_KEY}"
+      }
+    },
+    "azure-main": {
+      "type": "azure",
+      "config": {
+        "endpoint": "${AZURE_OPENAI_ENDPOINT}",
+        "api_key": "${AZURE_OPENAI_API_KEY}",
+        "api_version": "2025-04-01-preview"
+      }
+    }
+  },
+  "defaults": {
+    "provider": "anthropic-main",
+    "model": "claude-sonnet-4-20250514"
+  },
+  "groups": {
+    "tier1-critical": {
+      "match": ["technical_accuracy", "query_efficiency", "organization_progression", "template_conformance"],
+      "provider": "anthropic-main",
+      "model": "claude-opus-4-1-20250805",
+      "comment": "Tier 1 metrics (weight 2.5) - use highest quality model"
+    },
+    "tier2-quality": {
+      "match": ["hypothesis_alignment", "actionability_clarity", "environmental_integration"],
+      "provider": "anthropic-main",
+      "model": "claude-sonnet-4-20250514",
+      "comment": "Tier 2 metrics (weight 2.0) - use quality model"
+    },
+    "tier3-standard": {
+      "match": ["operational_practicality"],
+      "provider": "anthropic-main",
+      "model": "claude-sonnet-4-20250514",
+      "comment": "Tier 3 metrics (weight 1.5) - use quality model"
+    },
+    "tier4-fast": {
+      "match": ["comprehensiveness", "threat_intel_integration"],
+      "provider": "anthropic-main",
+      "model": "claude-3-5-haiku-20241022",
+      "comment": "Tier 4 metrics (weight 1.2) - use fast model"
+    },
+    "utility": {
+      "match": ["section_extractor"],
+      "provider": "anthropic-main",
+      "model": "claude-sonnet-4-20250514",
+      "comment": "Section extraction utility - use quality model"
+    }
+  },
+  "agents": {
+    "_comment": "You can override specific judges here if needed",
+    "technical_accuracy": {
+      "provider": "anthropic-main",
+      "model": "claude-opus-4-1-20250805"
+    },
+    "query_efficiency": {
+      "provider": "anthropic-main",
+      "model": "claude-opus-4-1-20250805"
+    }
+  }
+}
