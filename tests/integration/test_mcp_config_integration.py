@@ -39,6 +39,7 @@ from peak_assistant.utils.mcp_config import (
     AuthConfig,
     MCPServerConfig
 )
+from peak_assistant.utils import ConfigInterpolationError
 
 
 @pytest.fixture
@@ -299,11 +300,10 @@ class TestConfigValidation:
 class TestEnvironmentVariableInterpolation:
     """Test environment variable interpolation in config
     
-    Note: Environment variable interpolation (${ENV_VAR}) is planned but not yet implemented.
-    These tests are marked as expected failures until the feature is implemented.
+    Environment variable interpolation (${ENV_VAR}) uses the shared
+    interpolate_env_vars utility from peak_assistant.utils.
     """
     
-    @pytest.mark.xfail(reason="Environment variable interpolation not yet implemented")
     def test_env_var_in_token(self, monkeypatch):
         """Test ${ENV_VAR} interpolation in token field"""
         monkeypatch.setenv("TEST_TOKEN", "secret_token_value")
@@ -333,7 +333,6 @@ class TestEnvironmentVariableInterpolation:
         finally:
             Path(temp_path).unlink(missing_ok=True)
     
-    @pytest.mark.xfail(reason="Environment variable interpolation not yet implemented")
     def test_env_var_in_api_key(self, monkeypatch):
         """Test ${ENV_VAR} interpolation in api_key field"""
         monkeypatch.setenv("TEST_API_KEY", "secret_api_key")
@@ -364,7 +363,6 @@ class TestEnvironmentVariableInterpolation:
         finally:
             Path(temp_path).unlink(missing_ok=True)
     
-    @pytest.mark.xfail(reason="Environment variable interpolation not yet implemented")
     def test_env_var_in_client_secret(self, monkeypatch):
         """Test ${ENV_VAR} interpolation in client_secret field"""
         monkeypatch.setenv("OAUTH_CLIENT_SECRET", "secret_client_secret")
@@ -393,6 +391,142 @@ class TestEnvironmentVariableInterpolation:
             config = config_manager.get_server_config("test-server")
             
             assert config.auth.client_secret == "secret_client_secret"
+        finally:
+            Path(temp_path).unlink(missing_ok=True)
+    
+    def test_env_var_in_env_dict(self, monkeypatch):
+        """Test ${ENV_VAR} interpolation in stdio server env dictionary"""
+        monkeypatch.setenv("TAVILY_API_KEY", "test_tavily_key")
+        
+        config_data = {
+            "mcpServers": {
+                "test-server": {
+                    "transport": "stdio",
+                    "command": "npx",
+                    "args": ["-y", "tavily-mcp"],
+                    "env": {
+                        "TAVILY_API_KEY": "${TAVILY_API_KEY}"
+                    }
+                }
+            }
+        }
+        
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump(config_data, f)
+            temp_path = f.name
+        
+        try:
+            config_manager = MCPConfigManager(config_file=temp_path)
+            config = config_manager.get_server_config("test-server")
+            
+            assert config.env["TAVILY_API_KEY"] == "test_tavily_key"
+        finally:
+            Path(temp_path).unlink(missing_ok=True)
+    
+    def test_env_var_with_default(self):
+        """Test ${ENV_VAR|default} syntax"""
+        config_data = {
+            "mcpServers": {
+                "test-server": {
+                    "transport": "http",
+                    "url": "https://api.example.com",
+                    "auth": {
+                        "type": "bearer",
+                        "token": "${MISSING_TOKEN|default_token_value}"
+                    }
+                }
+            }
+        }
+        
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump(config_data, f)
+            temp_path = f.name
+        
+        try:
+            config_manager = MCPConfigManager(config_file=temp_path)
+            config = config_manager.get_server_config("test-server")
+            
+            assert config.auth.token == "default_token_value"
+        finally:
+            Path(temp_path).unlink(missing_ok=True)
+    
+    def test_env_var_null_default(self):
+        """Test ${ENV_VAR|null} returns empty string"""
+        config_data = {
+            "mcpServers": {
+                "test-server": {
+                    "transport": "http",
+                    "url": "https://api.example.com",
+                    "auth": {
+                        "type": "bearer",
+                        "token": "${MISSING_TOKEN|null}"
+                    }
+                }
+            }
+        }
+        
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump(config_data, f)
+            temp_path = f.name
+        
+        try:
+            config_manager = MCPConfigManager(config_file=temp_path)
+            config = config_manager.get_server_config("test-server")
+            
+            assert config.auth.token == ""
+        finally:
+            Path(temp_path).unlink(missing_ok=True)
+    
+    def test_env_var_in_url(self, monkeypatch):
+        """Test ${ENV_VAR} interpolation in URL field"""
+        monkeypatch.setenv("API_KEY", "test_key_123")
+        
+        config_data = {
+            "mcpServers": {
+                "test-server": {
+                    "transport": "http",
+                    "url": "https://api.example.com/mcp?key=${API_KEY}",
+                    "auth": {
+                        "type": "none"
+                    }
+                }
+            }
+        }
+        
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump(config_data, f)
+            temp_path = f.name
+        
+        try:
+            config_manager = MCPConfigManager(config_file=temp_path)
+            config = config_manager.get_server_config("test-server")
+            
+            assert config.url == "https://api.example.com/mcp?key=test_key_123"
+        finally:
+            Path(temp_path).unlink(missing_ok=True)
+    
+    def test_missing_env_var_no_default(self):
+        """Test that missing env var without default raises ConfigInterpolationError"""
+        config_data = {
+            "mcpServers": {
+                "test-server": {
+                    "transport": "http",
+                    "url": "https://api.example.com",
+                    "auth": {
+                        "type": "bearer",
+                        "token": "${MISSING_TOKEN}"
+                    }
+                }
+            }
+        }
+        
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump(config_data, f)
+            temp_path = f.name
+        
+        try:
+            with pytest.raises(ConfigInterpolationError, match="MISSING_TOKEN"):
+                MCPConfigManager(config_file=temp_path)
         finally:
             Path(temp_path).unlink(missing_ok=True)
 

@@ -19,28 +19,24 @@
 # SOFTWARE.
 #
 # SPDX-License-Identifier: MIT
+"""
+PEAK Assistant utilities package.
 
-from pathlib import Path
-from typing import Optional
+This package provides common utilities used throughout the PEAK Assistant.
+For backward compatibility, environment-related utilities are re-exported here.
+"""
 
-from dotenv import load_dotenv
+# Re-export environment utilities for backward compatibility
+from peak_assistant.utils.environment import (
+    ConfigInterpolationError,
+    find_dotenv_file,
+    interpolate_env_vars,
+    load_env_defaults,
+)
 
-
-def find_dotenv_file() -> Optional[str]:
-    """Search for a .env file in current directory and parent directories"""
-    current_dir = Path.cwd()
-    while current_dir != current_dir.parent:  # Stop at root directory
-        env_path = current_dir / ".env"
-        if env_path.exists():
-            return str(env_path)
-        current_dir = current_dir.parent
-    return None  # No .env file found
-
-
-def load_env_defaults() -> None:
-    """Load environment variables from .env file"""
-    dotenv_path = find_dotenv_file()
-    if dotenv_path:
-        load_dotenv(dotenv_path)
-    else:
-        print("Warning: No .env file found in current or parent directories")
+__all__ = [
+    "ConfigInterpolationError",
+    "find_dotenv_file",
+    "interpolate_env_vars",
+    "load_env_defaults",
+]

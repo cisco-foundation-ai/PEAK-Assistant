@@ -41,8 +41,8 @@ from dotenv import load_dotenv
 # Removed Flask dependency; redirect URIs resolved via Streamlit helpers
 from autogen_ext.tools.mcp import McpWorkbench, StdioServerParams
 
-# Import find_dotenv_file from centralized location
-from peak_assistant.utils import find_dotenv_file
+# Import utilities from centralized location
+from peak_assistant.utils import find_dotenv_file, interpolate_env_vars
 
 logger = logging.getLogger(__name__)
 
@@ -607,6 +607,16 @@ class MCPConfigManager:
         
         return default_path
     
+    def _interpolate_env(self, obj: Any) -> Any:
+        """Recursively interpolate ${ENV_VAR} in strings.
+        
+        Delegates to shared interpolate_env_vars utility.
+        
+        Raises:
+            ConfigInterpolationError: If environment variable not found and no default provided
+        """
+        return interpolate_env_vars(obj)
+    
     def _load_config(self):
         """Load MCP server configurations from file"""
         if not os.path.exists(self.config_file):
@@ -616,6 +626,9 @@ class MCPConfigManager:
         try:
             with open(self.config_file, 'r') as f:
                 config_data = json.load(f)
+            
+            # Interpolate environment variables
+            config_data = self._interpolate_env(config_data)
             
             # Load server configurations - support both formats
             servers_to_load = []
