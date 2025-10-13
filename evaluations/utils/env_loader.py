@@ -29,25 +29,12 @@ interpolation in model_config.json files.
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 from typing import Optional
 
 from dotenv import load_dotenv
 
-
-def find_dotenv_file() -> Optional[Path]:
-    """Search for a .env file in current directory and parent directories.
-    
-    Returns:
-        Path to .env file if found, None otherwise.
-    """
-    current_dir = Path.cwd()
-    while current_dir != current_dir.parent:  # Stop at root directory
-        env_path = current_dir / ".env"
-        if env_path.exists():
-            return env_path
-        current_dir = current_dir.parent
-    return None
+# Import find_dotenv_file from centralized location
+from peak_assistant.utils import find_dotenv_file
 
 
 def load_environment(quiet: bool = False) -> None:
