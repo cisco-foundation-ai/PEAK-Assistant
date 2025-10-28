@@ -41,10 +41,11 @@ from . import load_env_defaults
 # Known agent names from the codebase
 KNOWN_AGENTS = [
     "external_search_agent",
-    "internal_search_agent",
     "summarizer_agent",
     "summary_critic",
     "research_team_lead",
+    "local_data_search_agent",
+    "local_data_summarizer_agent",
     "hypothesis-refiner",
     "hypothesis-refiner-critic",
     "Data_Discovery_Agent",
