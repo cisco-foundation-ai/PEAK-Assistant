@@ -211,6 +211,11 @@ def load_mcp_server_configs() -> Dict[str, MCPServerConfig]:
         with open(config_file, 'r') as f:
             config_data = json.load(f)
         
+        # Load server groups
+        server_groups = config_data.get("serverGroups", {})
+        st.session_state["mcp_server_groups"] = server_groups
+        logger.info(f"Loaded {len(server_groups)} server groups")
+        
         servers = {}
         servers_to_load = []
         
@@ -287,6 +292,39 @@ def load_mcp_server_configs() -> Dict[str, MCPServerConfig]:
         logger.error(f"Error loading MCP server configurations: {e}", exc_info=True)
         st.session_state["mcp_server_configs"] = {}
         return {}
+
+def organize_servers_by_group(
+    server_configs: Dict[str, MCPServerConfig],
+    server_groups: Dict[str, List[str]]
+) -> Dict[str, List[str]]:
+    """
+    Organize server names by their group.
+    
+    Args:
+        server_configs: Dictionary of server configurations
+        server_groups: Dictionary mapping group names to lists of server names
+    
+    Returns:
+        Dictionary with group names as keys and lists of server names as values.
+        Servers not in any group are placed in an "Others" group.
+    """
+    # Track which servers are in groups
+    grouped_servers = set()
+    for servers in server_groups.values():
+        grouped_servers.update(servers)
+    
+    # Find ungrouped servers
+    all_servers = set(server_configs.keys())
+    ungrouped = all_servers - grouped_servers
+    
+    # Build result - copy existing groups
+    result = dict(server_groups)
+    
+    # Add "Others" group if there are ungrouped servers
+    if ungrouped:
+        result["Others"] = sorted(list(ungrouped))
+    
+    return result
 
 def get_user_session_id() -> str:
     """Get or create a unique session ID for the current user"""
