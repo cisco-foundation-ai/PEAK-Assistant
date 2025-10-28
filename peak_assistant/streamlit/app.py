@@ -239,6 +239,13 @@ with research_tab:
     )
 
 with local_data_tab:
+
+    # This is technically an optional step, but all the subsequent steps require the
+    # local data document. Let's just make sure that we have an empty document as a default.
+    if "Local_Data_document" not in st.session_state:
+        st.session_state["Local_Data_document"] = ""
+
+    # Check prerequisites and give warnings or errors as necessary
     has_issues = False
     
     # Check 1: Research document required

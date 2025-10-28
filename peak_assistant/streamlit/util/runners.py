@@ -131,8 +131,8 @@ async def run_local_data(debug_agents: bool = True):
         "no local data report generated",  # Default value if no "local_data_summarizer_agent" message is found
     )
 
-    # Remove the trailing "YYY-TERMINATED-YYY" string if present
-    report = report.replace("YYY-TERMINATED-YYY", "").strip()
+    # Remove the trailing "YYY-TERMINATE-YYY" string if present
+    report = report.replace("YYY-TERMINATE-YYY", "").strip()
 
     st.session_state["Local_Data_document"] = report 
 
@@ -143,6 +143,7 @@ async def run_hypothesis_generator():
     hypotheses = await hypothesizer(
         user_input="",
         research_document=st.session_state["Research_document"],
+        local_data_document=st.session_state["Local_Data_document"],
         local_context=st.session_state["local_context"],
     )
     hypotheses = hypotheses.split("\n")
@@ -180,6 +181,7 @@ async def run_hypothesis_refiner(debug_agents: bool = True):
         hypothesis=current_hypothesis,
         local_context=st.session_state["local_context"],
         research_document=st.session_state["Research_document"],
+        local_data_document=st.session_state["Local_Data_document"],
         previous_run=previous_messages,
         **debug_agents_opts
     )
@@ -220,6 +222,7 @@ async def run_able_table(debug_agents: bool = False):
         hypothesis=get_current_hypothesis(),
         local_context=st.session_state["local_context"],
         research_document=st.session_state["Research_document"],
+        local_data_document=st.session_state["Local_Data_document"],
         previous_run=previous_messages,
     )
 
@@ -251,6 +254,7 @@ async def run_data_discovery(debug_agents: bool = False):
             hypothesis=current_hypothesis,
             local_context=st.session_state["local_context"],
             research_document=st.session_state["Research_document"],
+            local_data_document=st.session_state["Local_Data_document"],
             able_info=st.session_state["ABLE_document"],
             previous_run=previous_messages,
             **debug_agents_opts
@@ -322,6 +326,7 @@ async def run_hunt_plan(debug_agents: bool = False):
         hunt_plan_result = await plan_hunt(
             hypothesis=current_hypothesis,
             research_document=st.session_state["Research_document"],
+            local_data_document=st.session_state["Local_Data_document"],
             able_info=st.session_state["ABLE_document"],
             data_discovery=st.session_state["Discovery_document"],
             local_context=st.session_state["local_context"],

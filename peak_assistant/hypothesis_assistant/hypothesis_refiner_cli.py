@@ -48,6 +48,7 @@ async def refiner(
     hypothesis: str,
     local_context: str,
     research_document: str,
+    local_data_document: str,
     verbose: bool = False,
     previous_run: list = list(),
     msg_preprocess_callback=None,
@@ -331,6 +332,10 @@ Provide feedback organized by criterion name. Only include criteria that scored 
         ),
         TextMessage(
             content=f"Here is the research document:\n{research_document}\n",
+            source="user",
+        ),
+        TextMessage(
+            content=f"Here is the local data document:\n{local_data_document}\n",
             source="user",
         ),
         TextMessage(
