@@ -29,13 +29,17 @@ import os
 import secrets
 import tempfile
 import time
-from typing import Optional, Dict, Any, Tuple
 import logging
-from urllib.parse import urlparse
-from enum import Enum
-from dataclasses import dataclass
-from urllib.parse import urljoin
+from urllib.parse import urlparse, urljoin
 from pathlib import Path
+
+# Import MCP configuration classes from centralized location
+from peak_assistant.utils.mcp_config import (
+    AuthType,
+    TransportType,
+    AuthConfig,
+    MCPServerConfig
+)
 
 logger = logging.getLogger(__name__)
 
@@ -161,47 +165,8 @@ def reset_session():
 
 
 # MCP Server Configuration and Status Management
-class AuthType(Enum):
-    NONE = "none"
-    BEARER = "bearer"
-    OAUTH2_CLIENT_CREDENTIALS = "oauth2_client_credentials"
-    OAUTH2_AUTHORIZATION_CODE = "oauth2_authorization_code"
-    API_KEY = "api_key"
-
-class TransportType(Enum):
-    STDIO = "stdio"
-    HTTP = "http"
-    SSE = "sse"
-
-@dataclass
-class AuthConfig:
-    type: AuthType
-    token: Optional[str] = None
-    client_id: Optional[str] = None
-    client_secret: Optional[str] = None
-    scope: Optional[str] = None
-    token_url: Optional[str] = None
-    authorization_url: Optional[str] = None
-    redirect_uri: Optional[str] = None
-    client_registration_url: Optional[str] = None
-    api_key: Optional[str] = None
-    header_name: Optional[str] = "Authorization"
-    requires_user_auth: bool = False
-    discovery_url: Optional[str] = None
-    enable_discovery: bool = True
-    discovery_timeout: int = 10
-
-@dataclass
-class MCPServerConfig:
-    name: str
-    transport: TransportType = TransportType.STDIO
-    command: Optional[str] = None
-    args: Optional[List[str]] = None
-    env: Optional[Dict[str, str]] = None
-    url: Optional[str] = None
-    auth: Optional[AuthConfig] = None
-    description: Optional[str] = None
-    timeout: int = 30
+# Data classes now imported from peak_assistant.utils.mcp_config
+# This eliminates code duplication and ensures consistency across the codebase
 
 def load_mcp_server_configs() -> Dict[str, MCPServerConfig]:
     """Load MCP server configurations from mcp_servers.json file"""

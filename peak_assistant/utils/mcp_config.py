@@ -41,6 +41,9 @@ from dotenv import load_dotenv
 # Removed Flask dependency; redirect URIs resolved via Streamlit helpers
 from autogen_ext.tools.mcp import McpWorkbench, StdioServerParams
 
+# Import utilities from centralized location
+from peak_assistant.utils import find_dotenv_file, interpolate_env_vars
+
 logger = logging.getLogger(__name__)
 
 def _is_streamlit_running() -> bool:
@@ -532,10 +535,7 @@ class MCPConfigManager:
         return self.servers.copy()
     
     def __init__(self, config_file: Optional[str] = None):
-        logger.info(f"[INIT DEBUG] MCPConfigManager.__init__ called with config_file: {config_file}")
         self.config_file = config_file or self._find_config_file()
-        logger.info(f"[INIT DEBUG] Using config file path: {self.config_file}")
-        logger.info(f"[INIT DEBUG] Config file exists: {os.path.exists(self.config_file)}")
         
         self.servers: Dict[str, MCPServerConfig] = {}
         self.server_groups: Dict[str, List[str]] = {}
@@ -543,13 +543,10 @@ class MCPConfigManager:
         self.user_session_manager = UserSessionManager()
         self._servers_needing_oauth_discovery: Dict[str, str] = {}  # server_name -> server_url
         
-        logger.info("[INIT DEBUG] About to call _load_config()")
         self._load_config()
-        logger.info(f"[INIT DEBUG] _load_config() completed. Loaded {len(self.servers)} servers and {len(self.server_groups)} server groups")
         
         # Perform OAuth discovery for servers that need it
         if self._servers_needing_oauth_discovery:
-            logger.info(f"[INIT DEBUG] Performing OAuth discovery for {len(self._servers_needing_oauth_discovery)} servers")
             
             # Check if we can use asyncio.run or need alternative approach
             try:
@@ -571,24 +568,20 @@ class MCPConfigManager:
                     with concurrent.futures.ThreadPoolExecutor() as executor:
                         future = executor.submit(run_discovery)
                         future.result(timeout=30)  # Wait up to 30 seconds
-                    
-                    logger.info(f"[INIT DEBUG] OAuth discovery completed using separate thread for {len(self._servers_needing_oauth_discovery)} servers")
                 else:
                     # Event loop exists but not running, can use run_until_complete
                     loop.run_until_complete(self._perform_oauth_discovery())
-                    logger.info(f"[INIT DEBUG] OAuth discovery completed using run_until_complete for {len(self._servers_needing_oauth_discovery)} servers")
             except RuntimeError as e:
                 if "no running event loop" in str(e) or "no current event loop" in str(e):
                     # No event loop exists, we can use asyncio.run
                     try:
                         asyncio.run(self._perform_oauth_discovery())
-                        logger.info(f"[INIT DEBUG] OAuth discovery completed using asyncio.run for {len(self._servers_needing_oauth_discovery)} servers")
                     except Exception as ex:
-                        logger.warning(f"[INIT DEBUG] Failed to run OAuth discovery with asyncio.run: {ex}. Discovery will happen on first access.")
+                        logger.warning(f"Failed to run OAuth discovery: {ex}. Discovery will happen on first access.")
                 else:
-                    logger.warning(f"[INIT DEBUG] Failed to run OAuth discovery synchronously: {e}. Discovery will happen on first access.")
+                    logger.warning(f"Failed to run OAuth discovery: {e}. Discovery will happen on first access.")
             except Exception as ex:
-                logger.warning(f"[INIT DEBUG] Failed to run OAuth discovery synchronously: {ex}. Discovery will happen on first access.")
+                logger.warning(f"Failed to run OAuth discovery: {ex}. Discovery will happen on first access.")
 
 
     
@@ -614,22 +607,28 @@ class MCPConfigManager:
         
         return default_path
     
+    def _interpolate_env(self, obj: Any) -> Any:
+        """Recursively interpolate ${ENV_VAR} in strings.
+        
+        Delegates to shared interpolate_env_vars utility.
+        
+        Raises:
+            ConfigInterpolationError: If environment variable not found and no default provided
+        """
+        return interpolate_env_vars(obj)
+    
     def _load_config(self):
         """Load MCP server configurations from file"""
-        logger.info(f"[LOAD CONFIG DEBUG] Starting _load_config for file: {self.config_file}")
-        
         if not os.path.exists(self.config_file):
-            logger.error(f"[LOAD CONFIG DEBUG] MCP config file not found: {self.config_file}")
-            logger.error(f"[LOAD CONFIG DEBUG] Current working directory: {os.getcwd()}")
-            logger.error("[LOAD CONFIG DEBUG] File existence check failed - configuration loading aborted")
+            logger.error(f"MCP config file not found: {self.config_file}")
             return
         
-        logger.info("[LOAD CONFIG DEBUG] Config file exists, attempting to read and parse JSON")
         try:
             with open(self.config_file, 'r') as f:
                 config_data = json.load(f)
-            logger.info(f"[LOAD CONFIG DEBUG] JSON parsing successful, config_data type: {type(config_data)}")
-            logger.info(f"[LOAD CONFIG DEBUG] Top-level keys in config: {list(config_data.keys()) if isinstance(config_data, dict) else 'Not a dict'}")
+            
+            # Interpolate environment variables
+            config_data = self._interpolate_env(config_data)
             
             # Load server configurations - support both formats
             servers_to_load = []
@@ -1023,7 +1022,6 @@ class MCPClientManager:
                 # Priority 1: Check Streamlit session state (for web UI)
                 # Streamlit session takes precedence when running in Streamlit to use fresh OAuth tokens
                 streamlit_running = _is_streamlit_running()
-                logger.info(f"[AUTH DEBUG] Streamlit running check for {config.name}: {streamlit_running}")
                 
                 if streamlit_running:
                     logger.debug(f"Getting OAuth headers for {config.name} from Streamlit session state")
@@ -1073,7 +1071,6 @@ class MCPClientManager:
                     # Only used when NOT running in Streamlit
                     env_var_name = f"PEAK_MCP_{config.name.upper().replace('-', '_')}_TOKEN"
                     env_token = os.getenv(env_var_name)
-                    logger.info(f"[AUTH DEBUG] Environment variable check for {config.name}: token={'present' if env_token else 'not set'}")
                     
                     if env_token:
                         logger.info(f"Using OAuth token from environment variable for {config.name}")
@@ -1132,25 +1129,19 @@ class MCPClientManager:
     
     async def _connect_sse_server(self, server_name: str, config: MCPServerConfig, user_id: Optional[str] = None) -> bool:
         """Connect to an SSE-based MCP server"""
-        logger.info(f"[SSE DEBUG] Starting connection to {server_name} for user_id: {user_id}")
-        
         if not config.url:
-            logger.error(f"[SSE DEBUG] No URL specified for SSE server: {server_name}")
+            logger.error(f"No URL specified for SSE server: {server_name}")
             return False
 
-        logger.info(f"[SSE DEBUG] Getting auth headers for {server_name}")
         headers = await self._get_auth_headers(config, user_id)
         if not headers:
-            logger.error(f"[SSE DEBUG] Failed to get auth headers for {server_name}")
+            logger.error(f"Failed to get auth headers for {server_name}")
             return False
-        
-        logger.info(f"[SSE DEBUG] Auth headers obtained for {server_name}: {list(headers.keys()) if headers else 'None'}")
 
         try:
             # Use SseServerParams approach for proper AutoGen compatibility
             from autogen_ext.tools.mcp import SseServerParams
             
-            logger.info(f"[SSE DEBUG] Creating SseServerParams for {server_name}")
             # Create proper SseServerParams object with extended timeouts for stability
             server_params = SseServerParams(
                 url=config.url,
@@ -1158,38 +1149,26 @@ class MCPClientManager:
                 timeout=config.timeout or 60.0,
                 sse_read_timeout=300.0  # 5 minutes read timeout
             )
-            logger.info(f"[SSE DEBUG] SseServerParams created successfully for {server_name}")
             
             # Create workbench with SseServerParams - let McpWorkbench handle connection lifecycle
-            logger.info(f"[SSE DEBUG] Creating McpWorkbench for {server_name}")
             workbench = McpWorkbench(server_params)
-            logger.info(f"[SSE DEBUG] Entering workbench context for {server_name}")
             await workbench.__aenter__()
-            logger.info(f"[SSE DEBUG] Workbench context entered successfully for {server_name}")
             
             # Test connection health by listing tools
             try:
-                logger.info(f"[SSE DEBUG] Testing connection by listing tools for {server_name}")
                 tools = await workbench.list_tools()
-                logger.info(f"[SSE DEBUG] SSE workbench for {server_name} connected successfully with {len(tools)} tools available")
+                logger.info(f"Connected to SSE server {server_name} with {len(tools)} tools")
             except Exception as e:
-                logger.warning(f"[SSE DEBUG] SSE workbench for {server_name} connection test failed: {e}")
+                logger.warning(f"SSE server {server_name} connection test failed: {e}")
                 # Try to continue anyway
             
             # Store workbench (user-specific or system-level)
-            logger.info(f"[SSE DEBUG] Storing workbench for {server_name}, user_id: {user_id}")
             if user_id:
                 if user_id not in self.user_workbenches:
                     self.user_workbenches[user_id] = {}
-                    logger.info(f"[SSE DEBUG] Created new user_workbenches entry for user {user_id}")
                 self.user_workbenches[user_id][server_name] = workbench
-                logger.info(f"[SSE DEBUG] Stored user-specific workbench for {server_name} under user {user_id}")
-                logger.info(f"[SSE DEBUG] Current user_workbenches keys: {list(self.user_workbenches.keys())}")
-                logger.info(f"[SSE DEBUG] Workbenches for user {user_id}: {list(self.user_workbenches[user_id].keys())}")
             else:
                 self.workbenches[server_name] = workbench
-                logger.info(f"[SSE DEBUG] Stored system-level workbench for {server_name}")
-                logger.info(f"[SSE DEBUG] Current system workbenches: {list(self.workbenches.keys())}")
 
             # Store connection info for proper cleanup (simplified for SseServerParams)
             self.active_clients[server_name] = {
@@ -1200,8 +1179,6 @@ class MCPClientManager:
                 "workbench": workbench,
                 "user_id": user_id
             }
-            logger.info(f"[SSE DEBUG] Active client info stored for {server_name}")
-            logger.info(f"Connected to SSE server and created workbench: {server_name}")
         except Exception as e:
             logger.error(f"Failed to connect to SSE server {server_name}: {e}")
             return False
@@ -1335,17 +1312,7 @@ async def setup_mcp_servers(server_group: str = "all", user_id: Optional[str] = 
     client_manager = get_client_manager()
     return await client_manager.connect_server_group(server_group, user_id=user_id)
 
-def find_dotenv_file():
-    """Search for a .env file in current directory and parent directories"""
-    current_dir = Path.cwd()
-    while current_dir != current_dir.parent:  # Stop at root directory
-        env_path = current_dir / '.env'
-        if env_path.exists():
-            return str(env_path)
-        current_dir = current_dir.parent
-    return None  # No .env file found
-
-# Initialize environment variables
+# Initialize environment variables using centralized find_dotenv_file()
 dotenv_path = find_dotenv_file()
 if dotenv_path:
     load_dotenv(dotenv_path)

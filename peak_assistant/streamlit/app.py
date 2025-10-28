@@ -237,7 +237,6 @@ with research_tab:
         agent_runner=run_researcher
     )
 
-# TODO: Implement something here.
 with hypothesis_generation_tab:
     if ("Research_document" not in st.session_state) or not st.session_state["Research_document"]:
         st.warning("Please run the Research tab first.")

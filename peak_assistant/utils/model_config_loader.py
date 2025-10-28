@@ -42,6 +42,8 @@ from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from peak_assistant.utils import interpolate_env_vars, ConfigInterpolationError
+
 
 class ModelConfigError(Exception):
     """Raised when model configuration is invalid or missing."""
@@ -105,34 +107,16 @@ class ModelConfigLoader:
     def _interpolate_env(self, obj: Any) -> Any:
         """Recursively interpolate ${ENV_VAR} in strings.
         
-        Supports ${ENV_VAR|default} syntax for defaults.
+        Delegates to shared interpolate_env_vars utility.
+        
+        Raises:
+            ModelConfigError: If environment variable not found and no default provided
         """
-        if isinstance(obj, str):
-            # Match ${VAR} or ${VAR|default}
-            pattern = r'\$\{([^}|]+)(?:\|([^}]*))?\}'
-            
-            def replacer(match):
-                var_name = match.group(1)
-                default_value = match.group(2) if match.group(2) is not None else None
-                
-                value = os.getenv(var_name)
-                if value is None:
-                    if default_value is not None:
-                        # Handle special case: ${VAR|null} -> None
-                        return default_value if default_value != "null" else ""
-                    else:
-                        raise ModelConfigError(
-                            f"Environment variable {var_name} not found and no default provided"
-                        )
-                return value
-            
-            return re.sub(pattern, replacer, obj)
-        elif isinstance(obj, dict):
-            return {k: self._interpolate_env(v) for k, v in obj.items()}
-        elif isinstance(obj, list):
-            return [self._interpolate_env(item) for item in obj]
-        else:
-            return obj
+        try:
+            return interpolate_env_vars(obj)
+        except ConfigInterpolationError as e:
+            # Wrap in ModelConfigError for backward compatibility
+            raise ModelConfigError(str(e))
     
     def resolve_agent_config(self, agent_name: Optional[str] = None) -> Dict[str, Any]:
         """Resolve configuration for a specific agent.

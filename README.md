@@ -114,6 +114,40 @@ The server groups are:
 
 You may add multiple MCP servers to each group if you would like the Assistant to have access to several sources, but you **must have at least one server in each group**.
 
+### Environment Variable Interpolation
+
+The MCP server configuration supports environment variable interpolation using `${ENV_VAR}` syntax. This allows you to keep sensitive credentials out of your configuration files:
+
+```json
+{
+  "mcpServers": {
+    "tavily-search": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "tavily-mcp@0.1.2"],
+      "env": {
+        "TAVILY_API_KEY": "${TAVILY_API_KEY}"
+      }
+    },
+    "secure-api": {
+      "transport": "http",
+      "url": "https://api.example.com/mcp",
+      "auth": {
+        "type": "bearer",
+        "token": "${API_BEARER_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+**Supported syntax:**
+- `${ENV_VAR}` - Replace with environment variable value (raises error if not found)
+- `${ENV_VAR|default}` - Replace with environment variable or use default value
+- `${ENV_VAR|null}` - Replace with environment variable or empty string
+
+Store your actual credentials in a `.env` file (which should be gitignored) or set them as environment variables before running the application.
+
 ### MCP Authentication
 
 The PEAK Assistant supports OAuth2 authentication for remote MCP servers, as well as OAuth resource autodiscovery. If your MCP server also supports those, you should be automatically directed to the server's authentication provider when you connect the MCP server from the app's main page.

@@ -67,7 +67,6 @@ def peak_assistant_chat(
         ]
 
     st.title(title)
-    # TODO: Make page description mandatory
     if page_description:
         desc_col, button_col = st.columns([5, 1])
         with desc_col:
