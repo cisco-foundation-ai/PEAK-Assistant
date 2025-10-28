@@ -50,20 +50,19 @@ async def researcher(
     """
     Orchestrates a multi-agent, multi-stage research workflow to generate a
     comprehensive cybersecurity threat hunting report for a specified
-    technique or behavior.
+    technique, behavior, or threat actor.
 
-    This function coordinates a team of specialized agents—search, research
-    critic, summarizer, and summary critic—each with distinct roles in
+    This function coordinates a team of specialized agents — Internet search, summarizer, and summary critic — each with distinct roles in
     researching, verifying, summarizing, and validating information about a
-    cybersecurity technique. The agents query Internet sources via MCP servers 
+    hunt topic. The agents query Internet sources via MCP servers 
     to gather authoritative information. The process is iterative and continues 
     until a high-quality, expert-level markdown report is produced and approved.
 
     Args:
-        technique: The name or description of the threat actor technique or behavior to research
+        technique: The name or description of the threat actor, technique, or behavior to research
         local_context: Additional organizational context or constraints to guide the research
         verbose: If True, print detailed execution information
-        previous_run: Messages from a previous execution to continue an iterative session
+        previous_run: Messages from a previous execution to continue an iterative session (e.g., after human feedback)
         mcp_server_group_external: Name of the MCP server group to use for external/Internet 
             research. Defaults to "research-external"
         user_id: User identifier for MCP server authentication and session management
@@ -82,8 +81,6 @@ async def researcher(
         
     Note:
         Requires MCP servers in the specified group to be configured and authenticated.
-        The function creates a team of four agents (search, research critic, summarizer, 
-        and summary critic) that collaborate iteratively to produce the final report.
     """
 
     search_system_prompt = """
@@ -409,12 +406,13 @@ async def local_data_searcher(
     msg_postprocess_kwargs=None,
 ) -> TaskResult:
     """
-    Search internal data sources for information relevant to a threat hunting technique.
+    Search internal, potentially sensitive, local data sources for information relevant 
+    to a threat hunting technique.
     
     Uses AI agents to query local data sources (wikis, ticketing systems, threat intel 
-    databases, etc.) via MCP servers to find prior hunts, security incidents, or threat 
-    intelligence related to the specified technique. The agents decompose the query, search 
-    multiple sources, and produce a comprehensive markdown report.
+    databases, etc.) via MCP servers to find prior hunts, security incidents, or other info
+    related to the current hunt topic. The agents decompose the query, search multiple 
+    sources, and produce a comprehensive markdown report.
     
     Args:
         technique: The threat hunting technique, behavior, or threat actor to research
@@ -422,7 +420,7 @@ async def local_data_searcher(
         research_document: Prior research report (e.g., from Internet research) to provide
             background on the technique
         verbose: If True, print detailed execution information
-        previous_run: Messages from a previous execution to continue an iterative session
+        previous_run: Messages from a previous execution to continue an iterative session (e.g., after human feedback)
         mcp_server_group_local_data: Name of the MCP server group to use for local data 
             searches. Defaults to "local-data-search"
         user_id: User identifier for MCP server authentication and session management
@@ -440,8 +438,6 @@ async def local_data_searcher(
     
     Note:
         Requires MCP servers in the specified group to be configured and authenticated.
-        The function creates a team of agents (search agent and summarizer agent) that 
-        collaborate to produce the final report.
     """
 
     search_system_prompt = """
