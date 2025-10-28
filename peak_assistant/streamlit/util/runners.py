@@ -29,7 +29,7 @@ from peak_assistant.utils.agent_callbacks import (
     preprocess_messages_logging,
     postprocess_messages_logging,
 )
-from peak_assistant.research_assistant import researcher
+from peak_assistant.research_assistant import researcher, local_data_searcher
 from peak_assistant.hypothesis_assistant.hypothesis_assistant_cli import hypothesizer
 from peak_assistant.hypothesis_assistant.hypothesis_refiner_cli import refiner
 from peak_assistant.able_assistant import able_table
@@ -84,6 +84,57 @@ async def run_researcher(debug_agents: bool = True):
     )
 
     st.session_state["Research_document"] = report 
+
+    return True
+
+async def run_local_data(debug_agents: bool = True):
+
+    debug_agents_opts = dict()
+    if debug_agents:
+        debug_agents_opts = {
+            "msg_preprocess_callback": preprocess_messages_logging,
+            "msg_preprocess_kwargs": {"agent_id": "researcher"},
+            "msg_postprocess_callback": postprocess_messages_logging,
+            "msg_postprocess_kwargs": {"agent_id": "researcher"},
+        }
+
+
+    previous_messages = convert_chat_history_to_text_messages(
+        st.session_state["Local_Data_messages"]
+    )
+
+    previous_messages.insert(-1, TextMessage(
+        content=f"The current report draft is: {st.session_state['Local_Data_document']}\n", source="user"
+    ))
+
+    # Get user_id from session state for MCP OAuth authentication
+    user_id = st.session_state.get("user_id", f"streamlit_user_{id(st.session_state)}")
+    
+    result = await local_data_searcher(
+        technique=st.session_state["Local_Data_messages"][0]["content"],
+        research_document=st.session_state["Research_document"],
+        local_context=st.session_state["local_context"],
+        previous_run=previous_messages,
+        user_id=user_id,
+        **debug_agents_opts
+    )
+
+    st.session_state["Local_Data_previous_messages"] = result.messages
+
+    # Find the final message from the "summarizer_agent" using next() and a generator expression
+    report = next(
+        (
+            getattr(message, "content", None)
+            for message in reversed(result.messages)
+            if message.source == "local_data_summarizer_agent" and hasattr(message, "content")
+        ),
+        "no local data report generated",  # Default value if no "local_data_summarizer_agent" message is found
+    )
+
+    # Remove the trailing "YYY-TERMINATED-YYY" string if present
+    report = report.replace("YYY-TERMINATED-YYY", "").strip()
+
+    st.session_state["Local_Data_document"] = report 
 
     return True
 

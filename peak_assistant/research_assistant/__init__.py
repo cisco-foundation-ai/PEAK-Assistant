@@ -27,7 +27,7 @@ import traceback
 from autogen_agentchat.messages import TextMessage
 from autogen_agentchat.agents import AssistantAgent
 from autogen_agentchat.conditions import TextMentionTermination
-from autogen_agentchat.teams import SelectorGroupChat
+from autogen_agentchat.teams import RoundRobinGroupChat, SelectorGroupChat
 from autogen_agentchat.ui import Console
 from autogen_agentchat.base import TaskResult
 
@@ -41,7 +41,6 @@ async def researcher(
     verbose: bool = False,
     previous_run: list = list(),
     mcp_server_group_external: str = "research-external",
-    mcp_server_group_internal: str = "research-internal",
     user_id: Optional[str] = None,
     msg_preprocess_callback=None,
     msg_preprocess_kwargs=None,
@@ -73,8 +72,6 @@ async def researcher(
         Exception: If an error occurs during the research or report generation process.
     """
 
-    # NOTE: This prompt is used for both the external and internal search agents.
-    # They're basically the same, just with different MCP tools.
     search_system_prompt = """
         You are a world-class research assistant specializing in deep, high-quality
         technical research to assist cybersecurity threat hunters. Given a threat actor
@@ -153,15 +150,6 @@ async def researcher(
         - A list of externally published threat hunt methodologies for this technique. 
           Do not include local hunts. For each, include a short description of exactly 
           what they're looking for and how they look for it. Call this section "Published Hunts".
-        - A summary of any local information about previous times you have hunted this
-          topic or it has been found in security incidents. Begin with a table that groups
-          each item that pertains to the same hunt together (e.g., all tickets and all wiki
-          pages for the same hunt), summarizes the data used, data analysis technique(s),
-          and key findings for each hunt. Column headings should be "Hunt" (include links here), 
-          "Summary", and "Key Findings". Concentrate on hunts that focus on the current 
-          topic or that feature the topic in some way. Be sure to include links to all 
-          relevant sources. If there is no relevant local information, write "No local
-          hunt information available." Call this section "Previous Hunting Information".
         - A list of tools threat actors commonly use to perform this technique.
           Call this section "Commonly-Used Tools".
         - A numbered list of references to all the sourcesq you consulted, including a
@@ -221,11 +209,9 @@ async def researcher(
            for this activity?
         7. Are there any published threat hunting methodologies for this technique
            or behavior?
-        8. Has this technique or behavior been found in previous incidents or threat
-           hunts?
-        9. What tools are commonly used by threat actors to perform this technique
+        8. What tools are commonly used by threat actors to perform this technique
            or behavior?
-        10. Are there specific threat actors known to use this technique or is
+        9. Are there specific threat actors known to use this technique or is
            it widely used by many threat actors?
 
         Remember that we are providing a report to an audence of threat hunters
@@ -258,10 +244,8 @@ async def researcher(
             {roles}
 
         Given the current context, select the most appropriate next speaker.
-            - The externalsearch agent should search for and analyze information from
+            - The external_search agent should search for and analyze information from
               the Internet.
-            - The internalsearch agent should search for and analyze information from
-              local information sources (e.g., wikis, ticket systems, threat intel databases, etc).
             - The summarizer agent should summarize the research findings (select 
               this role when the research is complete and approved by the research critic).
             - The summary critic agent should evaluate the report from the summarizer
@@ -285,10 +269,9 @@ async def researcher(
 
         For new reports, a typical workflow is:
 
-            1. Internal search agent (multiple calls)
-            2. External search agent (multiple calls)
-            4. Summarizer agent
-            5. Summary critic agent (repeat steps 1-4 as directed by critic)
+            1. External search agent (multiple calls)
+            2. Summarizer agent
+            3. Summary critic agent (repeat steps 1-2 as directed by critic)
 
         If there is already a draft of the report, only call the agent(s) necessary to incorporate
         the user feedback into the report. 
@@ -303,9 +286,6 @@ async def researcher(
     connected_servers_external = await setup_mcp_servers(
         mcp_server_group_external, user_id=user_id
     )
-    connected_servers_internal = await setup_mcp_servers(
-        mcp_server_group_internal, user_id=user_id
-    )
 
     # Get workbenches only from the external research server group
     group_workbenches_external = []
@@ -319,18 +299,6 @@ async def researcher(
         if verbose:
             print(error_msg)
         raise RuntimeError(error_msg)
-
-    # Get workbenches only from the internal research server group
-    group_workbenches_internal = []
-    for server_name in connected_servers_internal:
-        workbench = mcp_client_manager.get_workbench(server_name, user_id=user_id)
-        if workbench:
-            group_workbenches_internal.append(workbench)
-
-    if not group_workbenches_internal:
-        error_msg = f"No MCP workbenches available for internal research group '{mcp_server_group_internal}'. Skipping local research."
-        if verbose:
-            print(error_msg)
 
     # Create model clients for all agents
     external_search_client = await get_model_client(agent_name="external_search_agent")
@@ -359,18 +327,6 @@ async def researcher(
             system_message=summary_critic_system_prompt,
         ),
     ]
-
-    if group_workbenches_internal:
-        internal_search_client = await get_model_client(agent_name="internal_search_agent")
-        participants.append(
-            AssistantAgent(
-                "internal_search_agent",
-                description="Performs searches and analyzes information using local information sources (e.g., wikis, ticket systems, etc)",
-                model_client=internal_search_client,
-                workbench=group_workbenches_internal,
-                system_message=search_system_prompt,
-            )
-        )
 
     # Define a termination condition that stops the task once the report
     # has been approved
@@ -423,4 +379,181 @@ async def researcher(
         )
         raise Exception(
             "An unexpected error occurred while preparing the report."
+        ) from e
+
+async def local_data_searcher(
+    technique: str,
+    local_context: str,
+    research_document: str,
+    verbose: bool = False,
+    previous_run: list = list(),
+    mcp_server_group_local_data: str = "local-data-search",
+    user_id: Optional[str] = None,
+    msg_preprocess_callback=None,
+    msg_preprocess_kwargs=None,
+    msg_postprocess_callback=None,
+    msg_postprocess_kwargs=None,
+) -> TaskResult:
+
+    search_system_prompt = """
+        You are a world-class research assistant specializing in deep, high-quality
+        technical research to assist cybersecurity threat hunters. Given a threat actor
+        behavior or technique, your primary goal is to use your provided search tools to 
+        find relevant information about the behavior or technique in the organization's 
+        internal data sources, such as wikis, ticketing systems, threat intel databases, 
+        etc. You are looking for anything that may be relevant to the given hunt topic,
+        especially prior hunts, previous security incidents, or threat intel related to the 
+        technique, behavior, or threat actor.
+
+        Consult the provided hunt topic research report to better understand the topic before
+        you begin your search. Decompose broad or complex queries into precise, targeted 
+        search terms to maximize result relevance. Summarize the key findings or most important 
+        information in a concise and clear manner.
+
+        Always use your tools to gather information. Never provide information
+        without using your tools.         
+
+        Be sure to include relevant samples of log entries, code,
+        or detection rules that can be used to identify the behavior if available.
+
+        For each piece of information, clearly explain its relevance, technical
+        significance, and how it addresses the research query. Provide detailed,
+        nuanced explanations suitable for expert and highly-technical audiences.
+
+        You may need to make multiple calls to your tools to gather all the
+        information you need to answer the research question.
+
+        When receiving feedback from a verifier agent, use your tools to
+        iteratively refine your research, address gaps, and ensure the highest
+        standard of accuracy and completeness.
+
+        Always cite your sources and include links for the threat hunter to access
+        the full information.
+"""
+
+    summarizer_system_prompt = """
+        You are cybersecurity threat hunting research assistant. Your role is to provide a
+        detailed markdown summary of the local data found in wikis, ticketing systems, 
+        threat intel databases, etc. This process is intended to identify information 
+        relevant to the given hunt topic, especially prior hunts, previous security 
+        incidents, or threat intel related to the technique, behavior, or threat actor.
+
+        Review the provided information and create a summary report for the user. 
+        Remember that your audience is composed of expert cybersecurity threat hunters 
+        and researchers. Your summary should be comprehensive, well-structured, and 
+        technically rigorous, with a high level of detail. The report should contain 
+        everything a threat hunter would need in order to begin planning their hunt 
+        for this technique, provided that it is available in any of the local data 
+        sources the search agent has available to it. 
+
+        Format the output as a simple Markdown report. The title should be "Local Data 
+        Search Report - <technique>" where technique is taken from the provided research
+        report's title, which contains the technique name.
+
+        The report should contain one section per local data source that was used to 
+        gather information. The sections titles should be named after the data source, 
+        or if that name is not available, the general type of data found in that source 
+        (e.g., "Prior Incident tickets", "Previous hunt documentation", "Threat Intelligence").
+        
+        Each section should contain a summary of the information 
+        found in that data source, including any relevant log entries, code, or 
+        detection rules that can be used to identify the behavior if available.
+
+        For each piece of information, clearly explain its relevance, technical
+        significance, and how it addresses the research query. Provide detailed,
+        nuanced explanations suitable for expert and highly-technical audiences.
+
+        Always cite your sources and include links for the threat hunter to access
+        the full information.
+
+        End your report with the string "YYY-TERMINATE-YYY" by itself on the last line.
+"""
+
+    # Set up MCP servers for research
+    mcp_client_manager = get_client_manager()
+    connected_servers_local_data = await setup_mcp_servers(
+        mcp_server_group_local_data, user_id=user_id
+    )
+
+    # Get workbenches only from the external research server group
+    group_workbenches_local_data = []
+    for server_name in connected_servers_local_data:
+        workbench = mcp_client_manager.get_workbench(server_name, user_id=user_id)
+        if workbench:
+            group_workbenches_local_data.append(workbench)
+
+    if not group_workbenches_local_data:
+        error_msg = f"No MCP workbenches available for local data research group '{mcp_server_group_local_data}'. Check your MCP configuration."
+        if verbose:
+            print(error_msg)
+        raise RuntimeError(error_msg)
+
+    # Create model clients for all agents
+    local_data_search_client = await get_model_client(agent_name="local_data_search_agent")
+    local_data_summarizer_client = await get_model_client(agent_name="local_data_summarizer_agent")
+
+    local_data_search_agent = AssistantAgent(
+        "local_data_search_agent",
+        description="Performs searches and analyzes information using internal research tools (i.e. wikis, ticketing systems, etc.)",
+        model_client=local_data_search_client,
+        workbench=group_workbenches_local_data,
+        system_message=search_system_prompt,
+    )
+
+    local_data_summarizer_agent = AssistantAgent(
+        "local_data_summarizer_agent",
+        description="Provides a detailed markdown summary of the local data research as a report to the user.",
+        model_client=local_data_summarizer_client,
+        system_message=summarizer_system_prompt,
+    )
+
+    # Define a termination condition that stops the task once the report
+    # has been approved
+    text_termination = TextMentionTermination("YYY-TERMINATE-YYY")
+
+    # Create a team
+    team = RoundRobinGroupChat(
+        [local_data_search_agent, local_data_summarizer_agent],
+        termination_condition=text_termination
+    )
+
+    # Always add these, no matter if it's the first run or a subsequent one
+    messages = [
+        TextMessage(content=f"Hunt topic research report: {research_document}\n", source="user"),
+        TextMessage(
+            content=f"Additional local context: {local_context}\n", source="user"
+        ),
+    ]
+
+    # If we have messages from a previous run, add them so we can continue the research
+    if previous_run:
+        messages = messages + previous_run
+
+    # Preprocess the messages
+    if msg_preprocess_callback:
+        messages = msg_preprocess_callback(
+            msgs=messages, **(msg_preprocess_kwargs or {})
+        )
+
+    try:
+        # Run the team asynchronously
+        if verbose:
+            result = await Console(team.run_stream(task=messages), output_stats=True)
+        else:
+            result = await team.run(task=messages)
+
+        # Postprocess the result
+        if msg_postprocess_callback:
+            result = msg_postprocess_callback(
+                result=result, **(msg_postprocess_kwargs or {})
+            )
+
+        return result
+    except Exception as e:
+        # Catch any other unexpected errors and wrap them
+        print(
+            f"An unexpected error occurred in the local data search: {e}\n{traceback.format_exc()}"
+        )
+        raise Exception(
+            "An unexpected error occurred while searching the local data."
         ) from e

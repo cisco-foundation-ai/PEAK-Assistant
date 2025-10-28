@@ -393,6 +393,7 @@ def restore_session_from_oauth(state: str) -> bool:
                 or key.startswith("status_btn_")
                 or key.startswith("auth_button_")
                 or key.startswith("btn_")
+                or key.endswith("_run_button")
             ):
                 continue
             if key not in st.session_state:  # Don't overwrite existing state

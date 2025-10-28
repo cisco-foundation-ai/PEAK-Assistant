@@ -30,7 +30,7 @@ from streamlit_extras.stylable_container import stylable_container
 
 from peak_assistant.utils import find_dotenv_file
 from peak_assistant.streamlit.util.ui import peak_assistant_chat, peak_assistant_hypothesis_list
-from peak_assistant.streamlit.util.runners import run_researcher, run_hypothesis_generator, run_hypothesis_refiner, run_able_table, run_data_discovery, run_hunt_plan
+from peak_assistant.streamlit.util.runners import run_researcher, run_local_data, run_hypothesis_generator, run_hypothesis_refiner, run_able_table, run_data_discovery, run_hunt_plan
 from peak_assistant.streamlit.util.hypothesis_helpers import get_current_hypothesis
 from peak_assistant.streamlit.util.helpers import (
     reset_session, 
@@ -204,42 +204,57 @@ with st.sidebar:
 
 
 research_tab, \
+local_data_tab, \
 hypothesis_generation_tab, \
 hypothesis_refinement_tab, \
 able_tab, \
 data_discovery_tab, \
 hunt_plan_tab, \
-status_tab, \
+mcp_servers_tab, \
 agent_config_tab, \
 debug_tab = st.tabs(
     [
         "Research", 
+        "Local Data",
         "Hypothesis Generation",
         "Hypothesis Refinement",
         "ABLE Table",
         "Data Discovery",
         "Hunt Plan",
-        "Status",
-        "Agent Config",
-        "Debug"
+        ":grey[MCP Servers]",
+        ":grey[Agent Config]",
+        ":grey[Debug]"
     ]
 )
-
-
 
 with research_tab:
     peak_assistant_chat(
         title="Topic Research", 
-        page_description="The topic research assistant will search internal and Internet sources and compile a research report for your hunt topic.",
+        page_description="The topic research assistant will search Internet sources and compile a research report for your hunt topic.",
         doc_title="Research",
         default_prompt="What would you like to hunt for?", 
         allow_upload=True,
         agent_runner=run_researcher
     )
 
+with local_data_tab:
+    if "Research_document" not in st.session_state or not st.session_state["Research_document"]:
+        st.warning("Please run the Research tab first to generate a research report.")   
+    else: 
+        peak_assistant_chat(
+            title="Local Data Search", 
+            page_description="The local data assistant will search internal sources such as wikis, ticketing systems, etc. for information about your hunt topic.",
+            doc_title="Local_Data",
+            default_prompt="Let's query your local data sources!", 
+            allow_upload=True,
+            agent_runner=run_local_data,
+            run_button_label="Search local sources"
+        )
+
+
 with hypothesis_generation_tab:
     if ("Research_document" not in st.session_state) or not st.session_state["Research_document"]:
-        st.warning("Please run the Research tab first.")
+        st.warning("Please run the Internet Research tab first.")
     else:
         peak_assistant_hypothesis_list(
             agent_runner = run_hypothesis_generator
@@ -355,7 +370,7 @@ with hunt_plan_tab:
             run_button_label="Create Hunt Plan"
         )
 
-with status_tab:
+with mcp_servers_tab:
     st.header("MCP Server Status")
     st.write("Monitor the status and authentication state of configured MCP servers.")
     
