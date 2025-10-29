@@ -486,10 +486,11 @@ async def local_data_searcher(
         Review the provided information and create a summary report for the user. 
         Remember that your audience is composed of expert cybersecurity threat hunters 
         and researchers. Your summary should be comprehensive, well-structured, and 
-        technically rigorous, with a high level of detail. The report should contain 
-        everything a threat hunter would need in order to begin planning their hunt 
-        for this technique, provided that it is available in any of the local data 
-        sources the search agent has available to it. 
+        technically rigorous, with a high level of detail. The report should only draw
+        from information provided by the local data search agent. Do not include information
+        from the research report; that was only for context for the search agent to 
+        help it create keyword searches. Also, do not include any information from your
+        own knowledge. USE ONLY THE INFORMATION PROVIDED BY THE LOCAL DATA SEARCH AGENT.
 
         Format the output as a simple Markdown report. The title should be "Local Data 
         Search Report - <technique>" where technique is taken from the provided research

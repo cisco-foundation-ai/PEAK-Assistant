@@ -74,11 +74,13 @@ async def run_researcher(debug_agents: bool = True):
     st.session_state["Research_previous_messages"] = result.messages
 
     # Find the final message from the "summarizer_agent" using next() and a generator expression
+    # Note: Filter out empty content since some models may send empty messages
     report = next(
         (
             getattr(message, "content", None)
             for message in reversed(result.messages)
-            if message.source == "summarizer_agent" and hasattr(message, "content")
+            if message.source == "summarizer_agent" 
+            and hasattr(message, "content")
         ),
         "no report generated",  # Default value if no "summarizer_agent" message is found
     )
@@ -93,9 +95,9 @@ async def run_local_data(debug_agents: bool = True):
     if debug_agents:
         debug_agents_opts = {
             "msg_preprocess_callback": preprocess_messages_logging,
-            "msg_preprocess_kwargs": {"agent_id": "researcher"},
+            "msg_preprocess_kwargs": {"agent_id": "local-data-search"},
             "msg_postprocess_callback": postprocess_messages_logging,
-            "msg_postprocess_kwargs": {"agent_id": "researcher"},
+            "msg_postprocess_kwargs": {"agent_id": "local-data-search"},
         }
 
 
@@ -122,11 +124,13 @@ async def run_local_data(debug_agents: bool = True):
     st.session_state["Local_Data_previous_messages"] = result.messages
 
     # Find the final message from the "summarizer_agent" using next() and a generator expression
+    # Note: Filter out empty content since some models may send empty messages
     report = next(
         (
             getattr(message, "content", None)
             for message in reversed(result.messages)
-            if message.source == "local_data_summarizer_agent" and hasattr(message, "content")
+            if message.source == "local_data_summarizer_agent" 
+            and hasattr(message, "content")
         ),
         "no local data report generated",  # Default value if no "local_data_summarizer_agent" message is found
     )
@@ -189,11 +193,13 @@ async def run_hypothesis_refiner(debug_agents: bool = True):
     st.session_state["Refinement_previous_messages"] = result.messages
 
     # Find the final message from the "critic" agent using next() and a generator expression
+    # Note: Filter out empty content since some models may send empty messages
     refined_hypothesis_message = next(
         (
             getattr(message, "content", None)
             for message in reversed(result.messages)
-            if message.source == "refiner" and hasattr(message, "content")
+            if message.source == "refiner" 
+            and hasattr(message, "content")
         ),
         "Could not refine hypothesis. Something went wrong.",  # Default value if no "critic" message is found
     )
