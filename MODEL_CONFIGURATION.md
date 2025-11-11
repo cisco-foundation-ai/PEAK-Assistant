@@ -40,7 +40,7 @@ Each entry in `providers` defines a named provider instance:
 {
   "providers": {
     "my-provider-name": {
-      "type": "azure | openai",
+      "type": "azure | openai | anthropic",
       "config": {
         // Provider-type-specific connection fields
       },
@@ -63,7 +63,7 @@ Each entry in `defaults`, `groups`, or `agents` references a provider by name:
 }
 ```
 
-For `groups` entries, you must also include a `match` field:
+For `groups` entries, you must also include a `match` field. If the sub-agent matches any of the patterns in the `match` array, it will use the configuration in the group. The `match` field supports glob patterns:
 
 ```json
 {
@@ -337,7 +337,7 @@ The Anthropic provider connects to Anthropic's Claude models via their API.
 
 **Agent Configuration:**
 
-Anthropic agents require only the `model` field (no deployment like Azure):
+Anthropic agents require only the `model` field:
 
 ```json
 {
@@ -352,19 +352,6 @@ Anthropic agents require only the `model` field (no deployment like Azure):
     }
   }
 }
-```
-
-**Popular Models:**
-- `claude-3-5-sonnet-20241022` - Latest Sonnet (most capable, balanced)
-- `claude-3-5-haiku-20241022` - Latest Haiku (fast and efficient)
-- `claude-3-opus-20240229` - Opus (most powerful, slower)
-- `claude-3-sonnet-20240229` - Previous Sonnet
-- `claude-3-haiku-20240307` - Previous Haiku
-
-**Environment Variable:**
-
-```bash
-export ANTHROPIC_API_KEY="sk-ant-api03-..."
 ```
 
 ## Configuration Examples
@@ -418,7 +405,7 @@ This configuration uses GPT-4o for most agents but assigns o4-mini to specific r
   },
   "groups": {
     "reasoning-agents": {
-      "match": ["*_critic", "hunt_planner", "hunt_plan_critic"],
+      "match": ["*_critic", "hunt_planner"],
       "provider": "azure-main",
       "model": "o4-mini",
       "deployment": "o4-mini-deployment"
@@ -429,7 +416,7 @@ This configuration uses GPT-4o for most agents but assigns o4-mini to specific r
 
 In this example:
 - Most agents use GPT-4o (from `defaults`)
-- Agents matching `*_critic`, `hunt_planner`, or `hunt_plan_critic` use o4-mini
+- Agents matching `*_critic` or `hunt_planner` use o4-mini
 - Both use the same Azure provider instance (`azure-main`)
 
 ### Example 3: Azure OpenAI (Complete Configuration)
@@ -636,10 +623,6 @@ This example demonstrates a sophisticated setup using multiple provider instance
     "able_table": {
       "provider": "ollama-local",
       "model": "llama-3.1-8b"
-    },
-    "refiner": {
-      "provider": "lmstudio-local",
-      "model": "qwen-2.5-72b"
     }
   }
 }
@@ -651,9 +634,8 @@ In this configuration:
 - Critic and planner agents use Azure o4-mini via the `reasoning-agents` group
 - `summarizer_agent` uses OpenAI native GPT-4.1-mini
 - `able_table` uses Ollama (local) with Llama 3.1 8B
-- `refiner` uses LM Studio (local) with Qwen 2.5 72B
 
-This demonstrates mixing four different provider instances in a single configuration: Azure OpenAI, OpenAI native, Ollama (OpenAI-compatible), and LM Studio (OpenAI-compatible).
+This demonstrates mixing three different provider instances and four different models in a single configuration: Azure OpenAI, OpenAI native, and Ollama (OpenAI-compatible).
 
 
 ## Troubleshooting
@@ -692,78 +674,10 @@ This demonstrates mixing four different provider instances in a single configura
 
 If an agent name is not found in the configuration, the system will use the `defaults` configuration. If you want to verify which configuration an agent is using, check the application logs during startup.
 
-## Migration from Environment Variables
-
-If you were previously using environment variable-based configuration (`.env` file), you'll need to migrate to `model_config.json`. Here's a quick mapping:
-
-### Azure OpenAI
-
-**Old (environment variables):**
-```bash
-LLM_PROVIDER=azure
-AZURE_OPENAI_API_KEY=your-key
-AZURE_OPENAI_ENDPOINT=https://your-endpoint.openai.azure.com/
-AZURE_OPENAI_API_VERSION=2025-04-01-preview
-AZURE_OPENAI_DEPLOYMENT=gpt-4o
-AZURE_OPENAI_MODEL=gpt-4o
-```
-
-**New (model_config.json):**
-```json
-{
-  "version": "1",
-  "providers": {
-    "azure-main": {
-      "type": "azure",
-      "config": {
-        "endpoint": "${AZURE_OPENAI_ENDPOINT}",
-        "api_key": "${AZURE_OPENAI_API_KEY}",
-        "api_version": "2025-04-01-preview"
-      }
-    }
-  },
-  "defaults": {
-    "provider": "azure-main",
-    "model": "gpt-4o",
-    "deployment": "gpt-4o"
-  }
-}
-```
-
-You can still use environment variables for secrets by referencing them with `${VAR}` syntax in the JSON file.
-
-### OpenAI Native
-
-**Old (environment variables):**
-```bash
-LLM_PROVIDER=openai
-OPENAI_API_KEY=sk-your-key
-OPENAI_MODEL=gpt-4o-mini
-```
-
-**New (model_config.json):**
-```json
-{
-  "version": "1",
-  "providers": {
-    "openai-native": {
-      "type": "openai",
-      "config": {
-        "api_key": "${OPENAI_API_KEY}"
-      }
-    }
-  },
-  "defaults": {
-    "provider": "openai-native",
-    "model": "gpt-4o-mini"
-  }
-}
-```
-
 ## Future Extensions
 
 The configuration system is designed to be extensible. Future versions may support:
-- Additional providers (Anthropic, Google Gemini, etc.)
+- Additional providers 
 - Per-request generation parameters (temperature, max_tokens, etc.)
 - Model-specific tool/function calling configurations
 - Hot-reloading of configuration changes
