@@ -37,7 +37,7 @@ toolbarMode = "minimal"
 headless = true
 
 # Listen on this interface (0.0.0.0 == all interfaces)
-address = "0.0.0.0"
+#address = "0.0.0.0"
 
 [browser]
 # Don't send usage statistics to Streamlit.

@@ -37,12 +37,12 @@ from pathlib import Path
 
 @click.command()
 @click.option("--cert-dir", default="./", help="Directory to find SSL certificates.")
-@click.option("--host", default="0.0.0.0", help="Host to run the application on.")
+@click.option("--host", default="127.0.0.1", help="Host to run the application on.")
 @click.option("--port", default=8501, help="Port to run the application on.")
 @click.option("--context", default="./context.txt", help="Path for context.txt (legacy compatibility)")
 def main(
     cert_dir: str = "./",
-    host: str = "0.0.0.0", 
+    host: str = "127.0.0.1", 
     port: int = 8501,
     context: str = "./context.txt",
 ) -> None:
