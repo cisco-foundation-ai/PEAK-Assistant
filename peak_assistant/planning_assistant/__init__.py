@@ -32,6 +32,7 @@ from ..utils.llm_factory import get_model_client
 
 async def plan_hunt(
     research_document: str,
+    local_data_document: str,
     hypothesis: str,
     able_info: str,
     data_discovery: str,
@@ -49,6 +50,7 @@ async def plan_hunt(
 
     Args:
         research_document (str): The research document containing threat hunting techniques.
+        local_data_document (str): The local data document containing information about the data sources available in the Splunk server.
         hypothesis (str): The hunting hypothesis to be tested.
         able_info (str): The Actor, Behavior, Location and Evidence (ABLE) information.
         data_discovery (str): The data discovery information.
@@ -192,6 +194,10 @@ async def plan_hunt(
     messages = [
         TextMessage(
             content=f"Here is the research document:\n{research_document}\n",
+            source="user",
+        ),
+        TextMessage(
+            content=f"Here is the local data document:\n{local_data_document}\n",
             source="user",
         ),
         TextMessage(content=f"Here is the hypothesis: {hypothesis}\n", source="user"),

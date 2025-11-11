@@ -34,7 +34,10 @@ from ..utils.llm_factory import get_model_client
 
 
 async def hypothesizer(
-    user_input: str, research_document: str, local_context: str
+    user_input: str, 
+    research_document: str, 
+    local_data_document: str,
+    local_context: str
 ) -> str:
     """
     Hypothesizer agent that combines user input, a markdown document, and its own prompt
@@ -160,6 +163,10 @@ Before generating each hypothesis, verify:
             source="user",
         ),
         UserMessage(content=f"Here is the user's input: {user_input}\n", source="user"),
+        UserMessage(
+            content=f"Here is the local data document:\n{local_data_document}\n",
+            source="user",
+        ),
         UserMessage(
             content=f"Additional local context: {local_context}\n", source="user"
         ),
