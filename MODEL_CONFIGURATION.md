@@ -73,6 +73,13 @@ For `groups` entries, you must also include a `match` field. If the sub-agent ma
 }
 ```
 
+**Note on wildcard matching:** Pattern matching is case-sensitive and uses standard glob syntax (`*` matches any characters, `?` matches a single character). Be aware that agent names use different separators:
+- Most agents use underscores: `summary_critic`, `hunt_plan_critic`
+- Some agents use dashes: `hypothesis-refiner`, `hypothesis-refiner-critic`
+- Some use mixed case: `Data_Discovery_Agent`, `Discovery_Critic_Agent`
+
+For example, the pattern `*_critic` will match `summary_critic` and `hunt_plan_critic`, but not `hypothesis-refiner-critic` (which uses a dash).
+
 ### Resolution Precedence
 
 When resolving configuration for an agent, the system follows this precedence order:
@@ -98,22 +105,26 @@ If an environment variable is not set, you can provide a default using `${ENV_VA
 
 ## Agent Names
 
-The following agent names are used in the PEAK Assistant codebase:
+The following agent names are used in the PEAK Assistant codebase. 
 
-| Agent Name | Module | Purpose |
-|------------|--------|---------|
-| `external_search_agent` | research_assistant | Searches external sources (Internet) |
-| `internal_search_agent` | research_assistant | Searches internal sources (wikis, tickets) |
-| `summarizer_agent` | research_assistant | Creates research report summaries |
-| `summary_critic` | research_assistant | Reviews and critiques summaries |
-| `research_selector` | research_assistant | Team-level selector for research workflow |
-| `refiner` | hypothesis_assistant | Refines threat hunting hypotheses |
-| `critic` | hypothesis_assistant | Critiques hypothesis quality |
-| `Data_Discovery_Agent` | data_assistant | Identifies relevant Splunk data sources |
-| `Discovery_Critic_Agent` | data_assistant | Reviews data discovery results |
-| `hunt_planner` | planning_assistant | Creates detailed hunt plans |
-| `hunt_plan_critic` | planning_assistant | Reviews hunt plan quality |
-| `able_table` | able_assistant | Generates ABLE tables |
+**NOTE: Some agents need models which are capable of calling MCP servers, sometimes referred to as "tool-calling" models. These are marked on the table with a ✅.**
+
+| Agent Name | Phase | Purpose | Needs MCP | MCP Group |
+|------------|-------|---------|-----------|-----------|
+| `external_search_agent` | Research | Searches external sources (Internet) | ✅ | `research-external` |
+| `summarizer_agent` | Research | Creates research report summaries | | |
+| `summary_critic` | Research | Reviews and critiques summaries | | |
+| `research_team_lead` | Research | Team-level selector for research workflow | | |
+| `local_data_search_agent` | Local Data | Searches internal sources (wikis, tickets) | ✅ | `local-data-search` |
+| `local_data_summarizer_agent` | Local Data | Summarizes local data research findings | | |
+| `hypothesizer_agent` | Hypothesis Generation | Generates threat hunting hypotheses | | |
+| `hypothesis-refiner` | Hypothesis Refinement | Refines threat hunting hypotheses | | |
+| `hypothesis-refiner-critic` | Hypothesis Refinement | Critiques refined hypothesis quality | | |
+| `able_table` | ABLE Table | Generates ABLE tables | | |
+| `Data_Discovery_Agent` | Data Discovery | Identifies relevant Splunk data sources | ✅ | `data_discovery` |
+| `Discovery_Critic_Agent` | Data Discovery | Reviews data discovery results | | |
+| `hunt_planner` | Hunt Plan | Creates detailed hunt plans | | |
+| `hunt_plan_critic` | Hunt Plan | Reviews hunt plan quality | | |
 
 ## Provider Types
 
@@ -603,7 +614,7 @@ This example demonstrates a sophisticated setup using multiple provider instance
   },
   "groups": {
     "research-team": {
-      "match": ["external_search_*", "internal_search_*", "research_selector"],
+      "match": ["external_search_*", "local_data_search_*", "research_team_lead"],
       "provider": "azure-main",
       "model": "gpt-4o",
       "deployment": "gpt-4o-deployment"
@@ -630,7 +641,7 @@ This example demonstrates a sophisticated setup using multiple provider instance
 
 In this configuration:
 - Most agents use Azure GPT-4o (from `defaults`)
-- Research agents (`external_search_agent`, `internal_search_agent`, `research_selector`) use Azure GPT-4o via the `research-team` group
+- Research agents (`external_search_agent`, `local_data_search_agent`, `local_data_summarizer_agent`, `research_team_lead`) use Azure GPT-4o via the `research-team` group
 - Critic and planner agents use Azure o4-mini via the `reasoning-agents` group
 - `summarizer_agent` uses OpenAI native GPT-4.1-mini
 - `able_table` uses Ollama (local) with Llama 3.1 8B
