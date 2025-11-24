@@ -39,6 +39,7 @@ from ..utils.agent_callbacks import (
     preprocess_messages_logging,
     postprocess_messages_logging,
 )
+from ..utils.result_extractors import extract_research_report
 
 from . import researcher
 
@@ -155,15 +156,8 @@ def main() -> None:
             )
         )
 
-        # Find the final message from the "summarizer_agent" using next() and a generator expression
-        report = next(
-            (
-                getattr(message, "content", None)
-                for message in reversed(task_result.messages)
-                if message.source == "summarizer_agent" and hasattr(message, "content")
-            ),
-            "no report generated",  # Default value if no "summarizer_agent" message is found
-        )
+        # Extract the report using the centralized extractor
+        report = extract_research_report(task_result)
 
         if not report:
             print("No report generated. Please check the input and try again.")

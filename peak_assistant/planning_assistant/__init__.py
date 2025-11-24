@@ -262,11 +262,4 @@ async def plan_hunt(
         return result
     except Exception as e:
         print(f"Error during hunt planning: {e}")
-        return TaskResult(
-            messages=[
-                TextMessage(
-                    content=f"An error occurred while planning the hunt: {e}",
-                    source="system",
-                )
-            ]
-        )
+        raise Exception("An error occurred while planning the hunt.") from e

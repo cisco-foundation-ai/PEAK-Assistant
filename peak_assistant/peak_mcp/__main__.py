@@ -32,6 +32,13 @@ from mcp import types
 from mcp.server.fastmcp import FastMCP
 from pydantic.networks import AnyUrl
 from ..utils import find_dotenv_file
+from ..utils.result_extractors import (
+    extract_research_report,
+    extract_local_data_report,
+    extract_refined_hypothesis,
+    extract_data_discovery_report,
+    extract_hunt_plan,
+)
 
 from ..research_assistant import researcher as async_researcher
 from ..research_assistant import local_data_searcher as async_local_data_searcher
@@ -215,18 +222,15 @@ async def internet_researcher(technique: str, local_context: str) -> types.Embed
         types.EmbeddedResource: An embeddable resource containing the research report, or an error
              message if the process fails.
     """
-    result = await async_researcher(technique, local_context)
+    try:
+        result = await async_researcher(
+            technique=technique, local_context=local_context
+        )
+        report = extract_research_report(result)
+        return embeddable_object(data=report)
+    except Exception as e:
+        return embeddable_object(data=f"Error during research: {str(e)}")
 
-    report = next(
-        (
-            getattr(message, "content")
-            for message in reversed(result.messages)
-            if message.source == "summarizer_agent" and hasattr(message, "content")
-        ),
-        "",
-    )
-
-    return embeddable_object(data=report)
 
 @mcp.tool(
     name="peak-local-data-researcher",
@@ -255,18 +259,16 @@ async def local_data_researcher(
         types.EmbeddedResource: An embeddable resource containing the research report, or an error
              message if the process fails.
     """
-    result = await async_local_data_searcher(technique, local_context, research_document)
-
-    report = next(
-        (
-            getattr(message, "content")
-            for message in reversed(result.messages)
-            if message.source == "summarizer_agent" and hasattr(message, "content")
-        ),
-        "",
-    )
-
-    return embeddable_object(data=report)
+    try:
+        result = await async_local_data_searcher(
+            technique=technique,
+            research_document=research_document,
+            local_context=local_context,
+        )
+        report = extract_local_data_report(result)
+        return embeddable_object(data=report)
+    except Exception as e:
+        return embeddable_object(data=f"Error during local data search: {str(e)}")
 
 
 @mcp.tool(
@@ -292,9 +294,12 @@ async def hypothesizer(
     Returns:
         types.EmbeddedResource: A Markdown document containing the list of threat hunting hypotheses, or an error message if the process fails.
     """
-    user_input = ""
-    result = await async_hypothesizer(user_input, research_document, local_context, local_data_search_results)
-    return embeddable_object(data=result)
+    try:
+        user_input = ""
+        result = await async_hypothesizer(user_input, research_document, local_context, local_data_search_results)
+        return embeddable_object(data=result)
+    except Exception as e:
+        return embeddable_object(data=f"Error during hypothesis generation: {str(e)}")
 
 
 @mcp.tool(
@@ -323,27 +328,17 @@ async def hypothesis_refiner(
         types.EmbeddedResource: An embeddable resource containing the revised hypothesis.
     """
 
-    result = await async_refiner(
-        hypothesis=hypothesis,
-        research_document=research_document,
-        local_context=local_context,
-        local_data_document=local_data_search_results,
-    )
-
-    refined_hypothesis_message = next(
-        (
-            getattr(message, "content", "")
-            for message in reversed(result.messages)
-            if hasattr(message, "content") and message.source == "refiner"
-        ),
-        "",
-    )
-
-    refined_hypothesis = refined_hypothesis_message.replace(
-        "YYY-HYPOTHESIS-ACCEPTED-YYY", ""
-    ).strip()
-
-    return embeddable_object(data=refined_hypothesis)
+    try:
+        result = await async_refiner(
+            hypothesis=hypothesis,
+            research_document=research_document,
+            local_context=local_context,
+            local_data_document=local_data_search_results,
+        )
+        refined_hypothesis = extract_refined_hypothesis(result)
+        return embeddable_object(data=refined_hypothesis)
+    except Exception as e:
+        return embeddable_object(data=f"Error during hypothesis refinement: {str(e)}")
 
 
 @mcp.tool(name="peak-able-table", description="Create the PEAK ABLE table.")
@@ -369,14 +364,16 @@ async def able_table(
         types.EmbeddedResource: An embeddable resource containing the ABLE table, or an error message if the process fails.
     """
 
-    result = await async_able_table(
-        hypothesis=hypothesis,
-        research_document=research_document,
-        local_context=local_context,
-        local_data_document=local_data_search_results,
-    )
-
-    return embeddable_object(data=result)
+    try:
+        result = await async_able_table(
+            hypothesis=hypothesis,
+            research_document=research_document,
+            local_context=local_context,
+            local_data_document=local_data_search_results,
+        )
+        return embeddable_object(data=result)
+    except Exception as e:
+        return embeddable_object(data=f"Error during ABLE table creation: {str(e)}")
 
 
 @mcp.tool(
@@ -408,23 +405,18 @@ async def data_discovery(
         types.EmbeddedResource: An embeddable resource containing the indices, sourctypes and key fields
              relevant to the hunt, or an error message if the process fails.
     """
-    result = await async_identify_data_sources(
-        hypothesis=hypothesis,
-        research_document=research_document,
-        able_info=able_info,
-        local_context=local_context,
-        local_data_document=local_data_search_results,
-    )
-
-    data_source_report = next(
-        (
-            getattr(message, "content", None)
-            for message in reversed(result.messages)
-            if hasattr(message, "content") and message.source == "Data_Discovery_Agent"
-        ),
-        getattr(result.messages[-1], "content", None),
-    )
-    return embeddable_object(data=data_source_report or "No data sources found.")
+    try:
+        result = await async_identify_data_sources(
+            hypothesis=hypothesis,
+            research_document=research_document,
+            local_data_document=local_data_search_results,
+            able_info=able_info,
+            local_context=local_context,
+        )
+        data_sources_message = extract_data_discovery_report(result)
+        return embeddable_object(data=data_sources_message or "No data sources identified.")
+    except Exception as e:
+        return embeddable_object(data=f"Error during data discovery: {str(e)}")
 
 
 @mcp.tool(name="peak-hunt-planner", description="Produce a comprehensive hunting plan")
@@ -454,36 +446,19 @@ async def plan_hunt(
         types.EmbeddedResource: An embeddable resource containing the hunting plan, or an error message if the process fails.
     """
 
-    result = await async_plan_hunt(
-        hypothesis=hypothesis,
-        research_document=research_document,
-        able_info=able_info,
-        data_discovery=data_discovery,
-        local_context=local_context,
-        local_data_document=local_data_search_results,
-    )
-
-    hunt_plan = next(
-        (
-            getattr(message, "content", None)
-            for message in reversed(result.messages)
-            if message.source == "hunt_planner" and hasattr(message, "content")
-        ),
-        None,
-    )
-
-    # If no message found from hunt_planner, try to get any message with content
-    if hunt_plan is None:
-        hunt_plan = next(
-            (
-                getattr(message, "content", None)
-                for message in reversed(result.messages)
-                if hasattr(message, "content") and getattr(message, "content", None) is not None
-            ),
-            None,
+    try:
+        result = await async_plan_hunt(
+            hypothesis=hypothesis,
+            research_document=research_document,
+            able_info=able_info,
+            data_discovery=data_discovery,
+            local_context=local_context,
+            local_data_document=local_data_search_results,
         )
-
-    return embeddable_object(data=hunt_plan or "No hunt plan generated.")
+        hunt_plan = extract_hunt_plan(result)
+        return embeddable_object(data=hunt_plan or "No hunt plan generated.")
+    except Exception as e:
+        return embeddable_object(data=f"Error during hunt planning: {str(e)}")
 
 
 #### MAIN ####

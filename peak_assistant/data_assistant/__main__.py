@@ -36,6 +36,7 @@ from ..utils.agent_callbacks import (
     preprocess_messages_logging,
     postprocess_messages_logging,
 )
+from ..utils.result_extractors import extract_data_discovery_report
 
 
 def main() -> None:
@@ -173,16 +174,8 @@ def main() -> None:
             )
         )
 
-        # Find the final message from the "critic" agent using next() and a generator expression
-        data_sources_message = next(
-            (
-                getattr(message, "content", None)
-                for message in reversed(data_sources.messages)
-                if hasattr(message, "content")
-                and message.source == "Data_Discovery_Agent"
-            ),
-            None,  # Default value if no "critic" message is found
-        )
+        # Extract data sources using the centralized extractor
+        data_sources_message = extract_data_discovery_report(data_sources)
 
         # Display the data sources and ask for user feedback
         print(data_sources_message)

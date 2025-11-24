@@ -42,6 +42,7 @@ from ..utils.agent_callbacks import (
     preprocess_messages_logging,
     postprocess_messages_logging,
 )
+from ..utils.result_extractors import extract_refined_hypothesis
 
 
 async def refiner(
@@ -370,14 +371,7 @@ Provide feedback organized by criterion name. Only include criteria that scored 
         return result  # Use the correct attribute to access the generated content
     except Exception as e:
         print(f"Error while refining hypotheses: {e}")
-        return TaskResult(
-            messages=[
-                TextMessage(
-                    content=f"Error while refining hypotheses: {e}",
-                    source="system",
-                )
-            ]
-        )
+        raise Exception("An error occurred while refining the hypothesis.") from e
 
 
 def main() -> None:
@@ -503,20 +497,8 @@ def main() -> None:
             )
         )
 
-        # Find the final message from the "critic" agent using next() and a generator expression
-        refined_hypothesis_message = next(
-            (
-                getattr(message, "content")
-                for message in reversed(response.messages)
-                if hasattr(message, "content") and message.source == "refiner"
-            ),
-            "something went wrong",  # Default value if no "critic" message is found
-        )
-
-        # Remove the trailing "YYY-HYPOTHESIS-ACCEPTED-YYY" string
-        current_hypothesis = refined_hypothesis_message.replace(
-            "YYY-HYPOTHESIS-ACCEPTED-YYY", ""
-        ).strip()
+        # Extract the refined hypothesis using the centralized extractor
+        current_hypothesis = extract_refined_hypothesis(response)
 
         # Print the refined hypothesis and ask for user feedback
         print(f"Hypothesis:\n\n{current_hypothesis}")

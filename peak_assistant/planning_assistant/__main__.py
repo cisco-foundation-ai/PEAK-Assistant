@@ -35,6 +35,7 @@ from ..utils.agent_callbacks import (
     preprocess_messages_logging,
     postprocess_messages_logging,
 )
+from ..utils.result_extractors import extract_hunt_plan
 
 from . import plan_hunt
 
@@ -195,15 +196,8 @@ def main() -> None:
             )
         )
 
-        # Find the final message from the "hunt_planner" agent using next() and a generator expression
-        hunt_plan = next(
-            (
-                getattr(message, "content", None)
-                for message in reversed(data_sources.messages)
-                if message.source == "hunt_planner" and hasattr(message, "content")
-            ),
-            "no plan was generated",  # Default value if no "hunt_planner" message is found
-        )
+        # Extract hunt plan using the centralized extractor
+        hunt_plan = extract_hunt_plan(data_sources)
 
         print(f"Hunt plan:\n{'*' * 50}\n{hunt_plan}\n{'*' * 50}")
         
