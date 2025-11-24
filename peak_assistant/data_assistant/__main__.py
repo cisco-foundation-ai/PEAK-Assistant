@@ -61,6 +61,13 @@ def main() -> None:
         default=None,
     )
     parser.add_argument(
+        "-l",
+        "--local-data",
+        help="Path to the local data document (markdown file)",
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
         "-c",
         "--local_context",
         help="Additional local context to consider",
@@ -73,6 +80,11 @@ def main() -> None:
         action="store_true",
         help="Enable verbose output",
         default=False,
+    )
+    parser.add_argument(
+        "--no-feedback",
+        action="store_true",
+        help="Skip user feedback and automatically accept the generated data discovery report"
     )
     args = parser.parse_args()
 
@@ -116,6 +128,19 @@ def main() -> None:
             print(f"Error reading ABLE information: {e}")
             exit(1)
 
+    # Read the contents of the local data document if provided
+    local_data = ""
+    if args.local_data:
+        try:
+            with open(args.local_data, "r", encoding="utf-8") as file:
+                local_data = file.read()
+        except FileNotFoundError:
+            print(f"Error: Local data document '{args.local_data}' not found")
+            exit(1)
+        except Exception as e:
+            print(f"Error reading local data document: {e}")
+            exit(1)
+
     # Read the contents of the local context if provided
     local_context = ""
     if args.local_context:
@@ -136,6 +161,7 @@ def main() -> None:
             identify_data_sources(
                 hypothesis=args.hypothesis,
                 research_document=research_data,
+                local_data_document=local_data,
                 able_info=able_info,
                 local_context=local_context,
                 verbose=args.verbose,
@@ -160,6 +186,11 @@ def main() -> None:
 
         # Display the data sources and ask for user feedback
         print(data_sources_message)
+        
+        if args.no_feedback:
+            print("Skipping user feedback (--no-feedback enabled)")
+            break
+        
         feedback = input(
             "Please provide your feedback on the data sources (or press Enter to approve it): "
         )

@@ -396,6 +396,13 @@ def main() -> None:
         required=True,
     )
     parser.add_argument(
+        "-l",
+        "--local-data",
+        help="Path to the local data document (markdown file)",
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
         "-c",
         "--local_context",
         help="Additional local context to consider",
@@ -410,19 +417,18 @@ def main() -> None:
         default=False,
     )
     parser.add_argument(
-        "-a",
-        "--automated",
+        "--no-feedback",
         action="store_true",
-        help="Enable automated mode",
+        help="Skip user feedback and automatically accept the refined hypothesis",
         default=False,
     )
 
     # Parse the arguments
     args = parser.parse_args()
 
-    # Enforce verbose behavior based on the automated flag
-    if not args.automated:
-        # Force verbose to True if not in automated mode
+    # Enforce verbose behavior based on the no-feedback flag
+    if not args.no_feedback:
+        # Force verbose to True if not in no-feedback mode
         args.verbose = True
 
     # Load environment variables
@@ -452,6 +458,19 @@ def main() -> None:
         print(f"Error reading research document: {e}")
         exit(1)
 
+    # Read the contents of the local data document if provided
+    local_data = None
+    if args.local_data:
+        try:
+            with open(args.local_data, "r", encoding="utf-8") as file:
+                local_data = file.read()
+        except FileNotFoundError:
+            print(f"Error: Local data document '{args.local_data}' not found")
+            exit(1)
+        except Exception as e:
+            print(f"Error reading local data document: {e}")
+            exit(1)
+
     # Read the contents of the local context if provided
     local_context = None
     if args.local_context:
@@ -474,6 +493,7 @@ def main() -> None:
                 hypothesis=current_hypothesis,
                 local_context=local_context or "",
                 research_document=research_data,
+                local_data_document=local_data or "",
                 verbose=args.verbose,
                 previous_run=messages,
                 msg_preprocess_callback=preprocess_messages_logging,
@@ -501,24 +521,24 @@ def main() -> None:
         # Print the refined hypothesis and ask for user feedback
         print(f"Hypothesis:\n\n{current_hypothesis}")
 
-        if not args.automated:
-            feedback = input(
-                "Please provide your feedback on the refined hypothesis (or press Enter to approve it): "
+        if args.no_feedback:
+            # In no-feedback mode, accept the first refinement and exit
+            print(
+                "No-feedback mode: Hypothesis refinement completed.", file=sys.stderr
             )
+            break
+        
+        feedback = input(
+            "Please provide your feedback on the refined hypothesis (or press Enter to approve it): "
+        )
 
-            if feedback.strip():
-                # If feedback is provided, add it to the messages and loop back to the refiner
-                messages.append(
-                    TextMessage(content=f"User feedback: {feedback}\n", source="user")
-                )
-            else:
-                break
+        if feedback.strip():
+            # If feedback is provided, add it to the messages and loop back to the refiner
+            messages.append(
+                TextMessage(content=f"User feedback: {feedback}\n", source="user")
+            )
         else:
-            if "YYY-HYPOTHESIS-ACCEPTED-YYY" in refined_hypothesis_message:
-                print(
-                    "Automated mode: Hypothesis refinement completed.", file=sys.stderr
-                )
-                break
+            break
 
 
 if __name__ == "__main__":

@@ -206,6 +206,13 @@ def main():
         default="",
     )
     parser.add_argument(
+        "-l",
+        "--local-data",
+        help="Path to the local data document (markdown file)",
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
         "-c",
         "--local_context",
         help="Additional local context to consider",
@@ -242,6 +249,19 @@ def main():
         print(f"Error reading research document: {e}")
         exit(1)
 
+    # Read the contents of the local data document if provided
+    local_data = None
+    if args.local_data:
+        try:
+            with open(args.local_data, "r", encoding="utf-8") as file:
+                local_data = file.read()
+        except FileNotFoundError:
+            print(f"Error: Local data document '{args.local_data}' not found")
+            exit(1)
+        except Exception as e:
+            print(f"Error reading local data document: {e}")
+            exit(1)
+
     # Read the contents of the local context if provided
     local_context = None
     if args.local_context:
@@ -260,7 +280,8 @@ def main():
         hypothesizer(
             user_input=args.user_input,
             research_document=research_data,
-            local_context=local_context,
+            local_data_document=local_data or "",
+            local_context=local_context or "",
         )
     )
     print(hypotheses)

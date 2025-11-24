@@ -49,11 +49,23 @@ def main() -> None:
         "-y", "--hypothesis", help="The hunting hypothesis", required=True, default=""
     )
     parser.add_argument(
+        "-l",
+        "--local-data",
+        help="Path to the local data document (markdown file)",
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
         "-c",
         "--local_context",
         help="Additional local context to consider",
         required=False,
         default=None,
+    )
+    parser.add_argument(
+        "--no-feedback",
+        action="store_true",
+        help="Skip user feedback and automatically accept the generated ABLE table"
     )
     args = parser.parse_args()
 
@@ -84,6 +96,19 @@ def main() -> None:
         print(f"Error reading research document: {e}")
         exit(1)
 
+    # Read the contents of the local data document if provided
+    local_data = ""
+    if args.local_data:
+        try:
+            with open(args.local_data, "r", encoding="utf-8") as file:
+                local_data = file.read()
+        except FileNotFoundError:
+            print(f"Error: Local data document '{args.local_data}' not found")
+            exit(1)
+        except Exception as e:
+            print(f"Error reading local data document: {e}")
+            exit(1)
+
     # Read the contents of the local context if provided
     local_context = ""
     if args.local_context:
@@ -104,11 +129,16 @@ def main() -> None:
             able_table(
                 hypothesis=args.hypothesis,
                 research_document=research_data,
+                local_data_document=local_data,
                 local_context=local_context,
                 previous_run=messages,
             )
         )
         print(able)
+
+        if args.no_feedback:
+            print("Skipping user feedback (--no-feedback enabled)")
+            break
 
         feedback = input(
             "Please provide your feedback on the ABLE table (or press Enter to approve it): "
