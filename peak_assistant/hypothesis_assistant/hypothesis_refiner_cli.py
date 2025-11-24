@@ -488,7 +488,7 @@ def main() -> None:
             (
                 getattr(message, "content")
                 for message in reversed(response.messages)
-                if hasattr(message, "content") and message.source == "critic"
+                if hasattr(message, "content") and message.source == "refiner"
             ),
             "something went wrong",  # Default value if no "critic" message is found
         )

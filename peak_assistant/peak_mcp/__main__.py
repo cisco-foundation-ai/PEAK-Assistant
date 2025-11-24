@@ -34,6 +34,7 @@ from pydantic.networks import AnyUrl
 from ..utils import find_dotenv_file
 
 from ..research_assistant import researcher as async_researcher
+from ..research_assistant import local_data_searcher as async_local_data_searcher
 from ..hypothesis_assistant.hypothesis_assistant_cli import (
     hypothesizer as async_hypothesizer,
 )
@@ -194,14 +195,14 @@ async def plan_hunt_prompt() -> str:
 
 
 @mcp.tool(
-    name="peak-researcher",
-    description="Generate a comprehensive cybersecurity threat hunting report for a specified technique or behavior.",
+    name="peak-internet-researcher",
+    description="Generate a comprehensive cybersecurity threat hunting report based on Internet research for a specified technique or behavior.",
 )
-async def researcher(technique: str, local_context: str) -> types.EmbeddedResource:
+async def internet_researcher(technique: str, local_context: str) -> types.EmbeddedResource:
     """
     Orchestrates a multi-agent, multi-stage research workflow to generate a
-    comprehensive cybersecurity threat hunting report for a specified
-    technique or behavior. Always display this report as an artifact.
+    comprehensive cybersecurity threat hunting report based on Internet research 
+    for a specified technique or behavior. Always display this report as an artifact.
 
     Args:
         technique (str): The name or description of the threat actor
@@ -227,29 +228,72 @@ async def researcher(technique: str, local_context: str) -> types.EmbeddedResour
 
     return embeddable_object(data=report)
 
+@mcp.tool(
+    name="peak-local-data-researcher",
+    description="Search local data sources (intel databases, incident reports, ticket systems, etc) for information regarding past incidents or hunts which relate to the specified hunt technique or behavior.",
+)
+async def local_data_researcher(
+    technique: str, 
+    local_context: str,
+    research_document: str
+) -> types.EmbeddedResource:
+    """
+    Search local data sources (intel databases, incident reports, ticket systems, etc) 
+    for information regarding past incidents or hunts which relate to the specified hunt 
+    technique or behavior. Always display this report as an artifact.
+
+    Args:
+        technique (str): The name or description of the threat actor
+            technique or behavior to research.
+        local_context (str, optional): Additional context or constraints to guide
+            the research (e.g., environment, use case). This should be the exact
+            contents of the local context file, not a summary.
+        research_document (str): The exact contents of the research document from the 
+            Internet Researcher tool.
+
+    Returns:
+        types.EmbeddedResource: An embeddable resource containing the research report, or an error
+             message if the process fails.
+    """
+    result = await async_local_data_searcher(technique, local_context, research_document)
+
+    report = next(
+        (
+            getattr(message, "content")
+            for message in reversed(result.messages)
+            if message.source == "summarizer_agent" and hasattr(message, "content")
+        ),
+        "",
+    )
+
+    return embeddable_object(data=report)
+
 
 @mcp.tool(
     name="peak-hypothesizer",
-    description="Generate a list of threat hunting hypotheses based on the provided research document and local computing environment context.",
+    description="Generate a list of threat hunting hypotheses based on the provided Internet research document, local data search results, and local computing environment context.",
 )
 async def hypothesizer(
-    research_document: str, local_context: str
+    research_document: str, 
+    local_context: str,
+    local_data_search_results: str
 ) -> types.EmbeddedResource:
     """
-    Return a list of threat hunting hypotheses based on the provided research document
-    and local computing environment context.
+    Return a list of threat hunting hypotheses based on the provided research document,
+    local data search results, and local computing environment context.
 
     Args:
         research_document (str): The exact contents of the research report.
         local_context (str, optional): Additional context or constraints to guide the research
             (e.g., environment, use case). This should be the exact contents of the local context file,
             not a summary.
+        local_data_search_results (str): The exact contents of the local data search results.
 
     Returns:
         types.EmbeddedResource: A Markdown document containing the list of threat hunting hypotheses, or an error message if the process fails.
     """
     user_input = ""
-    result = await async_hypothesizer(user_input, research_document, local_context)
+    result = await async_hypothesizer(user_input, research_document, local_context, local_data_search_results)
     return embeddable_object(data=result)
 
 
@@ -258,7 +302,10 @@ async def hypothesizer(
     description="Given a threat hunting hypothesis provided by the user, provide suggest improvements to the user.",
 )
 async def hypothesis_refiner(
-    hypothesis: str, research_document: str, local_context: str
+    hypothesis: str, 
+    research_document: str, 
+    local_context: str,
+    local_data_search_results: str
 ) -> types.EmbeddedResource:
     """
     Given a threat hunting hypothesis provided by the user, provide suggest improvements to the user.
@@ -270,6 +317,7 @@ async def hypothesis_refiner(
         local_context (str, optional): Additional context or constraints to guide the research
             (e.g., environment, use case). This should be the exact contents of the local context file,
             not a summary.
+        local_data_search_results (str): The exact contents of the local data search results.
 
     Returns:
         types.EmbeddedResource: An embeddable resource containing the revised hypothesis.
@@ -279,13 +327,14 @@ async def hypothesis_refiner(
         hypothesis=hypothesis,
         research_document=research_document,
         local_context=local_context,
+        local_data_document=local_data_search_results,
     )
 
     refined_hypothesis_message = next(
         (
             getattr(message, "content", "")
             for message in reversed(result.messages)
-            if hasattr(message, "content") and message.source == "critic"
+            if hasattr(message, "content") and message.source == "refiner"
         ),
         "",
     )
@@ -299,7 +348,10 @@ async def hypothesis_refiner(
 
 @mcp.tool(name="peak-able-table", description="Create the PEAK ABLE table.")
 async def able_table(
-    hypothesis: str, research_document: str, local_context: str
+    hypothesis: str, 
+    research_document: str, 
+    local_context: str,
+    local_data_search_results: str
 ) -> types.EmbeddedResource:
     """
     Create the PEAK ABLE table based on the provided hypothesis, research document, and local context.
@@ -311,6 +363,7 @@ async def able_table(
         local_context (str, optional): Additional context or constraints to guide the research
             (e.g., environment, use case). This should be the exact contents of the local context file,
             not a summary.
+        local_data_search_results (str): The exact contents of the local data search results.
 
     Returns:
         types.EmbeddedResource: An embeddable resource containing the ABLE table, or an error message if the process fails.
@@ -320,6 +373,7 @@ async def able_table(
         hypothesis=hypothesis,
         research_document=research_document,
         local_context=local_context,
+        local_data_document=local_data_search_results,
     )
 
     return embeddable_object(data=result)
@@ -333,7 +387,8 @@ async def data_discovery(
     hypothesis: str,
     research_document: str,
     able_info: str,
-    local_context: str
+    local_context: str,
+    local_data_search_results: str
 ) -> types.EmbeddedResource:
     """
     Given the provided threat hunting hypothesis, research report, ABLE table and
@@ -347,6 +402,7 @@ async def data_discovery(
         local_context (str, optional): Additional context or constraints to guide the research
             (e.g., environment, use case). This should be the exact contents of the local context file,
             not a summary.
+        local_data_search_results (str): The exact contents of the local data search results.
 
     Returns:
         types.EmbeddedResource: An embeddable resource containing the indices, sourctypes and key fields
@@ -357,6 +413,7 @@ async def data_discovery(
         research_document=research_document,
         able_info=able_info,
         local_context=local_context,
+        local_data_document=local_data_search_results,
     )
 
     data_source_report = next(
@@ -377,6 +434,7 @@ async def plan_hunt(
     able_info: str,
     data_discovery: str,
     local_context: str,
+    local_data_search_results: str,
 ) -> types.EmbeddedResource:
     """
     Produce a comprehensive hunting plan based on the provided hypothesis, research document, ABLE table,
@@ -390,6 +448,7 @@ async def plan_hunt(
         local_context (str): Additional context or constraints to guide the research
             (e.g., environment, use case). This should be the exact contents of the local context file,
             not a summary.
+        local_data_search_results (str): The exact contents of the local data search results.
 
     Returns:
         types.EmbeddedResource: An embeddable resource containing the hunting plan, or an error message if the process fails.
@@ -401,6 +460,7 @@ async def plan_hunt(
         able_info=able_info,
         data_discovery=data_discovery,
         local_context=local_context,
+        local_data_document=local_data_search_results,
     )
 
     hunt_plan = next(
@@ -411,6 +471,17 @@ async def plan_hunt(
         ),
         None,
     )
+
+    # If no message found from hunt_planner, try to get any message with content
+    if hunt_plan is None:
+        hunt_plan = next(
+            (
+                getattr(message, "content", None)
+                for message in reversed(result.messages)
+                if hasattr(message, "content") and getattr(message, "content", None) is not None
+            ),
+            None,
+        )
 
     return embeddable_object(data=hunt_plan or "No hunt plan generated.")
 
