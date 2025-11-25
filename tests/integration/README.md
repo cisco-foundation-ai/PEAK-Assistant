@@ -21,6 +21,71 @@ These tests make **real API calls** to configured LLM providers and may incur co
 
 ## Running Tests
 
+### Full Workflow Tests
+
+#### CLI Tool Workflow Test
+
+Tests the complete workflow using command-line tools (subprocess calls):
+
+```bash
+# Basic usage
+python tests/integration/test_full_workflow.py "PowerShell Empire"
+
+# With local context file
+python tests/integration/test_full_workflow.py "T1055 Process Injection" \
+    -c /path/to/local_context.txt
+
+# Keep output files for inspection
+python tests/integration/test_full_workflow.py "Cobalt Strike" --keep-files
+
+# Save to specific directory
+python tests/integration/test_full_workflow.py "APT29" \
+    --temp-dir ./test_outputs --keep-files
+```
+
+#### MCP Server Workflow Test
+
+Tests the complete workflow using the MCP server interface (FastMCP client):
+
+```bash
+# Basic usage (ERROR level logs only - cleanest output)
+python tests/integration/test_mcp_full_workflow.py "PowerShell Empire"
+
+# With warnings (WARNING level)
+python tests/integration/test_mcp_full_workflow.py "PowerShell Empire" -v
+
+# With verbose output (INFO level)
+python tests/integration/test_mcp_full_workflow.py "PowerShell Empire" -vv
+
+# With debug output (DEBUG level)
+python tests/integration/test_mcp_full_workflow.py "PowerShell Empire" -vvv
+
+# With local context file
+python tests/integration/test_mcp_full_workflow.py "T1055 Process Injection" \
+    -c /path/to/local_context.txt
+
+# Keep output files for inspection
+python tests/integration/test_mcp_full_workflow.py "Cobalt Strike" --keep-files
+
+# Save to specific directory
+python tests/integration/test_mcp_full_workflow.py "APT29" \
+    --temp-dir ./test_outputs --keep-files
+```
+
+**Verbosity Levels:**
+- Default (no -v): Shows only ERROR messages (cleanest output)
+- `-v`: Shows WARNING and ERROR messages
+- `-vv`: Shows INFO, WARNING, and ERROR messages (detailed progress)
+- `-vvv`: Shows DEBUG, INFO, WARNING, and ERROR messages (full debugging)
+
+**Both workflow tests:**
+- Execute all 7 workflow steps in order
+- Show timing for each step
+- Save outputs to temporary files
+- Display preview of each output
+- Clean up temp files on success (unless --keep-files specified)
+- Test with **real agents and real API calls**
+
 ### Test All Configured Providers
 
 This discovers and tests every provider/model combination in your `model_config.json`:
@@ -101,13 +166,38 @@ Total: 4 | Passed: 4 | Failed: 0 | Errors: 0
 
 ## Cost Considerations
 
-Each test makes one API call with a minimal prompt ("Say 'Hello' and nothing else").
+### Provider Tests
+
+Each provider test makes one API call with a minimal prompt ("Say 'Hello' and nothing else").
 
 - Azure OpenAI: ~$0.0001 per test (depending on model)
 - OpenAI: ~$0.0001 per test (depending on model)
 - Local models (Ollama, LM Studio): Free
 
 Estimate: Testing 5 provider/model combinations ≈ $0.0005
+
+### Workflow Tests
+
+**Full workflow tests are significantly more expensive** as they run all 7 agents with real research/analysis tasks:
+
+1. Internet Research (multi-agent with search)
+2. Local Data Search (optional, may require MCP servers)
+3. Hypothesis Generation
+4. Hypothesis Refinement
+5. ABLE Table Generation
+6. Data Discovery (may require MCP servers)
+7. Hunt Planning
+
+**Estimated costs per workflow run:**
+- **Time:** 5-10 minutes total (varies by model speed)
+- **API Cost:** $0.10 - $0.50 per run (depends on models and topic complexity)
+- **Token Usage:** ~50,000-200,000 tokens across all steps
+
+**Recommendations:**
+- Run workflow tests sparingly (before releases, after major changes)
+- Use `--keep-files` to preserve outputs for inspection
+- Test with smaller/cheaper models first (e.g., gpt-4o-mini)
+- Consider local models for development testing
 
 ## Legacy Tests (Deprecated)
 
