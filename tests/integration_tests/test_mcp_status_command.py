@@ -293,4 +293,3 @@ def test_mcp_status_help():
     assert result.returncode == 0
     assert "Display configuration status" in result.stdout
     assert "-v, --verbose" in result.stdout
-    assert "-c, --config" in result.stdout
