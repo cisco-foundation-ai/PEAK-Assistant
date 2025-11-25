@@ -78,13 +78,56 @@ python tests/integration/test_mcp_full_workflow.py "APT29" \
 - `-vv`: Shows INFO, WARNING, and ERROR messages (detailed progress)
 - `-vvv`: Shows DEBUG, INFO, WARNING, and ERROR messages (full debugging)
 
-**Both workflow tests:**
+#### Streamlit UI Workflow Test
+
+Tests the complete workflow using the Streamlit UI runner functions:
+
+```bash
+# Basic usage (ERROR level logs only - cleanest output)
+python tests/integration/test_streamlit_workflow.py "PowerShell Empire"
+
+# With warnings (WARNING level)
+python tests/integration/test_streamlit_workflow.py "PowerShell Empire" -v
+
+# With verbose output (INFO level)
+python tests/integration/test_streamlit_workflow.py "PowerShell Empire" -vv
+
+# With debug output (DEBUG level)
+python tests/integration/test_streamlit_workflow.py "PowerShell Empire" -vvv
+
+# Enable agent callback logging (creates msgs.txt and results.txt)
+python tests/integration/test_streamlit_workflow.py "PowerShell Empire" --debug-agents
+
+# With local context file
+python tests/integration/test_streamlit_workflow.py "T1055 Process Injection" \
+    -c /path/to/local_context.txt
+
+# Keep output files for inspection
+python tests/integration/test_streamlit_workflow.py "Cobalt Strike" --keep-files
+
+# Save to specific directory
+python tests/integration/test_streamlit_workflow.py "APT29" \
+    --temp-dir ./test_outputs --keep-files
+```
+
+**Verbosity Levels:**
+- Default (no -v): Shows only ERROR messages (cleanest output)
+- `-v`: Shows WARNING and ERROR messages
+- `-vv`: Shows INFO, WARNING, and ERROR messages (detailed progress)
+- `-vvv`: Shows DEBUG, INFO, WARNING, and ERROR messages (full debugging)
+
+**All three workflow tests:**
 - Execute all 7 workflow steps in order
 - Show timing for each step
 - Save outputs to temporary files
 - Display preview of each output
 - Clean up temp files on success (unless --keep-files specified)
 - Test with **real agents and real API calls**
+
+**Differences between the three tests:**
+- **CLI Test** (`test_full_workflow.py`): Tests command-line tools via subprocess, most isolated
+- **MCP Test** (`test_mcp_full_workflow.py`): Tests MCP server interface, validates artifact handling
+- **Streamlit Test** (`test_streamlit_workflow.py`): Tests UI runner functions, validates session state handling
 
 ### Test All Configured Providers
 
