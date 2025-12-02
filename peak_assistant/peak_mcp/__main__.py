@@ -335,8 +335,13 @@ async def hypothesis_refiner(
             local_context=local_context,
             local_data_document=local_data_search_results,
         )
-        refined_hypothesis = extract_refined_hypothesis(result)
-        return embeddable_object(data=refined_hypothesis)
+        refined_hypothesis, acceptance_msg = extract_refined_hypothesis(result, original_hypothesis=hypothesis)
+        
+        # If hypothesis was accepted immediately, include message in response
+        if acceptance_msg:
+            return embeddable_object(data=f"{acceptance_msg}\n\n{refined_hypothesis}")
+        else:
+            return embeddable_object(data=refined_hypothesis)
     except Exception as e:
         return embeddable_object(data=f"Error during hypothesis refinement: {str(e)}")
 

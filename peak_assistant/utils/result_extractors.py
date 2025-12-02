@@ -104,9 +104,43 @@ def extract_local_data_report(result: TaskResult) -> str:
     return extract_agent_result(result, "local_data_searcher")
 
 
-def extract_refined_hypothesis(result: TaskResult) -> str:
-    """Extract refined hypothesis from refiner agent result."""
-    return extract_agent_result(result, "refiner")
+def extract_refined_hypothesis(result: TaskResult, original_hypothesis: Optional[str] = None) -> tuple[str, Optional[str]]:
+    """Extract refined hypothesis from refiner agent result.
+    
+    Args:
+        result: TaskResult from the refiner agent
+        original_hypothesis: The original hypothesis passed to refiner(). If provided and the
+                           critic immediately accepts without refinement, this will be returned
+                           instead of attempting to parse it from messages.
+    
+    Returns:
+        tuple: (hypothesis, optional_user_message)
+        - hypothesis: The refined or original hypothesis
+        - optional_user_message: Message to display to user if hypothesis was accepted 
+                                without changes, or None if refinement occurred
+    """
+    # Check if hypothesis was immediately accepted by critic without refinement
+    has_refiner_message = any(
+        msg.source == "refiner" for msg in result.messages
+    )
+    
+    if not has_refiner_message:
+        # Check if critic immediately accepted
+        has_acceptance = any(
+            "YYY-HYPOTHESIS-ACCEPTED-YYY" in getattr(msg, "content", "")
+            for msg in result.messages
+            if msg.source == "critic"
+        )
+        
+        if has_acceptance and original_hypothesis is not None:
+            # Return the original hypothesis with acceptance message
+            return (
+                original_hypothesis,
+                "Your hypothesis meets all quality criteria and has been accepted without changes."
+            )
+    
+    # Normal extraction path - refinement occurred
+    return (extract_agent_result(result, "refiner"), None)
 
 
 def extract_data_discovery_report(result: TaskResult) -> str:

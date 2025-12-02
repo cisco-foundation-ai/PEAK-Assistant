@@ -329,7 +329,7 @@ Provide feedback organized by criterion name. Only include criteria that scored 
     # Always add these, no matter if it's the first run or a subsequent one
     messages = [
         TextMessage(
-            content=f"Here is the user's hypothesis: {hypothesis}\n", source="user"
+            content=f"The current hypothesis is: {hypothesis}\n", source="user"
         ),
         TextMessage(
             content=f"Here is the research document:\n{research_document}\n",
@@ -498,8 +498,12 @@ def main() -> None:
         )
 
         # Extract the refined hypothesis using the centralized extractor
-        current_hypothesis = extract_refined_hypothesis(response)
+        current_hypothesis, acceptance_msg = extract_refined_hypothesis(response, original_hypothesis=current_hypothesis)
 
+        # If hypothesis was accepted immediately, print acceptance message
+        if acceptance_msg:
+            print(f"\n{acceptance_msg}\n")
+        
         # Print the refined hypothesis and ask for user feedback
         print(f"Hypothesis:\n\n{current_hypothesis}")
 

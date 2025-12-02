@@ -180,8 +180,15 @@ async def run_hypothesis_refiner(debug_agents: bool = True):
         )
 
         st.session_state["Refinement_previous_messages"] = result.messages
-        refined_hypothesis = extract_refined_hypothesis(result)
+        refined_hypothesis, acceptance_msg = extract_refined_hypothesis(result, original_hypothesis=current_hypothesis)
         st.session_state["Hypothesis"] = refined_hypothesis
+        
+        # If hypothesis was accepted immediately, add message to chat
+        if acceptance_msg:
+            st.session_state["Refinement_messages"].append({
+                "role": "assistant",
+                "content": acceptance_msg
+            })
     except Exception as e:
         st.error(f"Error during hypothesis refinement: {e}")
         return False
