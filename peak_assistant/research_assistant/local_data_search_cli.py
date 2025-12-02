@@ -23,50 +23,39 @@
 
 
 import os
+import sys
 import argparse
+import asyncio
 from typing import List
 from dotenv import load_dotenv
-import asyncio
 
 from autogen_agentchat.messages import TextMessage
 
-from . import identify_data_sources
 from ..utils import find_dotenv_file
 from ..utils.agent_callbacks import (
     preprocess_messages_logging,
     postprocess_messages_logging,
 )
-from ..utils.result_extractors import extract_data_discovery_report
+
+from . import local_data_searcher
 
 
 def main() -> None:
     # Set up argument parser
     parser = argparse.ArgumentParser(
-        description="Given a threat hunting technique dossier and a hypothesis, determine what relevant data is present on the Splunk server."
+        description="Search local data sources for information relevant to threat hunting"
     )
-    parser.add_argument("-e", "--environment", help="Path to specific .env file to use")
+    parser.add_argument(
+        "-t",
+        "--technique",
+        required=True,
+        help="The cybersecurity technique to research",
+    )
     parser.add_argument(
         "-r",
         "--research",
-        help="Path to the research document (markdown file)",
         required=True,
-    )
-    parser.add_argument(
-        "-y", "--hypothesis", help="The hunting hypothesis", required=True
-    )
-    parser.add_argument(
-        "-a",
-        "--able_info",
-        help="The Actor, Behavior, Location and Evidence (ABLE) information",
-        required=False,
-        default=None,
-    )
-    parser.add_argument(
-        "-l",
-        "--local-data",
-        help="Path to the local data document (markdown file)",
-        required=False,
-        default=None,
+        help="Path to the research document for context (markdown file)",
     )
     parser.add_argument(
         "-c",
@@ -75,17 +64,19 @@ def main() -> None:
         required=False,
         default=None,
     )
+    parser.add_argument("-e", "--environment", help="Path to specific .env file to use")
     parser.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        help="Enable verbose output",
-        default=False,
+        "-v", "--verbose", action="store_true", help="Enable verbose output"
     )
     parser.add_argument(
         "--no-feedback",
         action="store_true",
-        help="Skip user feedback and automatically accept the generated data discovery report"
+        help="Skip user feedback and automatically accept the generated report"
+    )
+    parser.add_argument(
+        "--debug-agents",
+        action="store_true",
+        help="Enable agent debug logging to msgs.txt and results.txt"
     )
     args = parser.parse_args()
 
@@ -116,34 +107,8 @@ def main() -> None:
         print(f"Error reading research document: {e}")
         exit(1)
 
-    # Read the contents of the ABLE information if provided
-    able_info = ""
-    if args.able_info:
-        try:
-            with open(args.able_info, "r", encoding="utf-8") as file:
-                able_info = file.read()
-        except FileNotFoundError:
-            print(f"Error: ABLE information file '{args.able_info}' not found")
-            exit(1)
-        except Exception as e:
-            print(f"Error reading ABLE information: {e}")
-            exit(1)
-
-    # Read the contents of the local data document if provided
-    local_data = ""
-    if args.local_data:
-        try:
-            with open(args.local_data, "r", encoding="utf-8") as file:
-                local_data = file.read()
-        except FileNotFoundError:
-            print(f"Error: Local data document '{args.local_data}' not found")
-            exit(1)
-        except Exception as e:
-            print(f"Error reading local data document: {e}")
-            exit(1)
-
     # Read the contents of the local context if provided
-    local_context = ""
+    local_context = None
     if args.local_context:
         try:
             with open(args.local_context, "r", encoding="utf-8") as file:
@@ -156,50 +121,80 @@ def main() -> None:
             exit(1)
 
     messages: List[TextMessage] = list()
+
+    debug_agents_opts = dict() 
+
+    # If debug agents is enabled, add the debug options
+    if args.debug_agents:
+        debug_agents_opts = {
+            "msg_preprocess_callback": preprocess_messages_logging,
+            "msg_preprocess_kwargs": {"agent_id": "local_data_searcher"},
+            "msg_postprocess_callback": postprocess_messages_logging,
+            "msg_postprocess_kwargs": {"agent_id": "local_data_searcher"},
+        }
+    
     while True:
-        # Run the hypothesizer asynchronously
-        data_sources = asyncio.run(
-            identify_data_sources(
-                hypothesis=args.hypothesis,
-                research_document=research_data,
-                local_data_document=local_data,
-                able_info=able_info,
-                local_context=local_context,
-                verbose=args.verbose,
-                previous_run=messages,
-                msg_preprocess_callback=preprocess_messages_logging,
-                msg_preprocess_kwargs={"agent_id": "data-discovery"},
-                msg_postprocess_callback=postprocess_messages_logging,
-                msg_postprocess_kwargs={"agent_id": "data-discovery"},
+        try:
+            # Run the local data searcher asynchronously
+            task_result = asyncio.run(
+                local_data_searcher(
+                    technique=args.technique,
+                    local_context=local_context or "",
+                    research_document=research_data,
+                    verbose=args.verbose,
+                    previous_run=messages,
+                    **debug_agents_opts
+                )
             )
+        except RuntimeError as e:
+            # Handle case where no MCP servers are available
+            if "No MCP workbenches available" in str(e):
+                print("⚠️  No MCP servers available for local data search", file=sys.stderr)
+                print("# Local Data Search Report\n\nNo local data sources available.")
+                return
+            raise
+
+        # Find the final message from the "local_data_summarizer_agent" using next() and a generator expression
+        report = next(
+            (
+                getattr(message, "content", None)
+                for message in reversed(task_result.messages)
+                if message.source == "local_data_summarizer_agent" and hasattr(message, "content")
+            ),
+            "no report generated",  # Default value if no "local_data_summarizer_agent" message is found
         )
 
-        # Extract data sources using the centralized extractor
-        data_sources_message = extract_data_discovery_report(data_sources)
+        if not report:
+            print("No report generated. Please check the input and try again.")
+            return
 
-        # Display the data sources and ask for user feedback
-        print(data_sources_message)
+        # Remove the termination string
+        report = report.replace("YYY-TERMINATE-YYY", "").strip()
+
+        # Display the report and ask for user feedback (unless skipped)
+        print(f"Report:\n{report}\n")
         
         if args.no_feedback:
             print("Skipping user feedback (--no-feedback enabled)")
             break
         
         feedback = input(
-            "Please provide your feedback on the data sources (or press Enter to approve it): "
+            "Please provide your feedback on the report (or press Enter to approve it): "
         )
 
         if feedback.strip():
             # If feedback is provided, add it to the messages and loop back to
-            # the data discovery team for further refinement
+            # the research team for further refinement
             messages = [
                 TextMessage(
-                    content=f"The current data sources draft is: {data_sources_message}\n",
-                    source="user",
+                    content=f"The current report draft is: {report}\n", source="user"
                 ),
                 TextMessage(content=f"User feedback: {feedback}\n", source="user"),
             ]
         else:
             break
+
+    # Output final report to stdout (already printed above)
 
 
 if __name__ == "__main__":

@@ -29,6 +29,13 @@ from peak_assistant.utils.agent_callbacks import (
     preprocess_messages_logging,
     postprocess_messages_logging,
 )
+from peak_assistant.utils.result_extractors import (
+    extract_research_report,
+    extract_local_data_report,
+    extract_refined_hypothesis,
+    extract_data_discovery_report,
+    extract_hunt_plan,
+)
 from peak_assistant.research_assistant import researcher, local_data_searcher
 from peak_assistant.hypothesis_assistant.hypothesis_assistant_cli import hypothesizer
 from peak_assistant.hypothesis_assistant.hypothesis_refiner_cli import refiner
@@ -63,29 +70,21 @@ async def run_researcher(debug_agents: bool = True):
     # Get user_id from session state for MCP OAuth authentication
     user_id = st.session_state.get("user_id", f"streamlit_user_{id(st.session_state)}")
     
-    result = await researcher(
-        technique=st.session_state["Research_messages"][0]["content"],
-        local_context=st.session_state["local_context"],
-        previous_run=previous_messages,
-        user_id=user_id,
-        **debug_agents_opts
-    )
+    try:
+        result = await researcher(
+            technique=st.session_state["Research_messages"][0]["content"],
+            local_context=st.session_state["local_context"],
+            previous_run=previous_messages,
+            user_id=user_id,
+            **debug_agents_opts
+        )
 
-    st.session_state["Research_previous_messages"] = result.messages
-
-    # Find the final message from the "summarizer_agent" using next() and a generator expression
-    # Note: Filter out empty content since some models may send empty messages
-    report = next(
-        (
-            getattr(message, "content", None)
-            for message in reversed(result.messages)
-            if message.source == "summarizer_agent" 
-            and hasattr(message, "content")
-        ),
-        "no report generated",  # Default value if no "summarizer_agent" message is found
-    )
-
-    st.session_state["Research_document"] = report 
+        st.session_state["Research_previous_messages"] = result.messages
+        report = extract_research_report(result)
+        st.session_state["Research_document"] = report
+    except Exception as e:
+        st.error(f"Error during research: {e}")
+        return False 
 
     return True
 
@@ -112,33 +111,22 @@ async def run_local_data(debug_agents: bool = True):
     # Get user_id from session state for MCP OAuth authentication
     user_id = st.session_state.get("user_id", f"streamlit_user_{id(st.session_state)}")
     
-    result = await local_data_searcher(
-        technique=st.session_state["Local_Data_messages"][0]["content"],
-        research_document=st.session_state["Research_document"],
-        local_context=st.session_state["local_context"],
-        previous_run=previous_messages,
-        user_id=user_id,
-        **debug_agents_opts
-    )
+    try:
+        result = await local_data_searcher(
+            technique=st.session_state["Local_Data_messages"][0]["content"],
+            research_document=st.session_state["Research_document"],
+            local_context=st.session_state["local_context"],
+            previous_run=previous_messages,
+            user_id=user_id,
+            **debug_agents_opts
+        )
 
-    st.session_state["Local_Data_previous_messages"] = result.messages
-
-    # Find the final message from the "summarizer_agent" using next() and a generator expression
-    # Note: Filter out empty content since some models may send empty messages
-    report = next(
-        (
-            getattr(message, "content", None)
-            for message in reversed(result.messages)
-            if message.source == "local_data_summarizer_agent" 
-            and hasattr(message, "content")
-        ),
-        "no local data report generated",  # Default value if no "local_data_summarizer_agent" message is found
-    )
-
-    # Remove the trailing "YYY-TERMINATE-YYY" string if present
-    report = report.replace("YYY-TERMINATE-YYY", "").strip()
-
-    st.session_state["Local_Data_document"] = report 
+        st.session_state["Local_Data_previous_messages"] = result.messages
+        report = extract_local_data_report(result)
+        st.session_state["Local_Data_document"] = report
+    except Exception as e:
+        st.error(f"Error during local data search: {e}")
+        return False 
 
     return True
 
@@ -181,33 +169,29 @@ async def run_hypothesis_refiner(debug_agents: bool = True):
         content=f"The current hypothesis is: {current_hypothesis}\n", source="user"
     ))
 
-    result = await refiner(
-        hypothesis=current_hypothesis,
-        local_context=st.session_state["local_context"],
-        research_document=st.session_state["Research_document"],
-        local_data_document=st.session_state["Local_Data_document"],
-        previous_run=previous_messages,
-        **debug_agents_opts
-    )
+    try:
+        result = await refiner(
+            hypothesis=current_hypothesis,
+            local_context=st.session_state["local_context"],
+            research_document=st.session_state["Research_document"],
+            local_data_document=st.session_state["Local_Data_document"],
+            previous_run=previous_messages,
+            **debug_agents_opts
+        )
 
-    st.session_state["Refinement_previous_messages"] = result.messages
-
-    # Find the final message from the "critic" agent using next() and a generator expression
-    # Note: Filter out empty content since some models may send empty messages
-    refined_hypothesis_message = next(
-        (
-            getattr(message, "content", None)
-            for message in reversed(result.messages)
-            if message.source == "refiner" 
-            and hasattr(message, "content")
-        ),
-        "Could not refine hypothesis. Something went wrong.",  # Default value if no "critic" message is found
-    )
-    
-    # Remove the trailing "YYY-HYPOTHESIS-ACCEPTED-YYY" string if present
-    refined_hypothesis = refined_hypothesis_message.replace("YYY-HYPOTHESIS-ACCEPTED-YYY", "").strip()
-
-    st.session_state["Refinement_document"] = refined_hypothesis
+        st.session_state["Refinement_previous_messages"] = result.messages
+        refined_hypothesis, acceptance_msg = extract_refined_hypothesis(result, original_hypothesis=current_hypothesis)
+        st.session_state["Hypothesis"] = refined_hypothesis
+        
+        # If hypothesis was accepted immediately, add message to chat
+        if acceptance_msg:
+            st.session_state["Refinement_messages"].append({
+                "role": "assistant",
+                "content": acceptance_msg
+            })
+    except Exception as e:
+        st.error(f"Error during hypothesis refinement: {e}")
+        return False
     
     # Note: We don't update the main Hypothesis state during refinement iterations
     # to avoid triggering the reset logic in app.py
@@ -257,7 +241,7 @@ async def run_data_discovery(debug_agents: bool = False):
 
     try:
         data_sources_result = await identify_data_sources(
-            hypothesis=current_hypothesis,
+            hypothesis=st.session_state["Hypothesis"],
             local_context=st.session_state["local_context"],
             research_document=st.session_state["Research_document"],
             local_data_document=st.session_state["Local_Data_document"],
@@ -266,38 +250,12 @@ async def run_data_discovery(debug_agents: bool = False):
             **debug_agents_opts
         )
 
-        # Extract the actual content from the TaskResult object
-        data_sources_message = next(
-            (
-                getattr(message, "content", None)
-                for message in reversed(data_sources_result.messages)
-                if hasattr(message, "content")
-                and message.source == "Data_Discovery_Agent"
-            ),
-            None,  # Default value if no message is found
-        )
-
-        # If no message found from Data_Discovery_Agent, try to get any message with content
-        if data_sources_message is None:
-            data_sources_message = next(
-                (
-                    getattr(message, "content", None)
-                    for message in reversed(data_sources_result.messages)
-                    if hasattr(message, "content") and getattr(message, "content", None) is not None
-                ),
-                None,
-            )
-
-        # Final fallback if still None
-        if data_sources_message is None:
-            data_sources_message = "Error: Unable to identify data sources due to system configuration issues. Please check MCP server configuration."
-
+        data_sources_message = extract_data_discovery_report(data_sources_result)
+        st.session_state["Discovery_document"] = data_sources_message
     except Exception as e:
-        # Handle MCP or other errors gracefully
-        data_sources_message = f"Error: Unable to identify data sources due to system error: {str(e)}\n\nPlease check your MCP server configuration and ensure all required services are running."
+        st.error(f"Error during data discovery: {e}")
+        return False
 
-    st.session_state["Discovery_document"] = data_sources_message
-    
     return True
 
 async def run_hunt_plan(debug_agents: bool = False):
@@ -330,7 +288,7 @@ async def run_hunt_plan(debug_agents: bool = False):
 
     try:
         hunt_plan_result = await plan_hunt(
-            hypothesis=current_hypothesis,
+            hypothesis=st.session_state["Hypothesis"],
             research_document=st.session_state["Research_document"],
             local_data_document=st.session_state["Local_Data_document"],
             able_info=st.session_state["ABLE_document"],
@@ -340,36 +298,10 @@ async def run_hunt_plan(debug_agents: bool = False):
             **debug_agents_opts
         )
 
-        # Extract the actual content from the TaskResult object
-        hunt_plan_message = next(
-            (
-                getattr(message, "content", None)
-                for message in reversed(hunt_plan_result.messages)
-                if hasattr(message, "content")
-                and message.source == "hunt_planner"
-            ),
-            None,  # Default value if no message is found
-        )
-
-        # If no message found from hunt_planner, try to get any message with content
-        if hunt_plan_message is None:
-            hunt_plan_message = next(
-                (
-                    getattr(message, "content", None)
-                    for message in reversed(hunt_plan_result.messages)
-                    if hasattr(message, "content") and getattr(message, "content", None) is not None
-                ),
-                None,
-            )
-
-        # Final fallback if still None
-        if hunt_plan_message is None:
-            hunt_plan_message = "Error: Unable to create hunt plan due to system configuration issues. Please check system configuration."
-
+        hunt_plan_message = extract_hunt_plan(hunt_plan_result)
+        st.session_state["Hunt Plan_document"] = hunt_plan_message
     except Exception as e:
-        # Handle errors gracefully
-        hunt_plan_message = f"Error: Unable to create hunt plan due to system error: {str(e)}\n\nPlease check your system configuration and ensure all required services are running."
+        st.error(f"Error during hunt planning: {e}")
+        return False
 
-    st.session_state["Hunt Plan_document"] = hunt_plan_message
-    
     return True

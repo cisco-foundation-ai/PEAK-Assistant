@@ -35,6 +35,7 @@ from ..utils.agent_callbacks import (
     preprocess_messages_logging,
     postprocess_messages_logging,
 )
+from ..utils.result_extractors import extract_hunt_plan
 
 from . import plan_hunt
 
@@ -69,6 +70,13 @@ def main() -> None:
         default=None,
     )
     parser.add_argument(
+        "-l",
+        "--local-data",
+        help="Path to the local data document (markdown file)",
+        required=False,
+        default=None,
+    )
+    parser.add_argument(
         "-c",
         "--local_context",
         help="Additional local context to consider",
@@ -81,6 +89,11 @@ def main() -> None:
         action="store_true",
         help="Enable verbose output",
         default=False,
+    )
+    parser.add_argument(
+        "--no-feedback",
+        action="store_true",
+        help="Skip user feedback and automatically accept the generated hunt plan"
     )
     args = parser.parse_args()
 
@@ -137,6 +150,19 @@ def main() -> None:
             print(f"Error reading data discovery information: {e}")
             exit(1)
 
+    # Read the contents of the local data document if provided
+    local_data = None
+    if args.local_data:
+        try:
+            with open(args.local_data, "r", encoding="utf-8") as file:
+                local_data = file.read()
+        except FileNotFoundError:
+            print(f"Error: Local data document '{args.local_data}' not found")
+            exit(1)
+        except Exception as e:
+            print(f"Error reading local data document: {e}")
+            exit(1)
+
     # Read the contents of the local context if provided
     local_context = None
     if args.local_context:
@@ -155,8 +181,9 @@ def main() -> None:
         # Run the hypothesizer asynchronously
         data_sources = asyncio.run(
             plan_hunt(
-                hypothesis=args.hypothesis,
                 research_document=research_data,
+                local_data_document=local_data or "",
+                hypothesis=args.hypothesis,
                 able_info=able_info or "",
                 data_discovery=data_discovery or "",
                 local_context=local_context or "",
@@ -169,17 +196,15 @@ def main() -> None:
             )
         )
 
-        # Find the final message from the "hunt_planner" agent using next() and a generator expression
-        hunt_plan = next(
-            (
-                getattr(message, "content", None)
-                for message in reversed(data_sources.messages)
-                if message.source == "hunt_planner" and hasattr(message, "content")
-            ),
-            "no plan was generated",  # Default value if no "hunt_planner" message is found
-        )
+        # Extract hunt plan using the centralized extractor
+        hunt_plan = extract_hunt_plan(data_sources)
 
         print(f"Hunt plan:\n{'*' * 50}\n{hunt_plan}\n{'*' * 50}")
+        
+        if args.no_feedback:
+            print("Skipping user feedback (--no-feedback enabled)")
+            break
+        
         feedback = input(
             "Please provide your feedback on the plan (or press Enter to approve it): "
         )

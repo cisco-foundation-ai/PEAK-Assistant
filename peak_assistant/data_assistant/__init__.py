@@ -261,11 +261,4 @@ async def _run_data_discovery_with_workbench(
         return result
     except Exception as e:
         print(f"Error during data source identification: {e}")
-        return TaskResult(
-            messages=[
-                TextMessage(
-                    content=f"An error occurred during data source identification: {e}",
-                    source="system",
-                )
-            ]
-        )
+        raise Exception("An error occurred while identifying data sources.") from e
