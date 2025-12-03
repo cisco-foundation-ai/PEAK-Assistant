@@ -667,7 +667,7 @@ This demonstrates mixing three different provider instances and four different m
 
 **Error:** `Unsupported provider type 'xyz'`
 
-**Solution:** The provider `type` field must be one of: `"azure"`, `"openai"`. Check for typos in your provider definitions.
+**Solution:** The provider `type` field must be one of: `"azure"`, `"openai"`, `"anthropic"`. Check for typos in your provider definitions.
 
 ### Missing Required Fields
 

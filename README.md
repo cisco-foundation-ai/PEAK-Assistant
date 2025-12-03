@@ -83,7 +83,7 @@ You will also need to configure the MCP servers the assistant uses to research t
     "research-external": [
       "tavily-search"
     ],
-    "research-internal": [
+    "local-data-search": [
       "atlassian-remote-mcp"
     ],
     "data_discovery": [
@@ -93,12 +93,13 @@ You will also need to configure the MCP servers the assistant uses to research t
 }
 ```
 
-At a minimum, you must provide the following types of MCP server (at least one of each):
+You must provide MCP servers for all three required server groups:
 
-* Internet search (e.g., Tavily)
-* Splunk search (e.g., the official Splunk MCP server)
+* **Internet search** (e.g., Tavily) - for external research
+* **Local data sources** (e.g., Atlassian MCP, Confluence, Jira) - for internal research based on past hunts and organizational knowledge
+* **SIEM/data platform** (e.g., Splunk MCP server) - for automated data discovery
 
-If you want to incorporate local data sources, for example to learn from the results of past hunts you may have performed on a topic, you may optionally also include MCP servers for those sources, though they are not required. In this example, we used [Atlassian's offical MCP server](https://www.atlassian.com/platform/remote-mcp-server) to allow the Assistant to search Jira tickets and Confluence wiki pages.
+In this example configuration, we use Tavily for Internet searches, [Atlassian's official MCP server](https://www.atlassian.com/platform/remote-mcp-server) to search Jira tickets and Confluence wiki pages, and the Splunk MCP server for data discovery.
 
 Feel free to substitute MCP servers with functional equivalents. For example, if you have a different Internet search provider, replace the Tavily configuration with whatever you're using.
 
@@ -108,10 +109,10 @@ In addition to defining the servers, you'll also have to add them to the appropr
 The server groups are:
 
 * `research-external`: Used for any Internet searches in the topic research phase
-* `research-internal`: Used for searching any local data sources during the topic research phase
-* `data-discovery`: Allows access to Splunk (or whatever other SIEM you use) for purposes of automated data discovery. 
+* `local-data-search`: Used for searching any local data sources during the topic research phase
+* `data_discovery`: Allows access to Splunk (or whatever other SIEM you use) for purposes of automated data discovery. 
 
-You may add multiple MCP servers to each group if you would like the Assistant to have access to several sources, but you **must have at least one server in each group**.
+You may add multiple MCP servers to each group if you would like the Assistant to have access to several sources. **All three groups are required and must have at least one server configured.**
 
 ### Environment Variable Interpolation
 
@@ -235,13 +236,13 @@ More complex configurations are also supported, including:
 See **[MODEL_CONFIGURATION.md](MODEL_CONFIGURATION.md)** for the full guide.
 
 ## Running the Assistant
-Now that it is configured it's time to run the app. Since you installed this as a module, you can simpley run the assistant:
+Now that it is configured it's time to run the app. Since you installed this as a module, you can simply run the assistant:
 
 ```bash
 uv run peak-assistant
 ```
 
-By default, the application will be available at `http://127.0.0.1:8501/` (or HTTPS if you have a certificate configured).
+By default, the application will be available at `https://127.0.0.1:8501/`.
 
 ## Workflow
 
@@ -293,6 +294,7 @@ Once you have the image downloaded, you can run the container by running the fol
 		--mount "type=bind,src=$(PWD)/key.pem,target=/certs/key.pem" \
 		--mount "type=bind,src=$(PWD)/context.txt,target=/home/peakassistant/context.txt" \
 		--mount "type=bind,src=$(PWD)/.env,target=/home/peakassistant/.env" \
+		--mount "type=bind,src=$(PWD)/model_config.json,target=/home/peakassistant/model_config.json" \
 		--mount "type=bind,src=$(PWD)/mcp_servers.json,target=/home/peakassistant/mcp_servers.json" \
 		-p "127.0.0.1:8501:8501" \
 		ghcr.io/cisco-foundation-ai/peak-assistant:latest
@@ -308,7 +310,7 @@ Note that you will still need to provide the same configuration files as you wou
 The sample command mounts the current directory as `/certs`, and maps the other files into the working directory of the app running in the container. It assumes these files are in the current directory, but you can adjust the paths as needed. 
 
 ### Accessing the Assistant via Docker
-Once the container is running, you can access it just as though it were running natively. Open `http://127.0.0.1:8501/` (or HTTPS if configured) in your browser.
+Once the container is running, you can access it just as though it were running natively. Open `https://127.0.0.1:8501/` in your browser.
 
 ## FAQ
 ### What if I want to use Podman instead of Docker to run the containers?
