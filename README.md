@@ -71,7 +71,7 @@ You will also need to configure the MCP servers the assistant uses to research t
         "https://YOUR-SERVER-HOST:8089/services/mcp",
         "--header",
         "Authorization: Bearer YOUR-SPLUNK-AUTH-TOKEN"
-      ],
+      ]
     },
     "atlassian-remote-mcp": {
       "transport": "sse",
@@ -205,12 +205,32 @@ and generate more accurate queries. It's not required, because the automated dat
 
 The PEAK Assistant requires a `model_config.json` file to configure LLM providers and models. This file must be placed in the repository root (the directory from which you run the application).
 
-For complete documentation on model configuration, including:
-- Detailed provider setup (Azure OpenAI, OpenAI, OpenAI-compatible, Anthropic)
+The following example shows a basic configuration that uses OpenAI's `gpt-4.1` model for everything.
+
+```json
+{
+  "version": "1",
+  "providers": {
+    "openai": {
+      "type": "openai",
+      "config": {
+        "api_key": "${OPENAI_API_KEY}",
+      }
+    }
+  },
+  "defaults": {
+    "provider": "openai",
+    "model": "gpt-4.1"
+  }
+}
+```
+
+More complex configurations are also supported, including:
+
+- Use of multiple LLM providers (Azure OpenAI, OpenAI, OpenAI-compatible local or remote, Anthropic)
 - Per-agent model assignment
-- Multiple configuration examples
+- Assigning models to groups of agents at once
 - Environment variable interpolation
-- Troubleshooting
 
 See **[MODEL_CONFIGURATION.md](MODEL_CONFIGURATION.md)** for the full guide.
 
@@ -237,29 +257,14 @@ The PEAK-Assistant follows a structured workflow that aligns with the PEAK Threa
 
 ## Live Integration Tests (optional)
 
-This repository includes live integration tests that make real calls to the configured LLM provider. These tests are marked with `@pytest.mark.live` and require a properly configured `model_config.json` file in the test directory.
+This repository includes live integration tests that make real calls to the configured LLM provider. These tests are marked with `@pytest.mark.live` and require a properly configured `model_config.json` file in the current working directory.
 
 - Run all live tests:
   ```bash
-  pytest -m live tests/integration -q
+  uv run pytest -m live tests/integration -q
   ```
 
-- OpenAI (native): ensure your `model_config.json` is configured with OpenAI provider and does not set `base_url`.
-  ```bash
-  pytest -m live tests/integration/test_openai_live.py -q
-  ```
-
-- OpenAI-compatible (custom base_url): ensure your `model_config.json` is configured with OpenAI provider and includes `base_url` (e.g., `http://localhost:11434/v1`).
-  ```bash
-  pytest -m live tests/integration/test_openai_base_url_live.py -q
-  ```
-
-- Azure OpenAI: ensure your `model_config.json` is configured with Azure provider.
-  ```bash
-  pytest -m live tests/integration/test_azure_live.py -q
-  ```
-
-Note: These tests make real network calls and may incur costs when using hosted providers.
+Note: These tests make real network calls and may incur costs when using hosted LLM providers.
 
 ## Docker Support
 
@@ -269,7 +274,7 @@ The PEAK Assistant can be run in a Docker container. To do this, you will need t
 The project provides pre-built Docker images, which can be downloaded by running the following command:
 
 ```bash
-docker pull ghcr.io/peak-assistant/peak-assistant:latest
+docker pull ghcr.io/cisco-foundation-ai/peak-assistant:latest
 ```
 
 ### Building the Docker image from source
