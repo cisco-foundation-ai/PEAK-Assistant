@@ -26,14 +26,12 @@ import logging
 from dotenv import load_dotenv
 
 import streamlit as st 
-from streamlit_extras.stylable_container import stylable_container
 
 from peak_assistant.utils import find_dotenv_file
 from peak_assistant.streamlit.util.ui import peak_assistant_chat, peak_assistant_hypothesis_list
 from peak_assistant.streamlit.util.runners import run_researcher, run_local_data, run_hypothesis_generator, run_hypothesis_refiner, run_able_table, run_data_discovery, run_hunt_plan
 from peak_assistant.streamlit.util.hypothesis_helpers import get_current_hypothesis
 from peak_assistant.streamlit.util.helpers import (
-    reset_session, 
     switch_tabs, 
     load_mcp_server_configs, 
     organize_servers_by_group,
@@ -157,11 +155,6 @@ if "code" in query_params and "state" in query_params:
         logger.debug(f"Received state: {state}")
         logger.debug(f"Available OAuth states: {[k for k in st.session_state.keys() if k.startswith('oauth_state_')]}")
 
-# Reset the app if requested. _reset_requested flag is set in utils.helpers.reset_session()
-if st.session_state.get("_reset_requested", False):
-    del st.session_state["_reset_requested"]
-    switch_tabs(0)
-
 # Read the local context file if it's not already in the session state.
 if "local_context" not in st.session_state:
     # Find and load our local context file (used for the agents)
@@ -171,8 +164,10 @@ if "local_context" not in st.session_state:
     st.session_state["local_context"] = local_context
 
 # Use the full page instead of a narrow central column
-st.set_page_config(layout="wide")
-st.set_page_config(page_title="PEAK Assistant")
+st.set_page_config(
+    layout="wide",
+    page_title="PEAK Assistant"
+)
 
 
 # Reduce the margin above the tabs
@@ -183,25 +178,6 @@ st.markdown("""
         }
     </style>
     """, unsafe_allow_html=True)
-
-
-with st.sidebar:
-
-    st.image(get_asset_path("images/peak-logo-dark.png"), width="stretch")
-
-    with stylable_container(
-        key="reset_button_container",
-        css_styles="""
-        button {
-            background-color: #990F02;
-            }
-            """
-    ):
-        reset_button = st.button(
-            "Reset Session",
-            icon=":material/warning:",
-            on_click=reset_session
-        )
 
 
 research_tab, \

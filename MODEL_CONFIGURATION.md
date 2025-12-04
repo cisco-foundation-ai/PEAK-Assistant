@@ -324,7 +324,6 @@ The Anthropic provider connects to Anthropic's Claude models via their API.
 - `max_tokens` (integer): Maximum tokens in response (default: model-specific)
 - `temperature` (float): Sampling temperature 0.0-1.0 (default: 1.0)
 - `top_p` (float): Nucleus sampling parameter (default: 1.0)
-- `top_k` (integer): Top-k sampling parameter
 - `base_url` (string): Custom API endpoint (for proxies)
 - `timeout` (float): Request timeout in seconds
 - `max_retries` (integer): Number of retry attempts
@@ -614,7 +613,7 @@ This example demonstrates a sophisticated setup using multiple provider instance
   },
   "groups": {
     "research-team": {
-      "match": ["external_search_*", "local_data_search_*", "research_team_lead"],
+      "match": ["external_search_*", "research_team_lead"],
       "provider": "azure-main",
       "model": "gpt-4o",
       "deployment": "gpt-4o-deployment"
@@ -641,7 +640,7 @@ This example demonstrates a sophisticated setup using multiple provider instance
 
 In this configuration:
 - Most agents use Azure GPT-4o (from `defaults`)
-- Research agents (`external_search_agent`, `local_data_search_agent`, `local_data_summarizer_agent`, `research_team_lead`) use Azure GPT-4o via the `research-team` group
+- Research agents (`external_search_agent` and `research_team_lead`) use Azure GPT-4o via the `research-team` group
 - Critic and planner agents use Azure o4-mini via the `reasoning-agents` group
 - `summarizer_agent` uses OpenAI native GPT-4.1-mini
 - `able_table` uses Ollama (local) with Llama 3.1 8B
@@ -667,7 +666,7 @@ This demonstrates mixing three different provider instances and four different m
 
 **Error:** `Unsupported provider type 'xyz'`
 
-**Solution:** The provider `type` field must be one of: `"azure"`, `"openai"`. Check for typos in your provider definitions.
+**Solution:** The provider `type` field must be one of: `"azure"`, `"openai"`, `"anthropic"`. Check for typos in your provider definitions.
 
 ### Missing Required Fields
 
