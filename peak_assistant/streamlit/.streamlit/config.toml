@@ -26,9 +26,6 @@
 level = "warning"
 
 [client]
-# Hide the sidebar by default, since there's not much there.
-showSidebarNavigation = false
-
 # Don't show the default streamlit controls (e.g., the "Deploy" button)
 toolbarMode = "minimal"
 

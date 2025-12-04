@@ -152,18 +152,6 @@ def switch_tabs(tab_index: int = 0):
     </script>
     """)
 
-@st.dialog("Reset Session", dismissible=True, on_dismiss="ignore")
-def reset_session():
-    st.warning("Are you sure you want to reset the session? This will erase all progress and start over.")
-    if st.button("Reset Session"):
-        for key in st.session_state.keys():
-            del st.session_state[key]
-        
-        st.session_state["_reset_requested"] = True
-
-        st.rerun()
-
-
 # MCP Server Configuration and Status Management
 # Data classes now imported from peak_assistant.utils.mcp_config
 # This eliminates code duplication and ensures consistency across the codebase
