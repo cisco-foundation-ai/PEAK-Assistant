@@ -34,7 +34,7 @@ from peak_assistant.streamlit.util.hypothesis_helpers import get_current_hypothe
 from peak_assistant.streamlit.util.helpers import (
     switch_tabs, 
     load_mcp_server_configs, 
-    organize_servers_by_group,
+    get_deduplicated_servers_with_groups,
     get_user_session_id, 
     get_mcp_auth_status, 
     test_mcp_connection, 
@@ -399,164 +399,296 @@ with mcp_servers_tab:
         st.warning("No MCP servers configured. Please add server configurations to `mcp_servers.json`.")
         st.info("Expected location: `mcp_servers.json` in the Streamlit app directory.")
     else:
-        # Organize servers by group
+        # Get deduplicated servers with their group memberships
         server_groups = st.session_state.get("mcp_server_groups", {})
-        organized = organize_servers_by_group(server_configs, server_groups)
-        
-        st.subheader(f"Configured Servers ({len(server_configs)})")
-        
-        # Display servers grouped by their server groups
-        for group_name, server_names in organized.items():
-            with st.expander(f"**{group_name}** ({len(server_names)} servers)", expanded=True):
-                # Table header for this group
-                col1, col2, col3, col4, col5 = st.columns([3, 2, 2, 2, 3])
-                with col1:
-                    st.write("**Server Name**")
-                with col2:
-                    st.write("**Transport**")
-                with col3:
-                    st.write("**Description**")
-                with col4:
-                    st.write("**Status**")
-                with col5:
-                    st.write("**Actions**")
-                
-                st.divider()
-                
-                # Display each server in this group
-                for server_name in server_names:
-                    config = server_configs.get(server_name)
-                    if not config:
-                        continue
-                    
-                    # Debug: Check if config is the right type
-                    if not hasattr(config, 'transport'):
-                        st.error(f"Invalid configuration for {server_name}: {type(config)} - {config}")
-                        continue
-                    
-                    # Clear any potentially conflicting keys from session state
-                    keys_to_remove = []
-                    for key in st.session_state.keys():
-                        if (
-                            key.startswith(f"auth_button_{server_name}")
-                            or key.startswith(f"status_btn_{server_name}")
-                            or key.startswith(f"btn_{server_name}")
-                            or key.startswith(f"test_conn_{server_name}")  # clear restored test button keys
-                        ):
-                            keys_to_remove.append(key)
-                    
-                    for key in keys_to_remove:
-                        del st.session_state[key]
-                        
-                    # Include Actions column on the same row
-                    col1, col2, col3, col4, col5 = st.columns([3, 2, 2, 2, 3])
-                    
-                    with col1:
-                        st.write(f"**{server_name}**")
-                    
-                    with col2:
-                        st.write(config.transport.value.upper())
-                    
-                    with col3:
-                        st.write(config.description or "No description")
-                    
-                    with col4:
-                        # Get authentication status
-                        status_color, status_message = get_mcp_auth_status(server_name, config)
-                        
-                        # Log status for debugging
-                        import logging
-                        logger = logging.getLogger(__name__)
-                        logger.debug(f"Status for {server_name}: {status_color} - {status_message}")
-                        
-                        # Create status button with appropriate color
-                        if status_color == "green":
-                            button_type = "primary"
-                            button_disabled = True
-                            button_label = "✅ Connected"
-                        elif status_color == "yellow":
-                            button_type = "secondary"
-                            button_disabled = False
-                            button_label = "🔐 Authenticate"
-                        else:  # red
-                            button_type = "secondary"
-                            button_disabled = False
-                            button_label = "❌ Error"
-                        
-                        # Create the status button (no key to avoid conflicts)
-                        if st.button(
-                            f"{button_label} ({server_name})",  # Make label unique since no key
-                            disabled=button_disabled,
-                            type=button_type,
-                            help=status_message
-                        ):
-                            # Handle authentication button click
-                            import logging
-                            logger = logging.getLogger(__name__)
-                            
-                            logger.debug(f"Button clicked for {server_name}")
-                            logger.debug(f"Explicit OAuth config: {config.auth and config.auth.type.value == 'oauth2_authorization_code'}")
-                            logger.debug(f"OAuth discovered: {status_message == 'OAuth2 authentication detected'}")
-                            logger.debug(f"Status message: '{status_message}'")
-                            
-                            if (config.auth and config.auth.type.value == "oauth2_authorization_code") or \
-                               (status_message == "OAuth2 authentication detected"):
-                                # OAuth2 flow (either explicit config or discovered)
-                                logger.info(f"Initiating OAuth flow for {server_name}")
-                                auth_url = initiate_oauth_flow(server_name, config)
-                                if auth_url:
-                                    logger.debug(f"Redirecting to authenticate with {server_name}")
-                                    logger.debug(f"Generated auth URL: {auth_url[:100]}...")
-                                    
-                                    # Log dynamic registration info if available
-                                    if f"oauth_client_{server_name}" in st.session_state:
-                                        client_info = st.session_state[f"oauth_client_{server_name}"]
-                                        logger.debug(f"Using dynamically registered client: {client_info['client_id']}")
-                                    
-                                    # Use meta refresh to redirect in the same tab
-                                    st.markdown(f"""
-                                    <meta http-equiv="refresh" content="0; url={auth_url}">
-                                    <p>If you are not redirected automatically, <a href="{auth_url}" target="_self">click here</a>.</p>
-                                    """, unsafe_allow_html=True)
-                                    
-                                    # Also try JavaScript as backup
-                                    st.markdown(f"""
-                                    <script>
-                                        setTimeout(function() {{
-                                            window.location.href = "{auth_url}";
-                                        }}, 1000);
-                                    </script>
-                                    """, unsafe_allow_html=True)
+        deduplicated_servers = get_deduplicated_servers_with_groups(server_configs, server_groups)
+
+        # Split servers into configured (workflow groups) and unused (non-workflow)
+        workflow_groups = {"research-external", "local-data-search", "data_discovery"}
+        configured_servers = []
+        unused_servers = []
+        for _name, _config, _groups in deduplicated_servers:
+            if any(g in workflow_groups for g in _groups):
+                configured_servers.append((_name, _config, _groups))
+            else:
+                unused_servers.append((_name, _config, _groups))
+
+        # Configured Servers section
+        st.subheader(f"Configured Servers ({len(configured_servers)})")
+
+        # Table header
+        col1, col2, col3, col4, col5, col6 = st.columns([2.5, 2, 1.5, 2, 2, 2.5])
+        with col1:
+            st.write("**Server Name**")
+        with col2:
+            st.write("**Groups**")
+        with col3:
+            st.write("**Transport**")
+        with col4:
+            st.write("**Description**")
+        with col5:
+            st.write("**Status**")
+        with col6:
+            st.write("**Actions**")
+
+        st.divider()
+
+        # Rows
+        for server_name, config, groups in configured_servers:
+            if not config or not hasattr(config, "transport"):
+                continue
+
+            # Clear any potentially conflicting keys from session state
+            keys_to_remove = []
+            for key in st.session_state.keys():
+                if (
+                    key.startswith(f"auth_button_{server_name}")
+                    or key.startswith(f"btn_{server_name}")
+                ):
+                    keys_to_remove.append(key)
+            for key in keys_to_remove:
+                del st.session_state[key]
+
+            col1, col2, col3, col4, col5, col6 = st.columns([2.5, 2, 1.5, 2, 2, 2.5])
+            with col1:
+                st.write(f"**{server_name}**")
+            with col2:
+                st.write(", ".join(groups) if groups else "None")
+            with col3:
+                st.write(config.transport.value.upper())
+            with col4:
+                st.write(config.description or "No description")
+            with col5:
+                # Get authentication status
+                status_color, status_message = get_mcp_auth_status(server_name, config)
+
+                # Log status for debugging
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.debug(f"Status for {server_name}: {status_color} - {status_message}")
+
+                # Create status button with appropriate color
+                if status_color == "green":
+                    button_type = "primary"
+                    button_disabled = True
+                    button_label = "✅ Connected"
+                elif status_color == "yellow":
+                    button_type = "secondary"
+                    button_disabled = False
+                    button_label = "🔐 Authenticate"
+                else:  # red
+                    button_type = "secondary"
+                    button_disabled = False
+                    button_label = "❌ Error"
+
+                # Create the status button with unique key (per server)
+                if st.button(
+                    f"{button_label}",
+                    key=f"status_btn_{server_name}",
+                    disabled=button_disabled,
+                    type=button_type,
+                    help=status_message
+                ):
+                    # Handle authentication button click
+                    import logging
+                    logger = logging.getLogger(__name__)
+
+                    logger.debug(f"Button clicked for {server_name}")
+                    logger.debug(f"Explicit OAuth config: {config.auth and config.auth.type.value == 'oauth2_authorization_code'}")
+                    logger.debug(f"OAuth discovered: {status_message == 'OAuth2 authentication detected'}")
+                    logger.debug(f"Status message: '{status_message}'")
+
+                    if (config.auth and config.auth.type.value == "oauth2_authorization_code") or \
+                       (status_message == "OAuth2 authentication detected"):
+                        # OAuth2 flow (either explicit config or discovered)
+                        logger.info(f"Initiating OAuth flow for {server_name}")
+                        auth_url = initiate_oauth_flow(server_name, config)
+                        if auth_url:
+                            logger.debug(f"Redirecting to authenticate with {server_name}")
+                            logger.debug(f"Generated auth URL: {auth_url[:100]}...")
+                            st.markdown(f"""
+                            <meta http-equiv="refresh" content="0; url={auth_url}">
+                            <p>If you are not redirected automatically, <a href="{auth_url}" target="_self">click here</a>.</p>
+                            """, unsafe_allow_html=True)
+                            st.markdown(f"""
+                            <script>
+                                setTimeout(function() {{
+                                    window.location.href = "{auth_url}";
+                                }}, 1000);
+                            </script>
+                            """, unsafe_allow_html=True)
+                        else:
+                            st.error(f"Failed to initiate OAuth2 flow for {server_name}")
+
+                    elif config.auth and config.auth.type.value == "api_key":
+                        # API Key input
+                        st.session_state[f"show_api_key_input_{server_name}"] = True
+                        st.rerun()
+
+                    elif config.auth and config.auth.type.value == "bearer":
+                        # Bearer token input
+                        st.session_state[f"show_bearer_input_{server_name}"] = True
+                        st.rerun()
+
+                    else:
+                        # Test connection for other types
+                        with st.spinner(f"Testing connection to {server_name}..."):
+                            import asyncio
+                            try:
+                                success, message = asyncio.run(test_mcp_connection(server_name, config))
+                                if success:
+                                    st.success(f"{server_name}: {message}")
                                 else:
-                                    st.error(f"Failed to initiate OAuth2 flow for {server_name}")
-                            
-                            elif config.auth and config.auth.type.value == "api_key":
-                                # API Key input
-                                st.session_state[f"show_api_key_input_{server_name}"] = True
-                                st.rerun()
-                            
-                            elif config.auth and config.auth.type.value == "bearer":
-                                # Bearer token input
-                                st.session_state[f"show_bearer_input_{server_name}"] = True
-                                st.rerun()
-                            
+                                    st.error(f"{server_name}: {message}")
+                            except Exception as e:
+                                st.error(f"{server_name}: Connection test failed - {str(e)}")
+
+            with col6:
+                # Dedicated Test Connection button (always available) on same row
+                if st.button(f"🧪 Test Connection", key=f"test_conn_{server_name}", type="secondary"):
+                    with st.spinner(f"Testing connection to {server_name}..."):
+                        import asyncio
+                        try:
+                            success, message = asyncio.run(test_mcp_connection(server_name, config))
+                            if success:
+                                st.success(f"{server_name}: {message}")
                             else:
-                                # Test connection for other types
-                                with st.spinner(f"Testing connection to {server_name}..."):
-                                    import asyncio
-                                    try:
-                                        success, message = asyncio.run(test_mcp_connection(server_name, config))
-                                        if success:
-                                            st.success(f"{server_name}: {message}")
-                                        else:
-                                            st.error(f"{server_name}: {message}")
-                                    except Exception as e:
-                                        st.error(f"{server_name}: Connection test failed - {str(e)}")
-                    
-                    with col5:
-                        # Dedicated Test Connection button (always available) on same row
-                        # Avoid an explicit key to prevent conflicts with restored session state
-                        if st.button(f"🧪 Test Connection ({server_name})", type="secondary"):
+                                st.error(f"{server_name}: {message}")
+                        except Exception as e:
+                            st.error(f"{server_name}: Connection test failed - {str(e)}")
+
+            # Show API key input if requested
+            if st.session_state.get(f"show_api_key_input_{server_name}", False):
+                with st.expander(f"Enter API Key for {server_name}", expanded=True):
+                    api_key = st.text_input(
+                        "API Key",
+                        type="password",
+                        key=f"api_key_input_{server_name}",
+                        help="Enter your API key for this server"
+                    )
+                    col_save, col_cancel = st.columns(2)
+                    with col_save:
+                        if st.button("Save", key=f"save_api_key_{server_name}"):
+                            if api_key:
+                                # Store API key in session state
+                                auth_key = f"MCP.{server_name}"
+                                st.session_state[auth_key] = {
+                                    "api_key": api_key,
+                                    "auth_type": "api_key"
+                                }
+                                st.success(f"API key saved for {server_name}")
+                                st.session_state[f"show_api_key_input_{server_name}"] = False
+                                st.rerun()
+                            else:
+                                st.error("Please enter an API key")
+                    with col_cancel:
+                        if st.button("Cancel", key=f"cancel_api_key_{server_name}"):
+                            st.session_state[f"show_api_key_input_{server_name}"] = False
+                            st.rerun()
+
+            # Show bearer token input if requested
+            if st.session_state.get(f"show_bearer_input_{server_name}", False):
+                with st.expander(f"Enter Bearer Token for {server_name}", expanded=True):
+                    bearer_token = st.text_input(
+                        "Bearer Token",
+                        type="password",
+                        key=f"bearer_input_{server_name}",
+                        help="Enter your bearer token for this server"
+                    )
+                    col_save, col_cancel = st.columns(2)
+                    with col_save:
+                        if st.button("Save", key=f"save_bearer_{server_name}"):
+                            if bearer_token:
+                                # Store bearer token in session state
+                                auth_key = f"MCP.{server_name}"
+                                st.session_state[auth_key] = {
+                                    "access_token": bearer_token,
+                                    "auth_type": "bearer"
+                                }
+                                st.success(f"Bearer token saved for {server_name}")
+                                st.session_state[f"show_bearer_input_{server_name}"] = False
+                                st.rerun()
+                            else:
+                                st.error("Please enter a bearer token")
+                    with col_cancel:
+                        if st.button("Cancel", key=f"cancel_bearer_{server_name}"):
+                            st.session_state[f"show_bearer_input_{server_name}"] = False
+                            st.rerun()
+
+            st.divider()
+
+        # Unused Servers section
+        if unused_servers:
+            st.subheader(f"Unused Servers ({len(unused_servers)})")
+            col1, col2, col3, col4, col5, col6 = st.columns([2.5, 2, 1.5, 2, 2, 2.5])
+            with col1:
+                st.write("**Server Name**")
+            with col2:
+                st.write("**Groups**")
+            with col3:
+                st.write("**Transport**")
+            with col4:
+                st.write("**Description**")
+            with col5:
+                st.write("**Status**")
+            with col6:
+                st.write("**Actions**")
+            st.divider()
+            for server_name, config, groups in unused_servers:
+                if not config or not hasattr(config, "transport"):
+                    continue
+                # Clear any potentially conflicting keys from session state
+                keys_to_remove = []
+                for key in st.session_state.keys():
+                    if (
+                        key.startswith(f"auth_button_{server_name}")
+                        or key.startswith(f"btn_{server_name}")
+                    ):
+                        keys_to_remove.append(key)
+                for key in keys_to_remove:
+                    del st.session_state[key]
+
+                col1, col2, col3, col4, col5, col6 = st.columns([2.5, 2, 1.5, 2, 2, 2.5])
+                with col1:
+                    st.write(f"**{server_name}**")
+                with col2:
+                    st.write(", ".join(groups) if groups else "None")
+                with col3:
+                    st.write(config.transport.value.upper())
+                with col4:
+                    st.write(config.description or "No description")
+                with col5:
+                    status_color, status_message = get_mcp_auth_status(server_name, config)
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.debug(f"Status for {server_name}: {status_color} - {status_message}")
+                    if status_color == "green":
+                        button_type = "primary"; button_disabled = True; button_label = "✅ Connected"
+                    elif status_color == "yellow":
+                        button_type = "secondary"; button_disabled = False; button_label = "🔐 Authenticate"
+                    else:
+                        button_type = "secondary"; button_disabled = False; button_label = "❌ Error"
+                    if st.button(
+                        f"{button_label}",
+                        key=f"status_btn_{server_name}",
+                        disabled=button_disabled,
+                        type=button_type,
+                        help=status_message
+                    ):
+                        if (config.auth and config.auth.type.value == "oauth2_authorization_code") or \
+                           (status_message == "OAuth2 authentication detected"):
+                            auth_url = initiate_oauth_flow(server_name, config)
+                            if auth_url:
+                                st.markdown(f"<meta http-equiv=\"refresh\" content=\"0; url={auth_url}\">", unsafe_allow_html=True)
+                            else:
+                                st.error(f"Failed to initiate OAuth2 flow for {server_name}")
+                        elif config.auth and config.auth.type.value == "api_key":
+                            st.session_state[f"show_api_key_input_{server_name}"] = True
+                            st.rerun()
+                        elif config.auth and config.auth.type.value == "bearer":
+                            st.session_state[f"show_bearer_input_{server_name}"] = True
+                            st.rerun()
+                        else:
                             with st.spinner(f"Testing connection to {server_name}..."):
                                 import asyncio
                                 try:
@@ -567,66 +699,71 @@ with mcp_servers_tab:
                                         st.error(f"{server_name}: {message}")
                                 except Exception as e:
                                     st.error(f"{server_name}: Connection test failed - {str(e)}")
-                    
-                    # Show API key input if requested
-                    if st.session_state.get(f"show_api_key_input_{server_name}", False):
-                        with st.expander(f"Enter API Key for {server_name}", expanded=True):
-                            api_key = st.text_input(
-                                "API Key",
-                                type="password",
-                                key=f"api_key_input_{server_name}",
-                                help="Enter your API key for this server"
-                            )
-                            col_save, col_cancel = st.columns(2)
-                            with col_save:
-                                if st.button("Save", key=f"save_api_key_{server_name}"):
-                                    if api_key:
-                                        # Store API key in session state
-                                        auth_key = f"MCP.{server_name}"
-                                        st.session_state[auth_key] = {
-                                            "api_key": api_key,
-                                            "auth_type": "api_key"
-                                        }
-                                        st.success(f"API key saved for {server_name}")
-                                        st.session_state[f"show_api_key_input_{server_name}"] = False
-                                        st.rerun()
-                                    else:
-                                        st.error("Please enter an API key")
-                            with col_cancel:
-                                if st.button("Cancel", key=f"cancel_api_key_{server_name}"):
+                with col6:
+                    if st.button(f"🧪 Test Connection", key=f"test_conn_{server_name}", type="secondary"):
+                        with st.spinner(f"Testing connection to {server_name}..."):
+                            import asyncio
+                            try:
+                                success, message = asyncio.run(test_mcp_connection(server_name, config))
+                                if success:
+                                    st.success(f"{server_name}: {message}")
+                                else:
+                                    st.error(f"{server_name}: {message}")
+                            except Exception as e:
+                                st.error(f"{server_name}: Connection test failed - {str(e)}")
+                if st.session_state.get(f"show_api_key_input_{server_name}", False):
+                    with st.expander(f"Enter API Key for {server_name}", expanded=True):
+                        api_key = st.text_input(
+                            "API Key",
+                            type="password",
+                            key=f"api_key_input_{server_name}",
+                            help="Enter your API key for this server"
+                        )
+                        col_save, col_cancel = st.columns(2)
+                        with col_save:
+                            if st.button("Save", key=f"save_api_key_{server_name}"):
+                                if api_key:
+                                    auth_key = f"MCP.{server_name}"
+                                    st.session_state[auth_key] = {
+                                        "api_key": api_key,
+                                        "auth_type": "api_key"
+                                    }
+                                    st.success(f"API key saved for {server_name}")
                                     st.session_state[f"show_api_key_input_{server_name}"] = False
                                     st.rerun()
-                    
-                    # Show bearer token input if requested
-                    if st.session_state.get(f"show_bearer_input_{server_name}", False):
-                        with st.expander(f"Enter Bearer Token for {server_name}", expanded=True):
-                            bearer_token = st.text_input(
-                                "Bearer Token",
-                                type="password",
-                                key=f"bearer_input_{server_name}",
-                                help="Enter your bearer token for this server"
-                            )
-                            col_save, col_cancel = st.columns(2)
-                            with col_save:
-                                if st.button("Save", key=f"save_bearer_{server_name}"):
-                                    if bearer_token:
-                                        # Store bearer token in session state
-                                        auth_key = f"MCP.{server_name}"
-                                        st.session_state[auth_key] = {
-                                            "access_token": bearer_token,
-                                            "auth_type": "bearer"
-                                        }
-                                        st.success(f"Bearer token saved for {server_name}")
-                                        st.session_state[f"show_bearer_input_{server_name}"] = False
-                                        st.rerun()
-                                    else:
-                                        st.error("Please enter a bearer token")
-                            with col_cancel:
-                                if st.button("Cancel", key=f"cancel_bearer_{server_name}"):
+                                else:
+                                    st.error("Please enter an API key")
+                        with col_cancel:
+                            if st.button("Cancel", key=f"cancel_api_key_{server_name}"):
+                                st.session_state[f"show_api_key_input_{server_name}"] = False
+                                st.rerun()
+                if st.session_state.get(f"show_bearer_input_{server_name}", False):
+                    with st.expander(f"Enter Bearer Token for {server_name}", expanded=True):
+                        bearer_token = st.text_input(
+                            "Bearer Token",
+                            type="password",
+                            key=f"bearer_input_{server_name}",
+                            help="Enter your bearer token for this server"
+                        )
+                        col_save, col_cancel = st.columns(2)
+                        with col_save:
+                            if st.button("Save", key=f"save_bearer_{server_name}"):
+                                if bearer_token:
+                                    auth_key = f"MCP.{server_name}"
+                                    st.session_state[auth_key] = {
+                                        "access_token": bearer_token,
+                                        "auth_type": "bearer"
+                                    }
+                                    st.success(f"Bearer token saved for {server_name}")
                                     st.session_state[f"show_bearer_input_{server_name}"] = False
                                     st.rerun()
-                    
-                    st.divider()
+                                else:
+                                    st.error("Please enter a bearer token")
+                        with col_cancel:
+                            if st.button("Cancel", key=f"cancel_bearer_{server_name}"):
+                                st.session_state[f"show_bearer_input_{server_name}"] = False
+                                st.rerun()
+                st.divider()
         
         # Add refresh button
         if st.button("🔄 Refresh Status", type="secondary"):

@@ -281,36 +281,60 @@ def load_mcp_server_configs() -> Dict[str, MCPServerConfig]:
         st.session_state["mcp_server_configs"] = {}
         return {}
 
-def organize_servers_by_group(
+def get_deduplicated_servers_with_groups(
     server_configs: Dict[str, MCPServerConfig],
     server_groups: Dict[str, List[str]]
-) -> Dict[str, List[str]]:
+) -> List[tuple[str, MCPServerConfig, List[str]]]:
     """
-    Organize server names by their group.
+    Get a deduplicated list of servers with their group memberships.
     
     Args:
         server_configs: Dictionary of server configurations
         server_groups: Dictionary mapping group names to lists of server names
     
     Returns:
-        Dictionary with group names as keys and lists of server names as values.
-        Servers not in any group are placed in an "Others" group.
+        List of tuples: (server_name, server_config, list_of_group_names)
+        Sorted by first group (by phase order), then alphabetically by server name.
+        Groups within each server are ordered by phase.
     """
-    # Track which servers are in groups
-    grouped_servers = set()
-    for servers in server_groups.values():
-        grouped_servers.update(servers)
+    # Define phase order for sorting (lower number = higher priority)
+    phase_order = {
+        "research-external": 0,
+        "local-data-search": 1,
+        "data_discovery": 2,
+        "Others": 999  # Others always last
+    }
     
-    # Find ungrouped servers
-    all_servers = set(server_configs.keys())
-    ungrouped = all_servers - grouped_servers
+    def get_phase_priority(group_name: str) -> int:
+        """Get the phase priority for a group, defaulting to Others if unknown."""
+        return phase_order.get(group_name, phase_order["Others"])
     
-    # Build result - copy existing groups
-    result = dict(server_groups)
+    # Build a mapping of server_name -> list of groups it belongs to
+    server_to_groups: Dict[str, List[str]] = {}
     
-    # Add "Others" group if there are ungrouped servers
-    if ungrouped:
-        result["Others"] = sorted(list(ungrouped))
+    for group_name, server_names in server_groups.items():
+        for server_name in server_names:
+            if server_name not in server_to_groups:
+                server_to_groups[server_name] = []
+            server_to_groups[server_name].append(group_name)
+    
+    # Add servers that aren't in any group
+    for server_name in server_configs.keys():
+        if server_name not in server_to_groups:
+            server_to_groups[server_name] = ["Others"]
+    
+    # Build result list with sorted groups
+    result = []
+    for server_name, config in server_configs.items():
+        # Sort groups by phase order
+        groups = sorted(
+            server_to_groups.get(server_name, ["Others"]),
+            key=get_phase_priority
+        )
+        result.append((server_name, config, groups))
+    
+    # Sort servers by: (first_group_phase_priority, server_name)
+    result.sort(key=lambda x: (get_phase_priority(x[2][0]), x[0]))
     
     return result
 
