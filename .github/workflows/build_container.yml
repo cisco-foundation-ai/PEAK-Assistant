@@ -8,7 +8,7 @@ name: "Build container"
   
 permissions:
   packages: write
-  contents: read
+  contents: write
 
 env:
   PLATFORM_PAIR: linux_amd64 # this should be overridden later
