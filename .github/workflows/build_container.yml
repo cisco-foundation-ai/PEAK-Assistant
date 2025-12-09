@@ -45,6 +45,10 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY_IMAGE }}
+          tags: |
+            # set latest tag for main branch
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
         if: ${{ matrix.platform == 'linux/arm64' }}
