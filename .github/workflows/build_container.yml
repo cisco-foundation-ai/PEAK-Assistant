@@ -6,9 +6,7 @@ name: "Build container"
   push:
   pull_request:
   
-permissions:
-  packages: write
-  contents: read
+permissions: write-all
 
 env:
   PLATFORM_PAIR: linux_amd64 # this should be overridden later
