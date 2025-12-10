@@ -37,14 +37,25 @@ DIGESTS = [
 
 print(f"Digests: {DIGESTS}", file=sys.stderr)
 
-command = ["docker", "--debug", "buildx", "imagetools", "create", *tags, *DIGESTS]
+if not DIGESTS:
+    print("Error: No digest files found in current directory", file=sys.stderr)
+    sys.exit(1)
+
+if not tags:
+    print("Error: No tags found in metadata", file=sys.stderr)
+    sys.exit(1)
+
+command = ["docker", "buildx", "imagetools", "create", *tags, *DIGESTS]
 
 print(f"Command: {command}", file=sys.stderr)
 try:
-    result = subprocess.run(command)
+    result = subprocess.run(command, check=True)
 except subprocess.CalledProcessError as e:
-    print(f"CalledProcessError running docker buildx imagetools create: {e}")
+    print(
+        f"CalledProcessError running docker buildx imagetools create: {e}",
+        file=sys.stderr,
+    )
     sys.exit(1)
 except Exception as e:
-    print(f"Exception running docker buildx imagetools create: {e}")
+    print(f"Exception running docker buildx imagetools create: {e}", file=sys.stderr)
     sys.exit(1)
