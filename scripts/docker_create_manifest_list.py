@@ -41,7 +41,7 @@ command = ["docker", "--debug", "buildx", "imagetools", "create", *tags, *DIGEST
 
 print(f"Command: {command}", file=sys.stderr)
 try:
-    result = subprocess.run(command, shell=True, check=True)
+    result = subprocess.run(command)
 except subprocess.CalledProcessError as e:
     print(f"CalledProcessError running docker buildx imagetools create: {e}")
     sys.exit(1)
