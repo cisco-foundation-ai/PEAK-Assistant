@@ -447,6 +447,98 @@ If your auth module isn't receiving expected config values:
 }
 ```
 
+## Using Custom Auth with Docker
+
+The standard PEAK Assistant Docker image supports custom auth modules via volume mounts - no custom image required.
+
+### Mount Your Auth Module
+
+Mount your auth module directory and config file to the container's working directory (`/home/peakassistant`):
+
+```bash
+docker run \
+  -v ./my_auth:/home/peakassistant/my_auth \
+  -v ./model_config.json:/home/peakassistant/model_config.json \
+  -v ./mcp_servers.json:/home/peakassistant/mcp_servers.json \
+  -e OAUTH_CLIENT_ID=your-client-id \
+  -e OAUTH_CLIENT_SECRET=your-client-secret \
+  -e OAUTH_TOKEN_ENDPOINT=https://identity.example.com/token \
+  -p 8501:8501 \
+  peak-assistant
+```
+
+### Directory Structure
+
+Your local directory should look like:
+
+```
+./
+├── my_auth/
+│   ├── __init__.py
+│   └── enterprise_oauth.py
+├── model_config.json
+└── mcp_servers.json
+```
+
+### Config Reference
+
+Your `model_config.json` references the module as mounted:
+
+```json
+{
+  "providers": {
+    "azure-enterprise": {
+      "type": "azure",
+      "auth_module": "my_auth.enterprise_oauth",
+      "config": {
+        "endpoint": "${AZURE_OPENAI_ENDPOINT}",
+        "api_version": "2025-04-01-preview",
+        "client_id": "${OAUTH_CLIENT_ID}",
+        "client_secret": "${OAUTH_CLIENT_SECRET}",
+        "token_endpoint": "${OAUTH_TOKEN_ENDPOINT}"
+      }
+    }
+  }
+}
+```
+
+### Docker Compose Example
+
+```yaml
+version: '3.8'
+services:
+  peak-assistant:
+    image: peak-assistant:latest
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./my_auth:/home/peakassistant/my_auth:ro
+      - ./model_config.json:/home/peakassistant/model_config.json:ro
+      - ./mcp_servers.json:/home/peakassistant/mcp_servers.json:ro
+    environment:
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
+      - OAUTH_CLIENT_ID=${OAUTH_CLIENT_ID}
+      - OAUTH_CLIENT_SECRET=${OAUTH_CLIENT_SECRET}
+      - OAUTH_TOKEN_ENDPOINT=${OAUTH_TOKEN_ENDPOINT}
+```
+
+**Note:** The `:ro` suffix mounts volumes as read-only for security.
+
+### Alternative: Custom Mount Location
+
+If you prefer to mount your auth module elsewhere, set `PYTHONPATH` to the parent directory:
+
+```bash
+docker run \
+  -v ./my_auth:/opt/custom/my_auth \
+  -v ./model_config.json:/home/peakassistant/model_config.json \
+  -e PYTHONPATH=/opt/custom \
+  -p 8501:8501 \
+  peak-assistant
+```
+
+The `PYTHONPATH` must point to the **parent** of your module directory (e.g., `/opt/custom` if your module is at `/opt/custom/my_auth`).
+
 ## See Also
 
 - [MODEL_CONFIGURATION.md](MODEL_CONFIGURATION.md) - Main configuration reference
