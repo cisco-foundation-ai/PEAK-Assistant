@@ -88,6 +88,8 @@ jobs:
     needs:
       - build
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
       - name: Download digests
         uses: actions/download-artifact@v4
         with:
@@ -125,8 +127,7 @@ jobs:
         #   echo $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
         #   docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
         run: |
-          find ${GITHUB_WORKSPACE}/../
-          ${GITHUB_WORKSPACE}/../scripts/docker_create_manifest_list.py "${{ env.REGISTRY_IMAGE }}" "$DOCKER_METADATA_OUTPUT_JSON"
+          ${GITHUB_WORKSPACE}/scripts/docker_create_manifest_list.py "${{ env.REGISTRY_IMAGE }}" "$DOCKER_METADATA_OUTPUT_JSON"
       - name: Inspect image
         run: |
           docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}
