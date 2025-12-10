@@ -37,7 +37,7 @@ DIGESTS = [
 
 print(f"Digests: {DIGESTS}", file=sys.stderr)
 
-command = ["docker", "buildx", "imagetools", "create", "--debug", *tags, *DIGESTS]
+command = ["docker", "--debug", "buildx", "imagetools", "create", *tags, *DIGESTS]
 
 print(f"Command: {command}", file=sys.stderr)
 try:
