@@ -25,7 +25,8 @@ except json.JSONDecodeError as e:
 tags = []
 
 for tag in docker_meta.get("tags", []):
-    tags.append(f"-t {tag}")
+    tags.append("-t")
+    tags.append(tag)
 
 print(f"Tags for manifest list: {tags}", file=sys.stderr)
 
