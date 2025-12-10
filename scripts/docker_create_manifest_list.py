@@ -12,8 +12,8 @@ import subprocess
 REGISTRY_IMAGE = sys.argv[1]
 DOCKER_METADATA_OUTPUT_JSON = sys.argv[2]
 
-print(f"Registry image: '{REGISTRY_IMAGE}'")
-print(f"Docker metadata output JSON: '{DOCKER_METADATA_OUTPUT_JSON}'")
+print(f"Registry image: '{REGISTRY_IMAGE}'", file=sys.stderr)
+print(f"Docker metadata output JSON: '{DOCKER_METADATA_OUTPUT_JSON}'", file=sys.stderr)
 
 
 try:
