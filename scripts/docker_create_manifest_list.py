@@ -36,12 +36,11 @@ DIGESTS = [
 
 print(f"Digests: {DIGESTS}", file=sys.stderr)
 
+command = ["docker", "buildx", "imagetools", "create", "--debug", *tags, *DIGESTS]
 
-command = ["docker", "buildx", "imagetools", "create", *tags, *DIGESTS]
-
-print(f"Command: {' '.join(command)}", file=sys.stderr)
+print(f"Command: {command}", file=sys.stderr)
 try:
-    result = subprocess.run(command)
+    result = subprocess.run(command, shell=True, check=True)
 except subprocess.CalledProcessError as e:
     print(f"CalledProcessError running docker buildx imagetools create: {e}")
     sys.exit(1)
