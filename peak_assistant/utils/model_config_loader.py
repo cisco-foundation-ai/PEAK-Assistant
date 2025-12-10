@@ -228,7 +228,11 @@ class ModelConfigLoader:
         
         # Validate provider-specific required fields
         if provider_type == "azure":
-            required = ["endpoint", "api_key", "api_version"]
+            # api_key is optional if auth_module is specified
+            has_auth_module = "auth_module" in provider_config
+            required = ["endpoint", "api_version"]
+            if not has_auth_module:
+                required.append("api_key")
             missing = [f for f in required if f not in config]
             if missing:
                 raise ModelConfigError(

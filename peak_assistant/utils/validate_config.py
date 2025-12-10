@@ -96,54 +96,34 @@ class ConfigValidator:
         return len(self.errors) == 0
     
     def _validate_providers(self):
-        """Validate provider configurations."""
+        """Validate provider configurations.
+        
+        Delegates to ModelConfigLoader.get_provider_config() for core validation,
+        then adds additional warnings for best practices.
+        """
         if not self.loader or not self.loader._providers:
             return
         
         for provider_name, provider_config in self.loader._providers.items():
-            provider_type = provider_config.get("type")
-            
-            if provider_type not in ["azure", "openai", "anthropic"]:
-                self.errors.append(
-                    f"Provider '{provider_name}': Invalid type '{provider_type}'. "
-                    f"Must be 'azure', 'openai', or 'anthropic'."
-                )
+            # Delegate core validation to the loader
+            try:
+                self.loader.get_provider_config(provider_name)
+            except ModelConfigError as e:
+                self.errors.append(str(e))
                 continue
             
+            # Additional warnings (not errors) for best practices
+            provider_type = provider_config.get("type")
             config = provider_config.get("config", {})
             
-            # Validate Azure provider
-            if provider_type == "azure":
-                required = ["endpoint", "api_key", "api_version"]
-                missing = [f for f in required if f not in config]
-                if missing:
-                    self.errors.append(
-                        f"Provider '{provider_name}' (azure): Missing required fields: {', '.join(missing)}"
+            # Check if base_url is set for OpenAI-compatible without model_info
+            if provider_type == "openai" and "base_url" in config:
+                models = provider_config.get("models", {})
+                if not models:
+                    self.warnings.append(
+                        f"Provider '{provider_name}': Uses base_url (OpenAI-compatible) but has no "
+                        f"'models' section. Consider adding model_info for non-standard models."
                     )
-            
-            # Validate OpenAI provider
-            elif provider_type == "openai":
-                if "api_key" not in config:
-                    self.errors.append(
-                        f"Provider '{provider_name}' (openai): Missing required field 'api_key'"
-                    )
-            
-            # Validate Anthropic provider
-            elif provider_type == "anthropic":
-                if "api_key" not in config:
-                    self.errors.append(
-                        f"Provider '{provider_name}' (anthropic): Missing required field 'api_key'"
-                    )
-                
-                # Check if base_url is set for OpenAI-compatible
-                if "base_url" in config:
-                    # Check if models with model_info are defined
-                    models = provider_config.get("models", {})
-                    if not models:
-                        self.warnings.append(
-                            f"Provider '{provider_name}': Uses base_url (OpenAI-compatible) but has no "
-                            f"'models' section. Consider adding model_info for non-standard models."
-                        )
     
     def _validate_agent_assignments(self):
         """Validate that agent assignments reference valid providers and have required fields."""
@@ -310,12 +290,16 @@ class ConfigValidator:
                 print(f"{continuation}  ├─ Endpoint: {endpoint}")
                 print(f"{continuation}  ├─ API Version: {config.get('api_version', 'N/A')}")
                 
-                # Check if API key is set
-                api_key = config.get("api_key", "")
-                if api_key.startswith("$"):
-                    print(f"{continuation}  └─ Credentials: (from env var)")
+                # Check authentication method
+                auth_module = provider_config.get("auth_module")
+                if auth_module:
+                    print(f"{continuation}  └─ Auth: {auth_module} (custom module)")
                 else:
-                    print(f"{continuation}  └─ Credentials: ✓")
+                    api_key = config.get("api_key", "")
+                    if api_key.startswith("$"):
+                        print(f"{continuation}  └─ Credentials: (from env var)")
+                    else:
+                        print(f"{continuation}  └─ Credentials: ✓")
             
             elif provider_type == "openai":
                 api_key = config.get("api_key", "")

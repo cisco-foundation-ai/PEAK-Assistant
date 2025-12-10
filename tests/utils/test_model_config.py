@@ -944,3 +944,311 @@ async def test_factory_anthropic_with_optional_params(temp_config_file):
     client = await llm_factory.get_model_client(config_path=config_file)
     assert client is not None
     assert client.__class__.__name__ == "AnthropicChatCompletionClient"
+
+
+# ============================================================================
+# Auth Module Tests
+# ============================================================================
+
+@pytest.mark.asyncio
+async def test_factory_azure_with_auth_module(temp_config_file, tmp_path, monkeypatch):
+    """Test Azure provider with custom auth_module."""
+    # Create a temporary auth module
+    auth_module_dir = tmp_path / "custom_auth"
+    auth_module_dir.mkdir()
+    (auth_module_dir / "__init__.py").write_text("")
+    (auth_module_dir / "my_oauth.py").write_text('''
+async def get_credentials(config):
+    """Mock OAuth that returns credentials based on config."""
+    return {
+        "api_key": "oauth-token-12345",
+        "user": '{"appkey": "test-app-key"}'
+    }
+''')
+    
+    # Add the temp path to sys.path so the module can be imported
+    import sys
+    sys.path.insert(0, str(tmp_path))
+    
+    try:
+        config_file = temp_config_file({
+            "version": "1",
+            "providers": {
+                "azure-oauth": {
+                    "type": "azure",
+                    "auth_module": "custom_auth.my_oauth",
+                    "config": {
+                        "endpoint": "https://example.azure.openai.com/",
+                        "api_version": "2025-04-01-preview"
+                        # Note: no api_key - auth_module provides it
+                    }
+                }
+            },
+            "defaults": {
+                "provider": "azure-oauth",
+                "model": "gpt-4o",
+                "deployment": "gpt-4o-deployment"
+            }
+        })
+        
+        client = await llm_factory.get_model_client(config_path=config_file)
+        assert isinstance(client, DummyClient)
+        assert client.kwargs["api_key"] == "oauth-token-12345"
+        assert client.kwargs["user"] == '{"appkey": "test-app-key"}'
+        assert client.kwargs["azure_deployment"] == "gpt-4o-deployment"
+    finally:
+        sys.path.remove(str(tmp_path))
+
+
+@pytest.mark.asyncio
+async def test_factory_azure_auth_module_missing_module(temp_config_file):
+    """Test that missing auth_module raises appropriate error."""
+    config_file = temp_config_file({
+        "version": "1",
+        "providers": {
+            "azure-oauth": {
+                "type": "azure",
+                "auth_module": "nonexistent.module",
+                "config": {
+                    "endpoint": "https://example.azure.openai.com/",
+                    "api_version": "2025-04-01-preview"
+                }
+            }
+        },
+        "defaults": {
+            "provider": "azure-oauth",
+            "model": "gpt-4o",
+            "deployment": "gpt-4o-deployment"
+        }
+    })
+    
+    with pytest.raises(ModelConfigError, match="Failed to import auth_module"):
+        await llm_factory.get_model_client(config_path=config_file)
+
+
+@pytest.mark.asyncio
+async def test_factory_azure_auth_module_missing_function(temp_config_file, tmp_path):
+    """Test that auth_module without get_credentials function raises error."""
+    # Create a module without get_credentials
+    auth_module_dir = tmp_path / "bad_auth"
+    auth_module_dir.mkdir()
+    (auth_module_dir / "__init__.py").write_text("")
+    (auth_module_dir / "no_func.py").write_text('''
+# This module is missing the required get_credentials function
+def other_function():
+    pass
+''')
+    
+    import sys
+    sys.path.insert(0, str(tmp_path))
+    
+    try:
+        config_file = temp_config_file({
+            "version": "1",
+            "providers": {
+                "azure-oauth": {
+                    "type": "azure",
+                    "auth_module": "bad_auth.no_func",
+                    "config": {
+                        "endpoint": "https://example.azure.openai.com/",
+                        "api_version": "2025-04-01-preview"
+                    }
+                }
+            },
+            "defaults": {
+                "provider": "azure-oauth",
+                "model": "gpt-4o",
+                "deployment": "gpt-4o-deployment"
+            }
+        })
+        
+        with pytest.raises(ModelConfigError, match="must expose.*get_credentials"):
+            await llm_factory.get_model_client(config_path=config_file)
+    finally:
+        sys.path.remove(str(tmp_path))
+
+
+@pytest.mark.asyncio
+async def test_factory_azure_auth_module_returns_invalid(temp_config_file, tmp_path):
+    """Test that auth_module returning invalid data raises error."""
+    # Create a module that returns wrong type
+    auth_module_dir = tmp_path / "invalid_auth"
+    auth_module_dir.mkdir()
+    (auth_module_dir / "__init__.py").write_text("")
+    (auth_module_dir / "wrong_return.py").write_text('''
+async def get_credentials(config):
+    return "not a dict"
+''')
+    
+    import sys
+    sys.path.insert(0, str(tmp_path))
+    
+    try:
+        config_file = temp_config_file({
+            "version": "1",
+            "providers": {
+                "azure-oauth": {
+                    "type": "azure",
+                    "auth_module": "invalid_auth.wrong_return",
+                    "config": {
+                        "endpoint": "https://example.azure.openai.com/",
+                        "api_version": "2025-04-01-preview"
+                    }
+                }
+            },
+            "defaults": {
+                "provider": "azure-oauth",
+                "model": "gpt-4o",
+                "deployment": "gpt-4o-deployment"
+            }
+        })
+        
+        with pytest.raises(ModelConfigError, match="must return a dict"):
+            await llm_factory.get_model_client(config_path=config_file)
+    finally:
+        sys.path.remove(str(tmp_path))
+
+
+@pytest.mark.asyncio
+async def test_factory_azure_auth_module_missing_api_key(temp_config_file, tmp_path):
+    """Test that auth_module returning dict without api_key raises error."""
+    # Create a module that returns dict without api_key
+    auth_module_dir = tmp_path / "nokey_auth"
+    auth_module_dir.mkdir()
+    (auth_module_dir / "__init__.py").write_text("")
+    (auth_module_dir / "no_api_key.py").write_text('''
+async def get_credentials(config):
+    return {"user": "some-user"}  # Missing api_key
+''')
+    
+    import sys
+    sys.path.insert(0, str(tmp_path))
+    
+    try:
+        config_file = temp_config_file({
+            "version": "1",
+            "providers": {
+                "azure-oauth": {
+                    "type": "azure",
+                    "auth_module": "nokey_auth.no_api_key",
+                    "config": {
+                        "endpoint": "https://example.azure.openai.com/",
+                        "api_version": "2025-04-01-preview"
+                    }
+                }
+            },
+            "defaults": {
+                "provider": "azure-oauth",
+                "model": "gpt-4o",
+                "deployment": "gpt-4o-deployment"
+            }
+        })
+        
+        with pytest.raises(ModelConfigError, match="must return a dict with 'api_key'"):
+            await llm_factory.get_model_client(config_path=config_file)
+    finally:
+        sys.path.remove(str(tmp_path))
+
+
+@pytest.mark.asyncio
+async def test_factory_azure_auth_module_receives_config(temp_config_file, tmp_path):
+    """Test that auth_module receives the provider config."""
+    # Create a module that echoes back config values
+    auth_module_dir = tmp_path / "echo_auth"
+    auth_module_dir.mkdir()
+    (auth_module_dir / "__init__.py").write_text("")
+    (auth_module_dir / "echo.py").write_text('''
+async def get_credentials(config):
+    """Return api_key based on config to prove we received it."""
+    return {
+        "api_key": f"token-for-{config.get('custom_field', 'unknown')}",
+    }
+''')
+    
+    import sys
+    sys.path.insert(0, str(tmp_path))
+    
+    try:
+        config_file = temp_config_file({
+            "version": "1",
+            "providers": {
+                "azure-oauth": {
+                    "type": "azure",
+                    "auth_module": "echo_auth.echo",
+                    "config": {
+                        "endpoint": "https://example.azure.openai.com/",
+                        "api_version": "2025-04-01-preview",
+                        "custom_field": "my-app-id"
+                    }
+                }
+            },
+            "defaults": {
+                "provider": "azure-oauth",
+                "model": "gpt-4o",
+                "deployment": "gpt-4o-deployment"
+            }
+        })
+        
+        client = await llm_factory.get_model_client(config_path=config_file)
+        assert client.kwargs["api_key"] == "token-for-my-app-id"
+    finally:
+        sys.path.remove(str(tmp_path))
+
+
+def test_loader_azure_allows_missing_api_key_with_auth_module(temp_config_file):
+    """Test that loader allows missing api_key when auth_module is present."""
+    config_file = temp_config_file({
+        "version": "1",
+        "providers": {
+            "azure-oauth": {
+                "type": "azure",
+                "auth_module": "some.module",
+                "config": {
+                    "endpoint": "https://example.azure.openai.com/",
+                    "api_version": "2025-04-01-preview"
+                    # No api_key - should be allowed
+                }
+            }
+        },
+        "defaults": {
+            "provider": "azure-oauth",
+            "model": "gpt-4o",
+            "deployment": "gpt-4o-deployment"
+        }
+    })
+    
+    loader = ModelConfigLoader(config_file)
+    loader.load()
+    
+    # Should not raise - api_key is optional when auth_module is present
+    provider_config = loader.get_provider_config("azure-oauth")
+    assert provider_config["auth_module"] == "some.module"
+    assert "api_key" not in provider_config["config"]
+
+
+def test_loader_azure_requires_api_key_without_auth_module(temp_config_file):
+    """Test that loader requires api_key when no auth_module is present."""
+    config_file = temp_config_file({
+        "version": "1",
+        "providers": {
+            "azure-standard": {
+                "type": "azure",
+                "config": {
+                    "endpoint": "https://example.azure.openai.com/",
+                    "api_version": "2025-04-01-preview"
+                    # No api_key and no auth_module - should fail
+                }
+            }
+        },
+        "defaults": {
+            "provider": "azure-standard",
+            "model": "gpt-4o",
+            "deployment": "gpt-4o-deployment"
+        }
+    })
+    
+    loader = ModelConfigLoader(config_file)
+    loader.load()
+    
+    with pytest.raises(ModelConfigError, match="Missing required fields.*api_key"):
+        loader.get_provider_config("azure-standard")
