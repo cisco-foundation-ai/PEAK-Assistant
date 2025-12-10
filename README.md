@@ -275,7 +275,7 @@ The PEAK Assistant can be run in a Docker container. To do this, you will need t
 The project provides pre-built Docker images, which can be downloaded by running the following command:
 
 ```bash
-docker pull ghcr.io/cisco-foundation-ai/peak-assistant:main
+docker pull ghcr.io/cisco-foundation-ai/peak-assistant:latest
 ```
 
 ### Building the Docker image from source
@@ -297,7 +297,7 @@ Once you have the image downloaded, you can run the container by running the fol
 		--mount "type=bind,src=$(PWD)/model_config.json,target=/home/peakassistant/model_config.json" \
 		--mount "type=bind,src=$(PWD)/mcp_servers.json,target=/home/peakassistant/mcp_servers.json" \
 		-p "127.0.0.1:8501:8501" \
-		ghcr.io/cisco-foundation-ai/peak-assistant:main
+		ghcr.io/cisco-foundation-ai/peak-assistant:latest
 ```
 
 Note that you will still need to provide the same configuration files as you would if you were running the app natively:
