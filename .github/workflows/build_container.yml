@@ -111,6 +111,7 @@ jobs:
           tags: |
             # set latest tag for main branch
             type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+            type=raw,value=${{ steps.build.outputs.tags }},enable=true
 
       - name: Login to GitHub Container Registry
         # https://github.com/docker/login-action/#github-container-registry
