@@ -33,10 +33,61 @@ Configuration:
 
 from __future__ import annotations
 
+import importlib
 from typing import Optional, Any, Type
 from pathlib import Path
 
 from .model_config_loader import get_loader, ModelConfigError
+
+
+async def _get_auth_module_credentials(auth_module: str, config: dict) -> dict:
+    """Load credentials from an external auth module.
+    
+    The auth module must expose an async function `get_credentials(config)` that returns
+    a dict with at least 'api_key'. It may also return 'user' or other parameters.
+    
+    Args:
+        auth_module: Python module path (e.g., 'my_package.my_auth_module')
+        config: Provider config dict to pass to the auth module
+    
+    Returns:
+        Dict with credentials (at minimum 'api_key')
+    
+    Raises:
+        ModelConfigError: If module cannot be loaded or doesn't have required function
+    """
+    try:
+        module = importlib.import_module(auth_module)
+    except ImportError as e:
+        raise ModelConfigError(
+            f"Failed to import auth_module '{auth_module}': {e}"
+        ) from e
+    
+    if not hasattr(module, "get_credentials"):
+        raise ModelConfigError(
+            f"Auth module '{auth_module}' must expose an async 'get_credentials(config)' function"
+        )
+    
+    get_credentials = getattr(module, "get_credentials")
+    
+    try:
+        creds = await get_credentials(config)
+    except Exception as e:
+        raise ModelConfigError(
+            f"Auth module '{auth_module}' get_credentials() failed: {e}"
+        ) from e
+    
+    if not isinstance(creds, dict):
+        raise ModelConfigError(
+            f"Auth module '{auth_module}' get_credentials() must return a dict, got {type(creds).__name__}"
+        )
+    
+    if "api_key" not in creds:
+        raise ModelConfigError(
+            f"Auth module '{auth_module}' get_credentials() must return a dict with 'api_key'"
+        )
+    
+    return creds
 
 
 async def get_model_client(agent_name: Optional[str] = None, config_path: Optional[Path] = None):
@@ -106,10 +157,18 @@ async def _build_azure_client(agent_config: dict, provider_config: dict, loader:
     if "deployment" not in agent_config:
         raise ModelConfigError("Azure agent configuration must include 'deployment' field")
     
-    # Get connection config from provider
-    conn_config = provider_config["config"]
+    # Get connection config from provider (make a copy so we can modify it)
+    conn_config = dict(provider_config["config"])
     
-    # Validate required provider fields
+    # Check for custom auth module
+    if "auth_module" in provider_config:
+        auth_creds = await _get_auth_module_credentials(
+            provider_config["auth_module"], 
+            conn_config
+        )
+        conn_config.update(auth_creds)
+    
+    # Validate required provider fields (api_key should now be present either from config or auth_module)
     required_fields = ["endpoint", "api_key", "api_version"]
     missing = [f for f in required_fields if f not in conn_config]
     if missing:
@@ -124,6 +183,10 @@ async def _build_azure_client(agent_config: dict, provider_config: dict, loader:
         "azure_endpoint": conn_config["endpoint"],
         "api_key": conn_config["api_key"],
     }
+    
+    # Optional: user parameter (typically from auth_module for gateway authentication)
+    if "user" in conn_config:
+        params["user"] = conn_config["user"]
     
     # Optional parameters - common
     if "max_tokens" in conn_config:

@@ -168,6 +168,38 @@ The following agent names are used in the PEAK Assistant codebase.
 
 **Note:** For Azure, you must specify both `model` (the model identifier like "gpt-4o") and `deployment` (your Azure deployment name) in the agent configuration.
 
+### Azure with Custom Authentication (auth_module)
+
+For Azure OpenAI deployments behind an authentication gateway (e.g., OAuth2 gateways, enterprise proxies), you can provide a custom authentication module instead of a static API key.
+
+**Optional field:**
+- `auth_module` (string): Python module path to a custom authentication module
+
+When `auth_module` is specified, the `api_key` field becomes optional in the `config` section. The auth module provides credentials at runtime.
+
+**Quick example:**
+```json
+{
+  "providers": {
+    "azure-enterprise": {
+      "type": "azure",
+      "auth_module": "my_auth.enterprise_oauth",
+      "config": {
+        "endpoint": "${AZURE_OPENAI_ENDPOINT}",
+        "api_version": "2025-04-01-preview",
+        "client_id": "${OAUTH_CLIENT_ID}",
+        "client_secret": "${OAUTH_CLIENT_SECRET}",
+        "token_endpoint": "${OAUTH_TOKEN_ENDPOINT}"
+      }
+    }
+  }
+}
+```
+
+The auth module must expose an async function `get_credentials(config)` that returns a dict with at least `api_key`.
+
+**📖 For complete documentation on implementing custom authentication, see [CUSTOM_AUTHENTICATION.md](CUSTOM_AUTHENTICATION.md).**
+
 ### OpenAI Provider Type
 
 **Type:** `"openai"`
