@@ -109,8 +109,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY_IMAGE }}
           tags: |
-            # set latest tag for main branch
-            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+            type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value=${{ steps.build.outputs.tags }},enable=true
 
       - name: Login to GitHub Container Registry
@@ -123,10 +122,6 @@ jobs:
 
       - name: Create manifest list and push
         working-directory: /tmp/digests
-        # run: |
-        #   echo $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") 
-        #   echo $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
-        #   docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
         run: |
           ${GITHUB_WORKSPACE}/scripts/docker_create_manifest_list.py "${{ env.REGISTRY_IMAGE }}" "$DOCKER_METADATA_OUTPUT_JSON"
       - name: Inspect image
