@@ -35,12 +35,11 @@ print("Digests: ", file=sys.stderr)
 print(list(DIGESTS), file=sys.stderr)
 
 try:
-
     result = subprocess.run(
         [
             "docker", "buildx", "imagetools", "create",
             *tags,
-            
+            *DIGESTS            
         ]
     )
 except subprocess.CalledProcessError as e:
