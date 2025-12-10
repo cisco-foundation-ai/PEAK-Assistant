@@ -106,6 +106,9 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY_IMAGE }}
+          tags: |
+            # set latest tag for main branch
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
 
       - name: Login to GitHub Container Registry
         # https://github.com/docker/login-action/#github-container-registry
@@ -117,10 +120,11 @@ jobs:
 
       - name: Create manifest list and push
         working-directory: /tmp/digests
-        run: |
-          echo $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") 
-          echo $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
-          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
+        # run: |
+        #   echo $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") 
+        #   echo $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
+        #   docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
+        run: ${GITHUB_WORKSPACE}/scripts/docker_create_manifest_list.py "${{ env.REGISTRY_IMAGE }}" "$DOCKER_METADATA_OUTPUT_JSON"
       - name: Inspect image
         run: |
           docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}
