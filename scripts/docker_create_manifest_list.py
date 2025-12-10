@@ -27,15 +27,20 @@ tags = []
 for tag in docker_meta.get("tags", []):
     tags.append(f"-t {tag}")
 
-tag_string = " ".join(tags)
+print(f"Tags for manifest list: {tags}", file=sys.stderr)
 
+DIGESTS = (f"{REGISTRY_IMAGE}@sha256:{digest}" for digest in [filename for filename in os.listdir(".") if os.path.isfile(filename)])
+
+print("Digests: ", file=sys.stderr)
+print(list(DIGESTS), file=sys.stderr)
 
 try:
+
     result = subprocess.run(
         [
             "docker", "buildx", "imagetools", "create",
             *tags,
-            *(f"{REGISTRY_IMAGE}@sha256:{digest}" for digest in [filename for filename in os.listdir(".") if os.path.isfile(filename)]),
+            
         ]
     )
 except subprocess.CalledProcessError as e:
