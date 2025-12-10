@@ -8,7 +8,7 @@ name: "Build container"
   
 permissions:
   packages: write
-  contents: read
+  contents: write
 
 env:
   PLATFORM_PAIR: linux_amd64 # this should be overridden later
@@ -45,6 +45,10 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY_IMAGE }}
+          tags: |
+            # set latest tag for main branch
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
         if: ${{ matrix.platform == 'linux/arm64' }}
@@ -84,6 +88,8 @@ jobs:
     needs:
       - build
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
       - name: Download digests
         uses: actions/download-artifact@v4
         with:
@@ -102,6 +108,9 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY_IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ github.ref }},enable=true
 
       - name: Login to GitHub Container Registry
         # https://github.com/docker/login-action/#github-container-registry
@@ -114,7 +123,7 @@ jobs:
       - name: Create manifest list and push
         working-directory: /tmp/digests
         run: |
-          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
+          ${GITHUB_WORKSPACE}/scripts/docker_create_manifest_list.py "${{ env.REGISTRY_IMAGE }}" "$DOCKER_METADATA_OUTPUT_JSON"
       - name: Inspect image
         run: |
           docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}
