@@ -24,6 +24,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from autogen_agentchat.messages import TextMessage, UserMessage
 import streamlit as st
 import hashlib
+import html
 import json
 import os
 import secrets
@@ -42,6 +43,53 @@ from peak_assistant.utils.mcp_config import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def validate_and_escape_oauth_url(url: str) -> Optional[str]:
+    """
+    Validate OAuth URL using allowlist approach and HTML-escape for safe rendering.
+    
+    Security: Only allows https:// URLs, or http:// for localhost development.
+    All other schemes (javascript:, data:, file:, etc.) are rejected.
+    
+    Args:
+        url: The OAuth URL to validate
+        
+    Returns:
+        HTML-escaped URL if valid, None if invalid or potentially malicious
+    """
+    if not isinstance(url, str) or not url:
+        return None
+    
+    try:
+        parsed = urlparse(url)
+        
+        # ALLOWLIST: Only permit https, or http for localhost dev
+        allowed_schemes = {'https', 'http'}
+        localhost_hosts = {'localhost', '127.0.0.1'}
+        
+        # Scheme check (case-insensitive via urlparse normalization)
+        if parsed.scheme.lower() not in allowed_schemes:
+            logger.warning(f"OAuth URL rejected: invalid scheme '{parsed.scheme}'")
+            return None
+        
+        # Must have a valid host
+        if not parsed.netloc:
+            logger.warning("OAuth URL rejected: missing host")
+            return None
+        
+        # http only allowed for localhost (strip port for comparison)
+        host_without_port = parsed.netloc.split(':')[0]
+        if parsed.scheme.lower() == 'http' and host_without_port not in localhost_hosts:
+            logger.warning(f"OAuth URL rejected: http not allowed for non-localhost host '{host_without_port}'")
+            return None
+        
+        # HTML-escape to prevent attribute breakout in rendered HTML
+        return html.escape(url, quote=True)
+    except Exception as e:
+        logger.warning(f"OAuth URL validation failed: {e}")
+        return None
+
 
 def get_asset_path(relative_path: str) -> str:
     """Get absolute path to asset relative to streamlit app directory"""

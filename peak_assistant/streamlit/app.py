@@ -42,7 +42,8 @@ from peak_assistant.streamlit.util.helpers import (
     restore_session_from_oauth,
     exchange_oauth_code_for_token,
     get_asset_path,
-    get_agent_config_data
+    get_agent_config_data,
+    validate_and_escape_oauth_url
 )
 #############################
 ## LOGGING SETUP
@@ -511,19 +512,24 @@ with mcp_servers_tab:
                         logger.info(f"Initiating OAuth flow for {server_name}")
                         auth_url = initiate_oauth_flow(server_name, config)
                         if auth_url:
-                            logger.debug(f"Redirecting to authenticate with {server_name}")
-                            logger.debug(f"Generated auth URL: {auth_url[:100]}...")
-                            st.markdown(f"""
-                            <meta http-equiv="refresh" content="0; url={auth_url}">
-                            <p>If you are not redirected automatically, <a href="{auth_url}" target="_self">click here</a>.</p>
-                            """, unsafe_allow_html=True)
-                            st.markdown(f"""
-                            <script>
-                                setTimeout(function() {{
-                                    window.location.href = "{auth_url}";
-                                }}, 1000);
-                            </script>
-                            """, unsafe_allow_html=True)
+                            # Validate and escape URL to prevent XSS/injection attacks
+                            safe_url = validate_and_escape_oauth_url(auth_url)
+                            if safe_url:
+                                logger.debug(f"Redirecting to authenticate with {server_name}")
+                                logger.debug(f"Generated auth URL: {auth_url[:100]}...")
+                                st.markdown(f"""
+                                <meta http-equiv="refresh" content="0; url={safe_url}">
+                                <p>If you are not redirected automatically, <a href="{safe_url}" target="_self">click here</a>.</p>
+                                """, unsafe_allow_html=True)
+                                st.markdown(f"""
+                                <script>
+                                    setTimeout(function() {{
+                                        window.location.href = "{safe_url}";
+                                    }}, 1000);
+                                </script>
+                                """, unsafe_allow_html=True)
+                            else:
+                                st.error(f"Invalid OAuth URL for {server_name}. URL must use https:// (or http:// for localhost).")
                         else:
                             st.error(f"Failed to initiate OAuth2 flow for {server_name}")
 
@@ -686,7 +692,12 @@ with mcp_servers_tab:
                            (status_message == "OAuth2 authentication detected"):
                             auth_url = initiate_oauth_flow(server_name, config)
                             if auth_url:
-                                st.markdown(f"<meta http-equiv=\"refresh\" content=\"0; url={auth_url}\">", unsafe_allow_html=True)
+                                # Validate and escape URL to prevent XSS/injection attacks
+                                safe_url = validate_and_escape_oauth_url(auth_url)
+                                if safe_url:
+                                    st.markdown(f"<meta http-equiv=\"refresh\" content=\"0; url={safe_url}\">", unsafe_allow_html=True)
+                                else:
+                                    st.error(f"Invalid OAuth URL for {server_name}. URL must use https:// (or http:// for localhost).")
                             else:
                                 st.error(f"Failed to initiate OAuth2 flow for {server_name}")
                         elif config.auth and config.auth.type.value == "api_key":
