@@ -182,11 +182,15 @@ cython_debug/
 *.jsonl
 *.ORIG
 
+# Private auth modules (not for public repo)
+private_auth/
+
 # Ignore everything in the evaluation reports directory.
 # We don't commit these to the repo anyway. 
 reports/
 
-# re-allow README.md and MODEL_CONFIGURATION.md to be included in the repo
+# re-allow documentation files to be included in the repo
 !README.md
 !MODEL_CONFIGURATION.md
+!CUSTOM_AUTHENTICATION.md
 !model_config.json.example
