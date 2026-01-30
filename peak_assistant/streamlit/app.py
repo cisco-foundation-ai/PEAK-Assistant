@@ -180,29 +180,36 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 
-research_tab, \
-local_data_tab, \
-hypothesis_generation_tab, \
-hypothesis_refinement_tab, \
-able_tab, \
-data_discovery_tab, \
-hunt_plan_tab, \
-mcp_servers_tab, \
-agent_config_tab, \
-debug_tab = st.tabs(
-    [
-        "Research", 
-        "Local Data",
-        "Hypothesis Generation",
-        "Hypothesis Refinement",
-        "ABLE Table",
-        "Data Discovery",
-        "Hunt Plan",
-        ":grey[MCP Servers]",
-        ":grey[Agent Config]",
-        ":grey[Debug]"
-    ]
-)
+# Check if debug tab should be shown
+show_debug_tab = os.environ.get("PEAK_ASSISTANT_DEBUG_TAB") is not None
+
+# Build tab list dynamically
+tab_names = [
+    "Research", 
+    "Local Data",
+    "Hypothesis Generation",
+    "Hypothesis Refinement",
+    "ABLE Table",
+    "Data Discovery",
+    "Hunt Plan",
+    ":grey[MCP Servers]",
+    ":grey[Agent Config]",
+]
+if show_debug_tab:
+    tab_names.append(":grey[Debug]")
+
+tabs = st.tabs(tab_names)
+
+research_tab = tabs[0]
+local_data_tab = tabs[1]
+hypothesis_generation_tab = tabs[2]
+hypothesis_refinement_tab = tabs[3]
+able_tab = tabs[4]
+data_discovery_tab = tabs[5]
+hunt_plan_tab = tabs[6]
+mcp_servers_tab = tabs[7]
+agent_config_tab = tabs[8]
+debug_tab = tabs[9] if show_debug_tab else None
 
 with research_tab:
     peak_assistant_chat(
@@ -892,8 +899,9 @@ with agent_config_tab:
         - See `MODEL_CONFIGURATION.md` for documentation
         """)
 
-with debug_tab:
-    with st.expander("Environment Variables"):
-        st.write(os.environ)
-    with st.expander("Session State"):
-        st.write(st.session_state)
+if debug_tab:
+    with debug_tab:
+        with st.expander("Environment Variables"):
+            st.write(os.environ)
+        with st.expander("Session State"):
+            st.write(st.session_state)
