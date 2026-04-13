@@ -210,13 +210,29 @@ async def _build_azure_client(agent_config: dict, provider_config: dict, loader:
     if "seed" in conn_config:
         params["seed"] = conn_config["seed"]
     
+    # Optional: model_info for models not recognized by autogen
+    model_info = loader.get_model_info(agent_config["provider"], agent_config["model"])
+    if model_info:
+        params["model_info"] = model_info
+
     global AZURE_CLIENT_CLASS
     if AZURE_CLIENT_CLASS is None:
         # Lazy import to avoid requiring dependency at module import time
         from autogen_ext.models.openai import AzureOpenAIChatCompletionClient as _AZ
         AZURE_CLIENT_CLASS = _AZ
-    
-    return AZURE_CLIENT_CLASS(**params)  # type: ignore[misc]
+
+    try:
+        return AZURE_CLIENT_CLASS(**params)  # type: ignore[misc]
+    except ValueError as e:
+        msg = str(e)
+        if "model_info" in msg or "ModelInfo" in msg:
+            hint = (
+                f"Azure model '{agent_config['model']}' is not recognized by autogen and requires model_info. "
+                f"Add a 'models' section to your provider configuration with model_info for this model. "
+                f"See MODEL_CONFIGURATION.md for examples."
+            )
+            raise ModelConfigError(f"{hint}\nOriginal error: {msg}") from e
+        raise
 
 
 async def _build_openai_client(agent_config: dict, provider_config: dict, loader: Any):
