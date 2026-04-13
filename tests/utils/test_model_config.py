@@ -536,6 +536,82 @@ async def test_factory_azure_per_agent(temp_config_file, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_factory_azure_with_model_info(temp_config_file, monkeypatch):
+    """Test that Azure client passes model_info when provided in config."""
+    monkeypatch.setenv("AZURE_API_KEY", "test-key")
+
+    config_file = temp_config_file({
+        "version": "1",
+        "providers": {
+            "azure-main": {
+                "type": "azure",
+                "config": {
+                    "endpoint": "https://example.azure.openai.com/",
+                    "api_key": "${AZURE_API_KEY}",
+                    "api_version": "2025-04-01-preview"
+                },
+                "models": {
+                    "gpt-5.4-mini": {
+                        "model_info": {
+                            "vision": True,
+                            "function_calling": True,
+                            "json_output": True,
+                            "family": "gpt-5",
+                            "structured_output": True,
+                            "multiple_system_messages": True
+                        }
+                    }
+                }
+            }
+        },
+        "defaults": {
+            "provider": "azure-main",
+            "model": "gpt-5.4-mini",
+            "deployment": "gpt-5.4-mini"
+        }
+    })
+
+    client = await llm_factory.get_model_client(config_path=config_file)
+    assert isinstance(client, DummyClient)
+    assert client.kwargs["model"] == "gpt-5.4-mini"
+    assert "model_info" in client.kwargs
+    assert client.kwargs["model_info"]["family"] == "gpt-5"
+    assert client.kwargs["model_info"]["vision"] is True
+    assert client.kwargs["model_info"]["function_calling"] is True
+    assert client.kwargs["model_info"]["structured_output"] is True
+
+
+@pytest.mark.asyncio
+async def test_factory_azure_without_model_info_no_key(temp_config_file, monkeypatch):
+    """Test that Azure client does NOT include model_info when not in config."""
+    monkeypatch.setenv("AZURE_API_KEY", "test-key")
+
+    config_file = temp_config_file({
+        "version": "1",
+        "providers": {
+            "azure-main": {
+                "type": "azure",
+                "config": {
+                    "endpoint": "https://example.azure.openai.com/",
+                    "api_key": "${AZURE_API_KEY}",
+                    "api_version": "2025-04-01-preview"
+                }
+            }
+        },
+        "defaults": {
+            "provider": "azure-main",
+            "model": "gpt-4o",
+            "deployment": "gpt-4o-deployment"
+        }
+    })
+
+    client = await llm_factory.get_model_client(config_path=config_file)
+    assert isinstance(client, DummyClient)
+    assert client.kwargs["model"] == "gpt-4o"
+    assert "model_info" not in client.kwargs
+
+
+@pytest.mark.asyncio
 async def test_factory_openai_native(temp_config_file, monkeypatch):
     """Test creating OpenAI native client."""
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test-key")
