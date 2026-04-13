@@ -31,6 +31,16 @@ cd PEAK-Assistant
 uv sync
 ```
 
+## Environment Variables
+
+The PEAK Assistant uses a `.env` file to store API keys and other sensitive configuration. An example file is provided to get you started:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and fill in the values for the provider(s) you plan to use. You only need to configure the variables for the provider(s) referenced in your `model_config.json` — the rest can stay commented out. See [Model Configuration](#model-configuration) below for details on setting up your provider.
+
 ## Generate TLS Certificate
 Once that's done, you'll need to generate the TLS certificate and private key. The files must be named `cert.pem` and `key.pem`, and reside in the local directory (or a directory specified by `--cert-dir` on startup). You can do this manually like so:
 
@@ -146,7 +156,7 @@ The MCP server configuration supports environment variable interpolation using `
 - `${ENV_VAR|default}` - Replace with environment variable or use default value
 - `${ENV_VAR|null}` - Replace with environment variable or empty string
 
-Store your actual secrets in a `.env` file or set them as environment variables before running the application.
+Store your actual secrets in your `.env` file (see [Environment Variables](#environment-variables) above) or set them as environment variables before running the application.
 
 ### MCP Authentication
 
