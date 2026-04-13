@@ -41,6 +41,7 @@ from peak_assistant.utils.mcp_config import (
     AuthConfig,
     MCPServerConfig
 )
+from peak_assistant.utils.environment import interpolate_env_vars
 
 logger = logging.getLogger(__name__)
 
@@ -246,7 +247,10 @@ def load_mcp_server_configs() -> Dict[str, MCPServerConfig]:
     try:
         with open(config_file, 'r') as f:
             config_data = json.load(f)
-        
+
+        # Interpolate environment variables (mirrors CLI in mcp_config.py)
+        config_data = interpolate_env_vars(config_data)
+
         # Load server groups
         server_groups = config_data.get("serverGroups", {})
         st.session_state["mcp_server_groups"] = server_groups
@@ -714,10 +718,15 @@ async def test_mcp_connection(server_name: str, server_config: MCPServerConfig) 
             try:
                 from autogen_ext.tools.mcp import McpWorkbench, StdioServerParams
                 
+                # Build complete subprocess environment (mirrors CLI in mcp_config.py)
+                env = os.environ.copy()
+                if server_config.env:
+                    env.update(server_config.env)
+
                 server_params = StdioServerParams(
                     command=server_config.command,
                     args=server_config.args or [],
-                    env=server_config.env or {}
+                    env=env
                 )
                 
                 # Create a temporary workbench to test the connection
