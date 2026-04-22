@@ -289,11 +289,13 @@ docker pull ghcr.io/cisco-foundation-ai/peak-assistant:latest
 ```
 
 ### Building the Docker image from source
-If you prefer to build the image from source, you can do so by running the following command from the root of the repository::
+If you prefer to build the image from source, you can do so by running the following command from the root of the repository:
 
 ```bash
 docker build -t peak-assistant .
 ```
+
+> **Note:** The container image includes Node.js 20 (copied from the official `node:20-slim` image) so that `npx`-based MCP servers work out of the box. No remote scripts are executed during the build.
 
 ### Running the Docker container
 Once you have the image downloaded, you can run the container by running the following command:
