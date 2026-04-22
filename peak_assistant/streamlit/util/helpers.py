@@ -45,6 +45,15 @@ from peak_assistant.utils.environment import interpolate_env_vars
 
 logger = logging.getLogger(__name__)
 
+SENSITIVE_AUTH_FIELDS = {
+    "access_token",
+    "refresh_token",
+    "authorization_code",
+    "client_secret",
+    "api_key",
+    "token",
+}
+
 
 def validate_and_escape_oauth_url(url: str) -> Optional[str]:
     """
@@ -403,36 +412,28 @@ def store_session_for_oauth(server_name: str, state: str) -> str:
     Uses the OAuth state parameter as the key for recovery.
     """
     try:
-        # Create session data - exclude non-serializable objects
+        # Create a minimal recovery snapshot with only OAuth flow metadata.
+        # Do not persist general session state, which may contain credentials.
         filtered_session_state = {}
+        allowed_exact_keys = {"user_session_id"}
+        allowed_prefixes = (
+            "oauth_client_",
+            "oauth_state_",
+            "oauth_server_for_state_",
+            "oauth_endpoints_",   # token_endpoint needed for token exchange post-redirect
+            "oauth_discovery_",   # discovery metadata needed to verify OAuth support
+            "MCP.",               # existing access tokens for other servers
+        )
+
         for key, value in st.session_state.items():
-            # Skip MCP server configs (they'll be reloaded from JSON)
-            if key == "mcp_server_configs":
+            if key not in allowed_exact_keys and not key.startswith(allowed_prefixes):
                 continue
-            # Skip UI widget keys that can conflict with Streamlit policies on restore
-            if (
-                key.startswith("test_conn_")
-                or key.startswith("status_btn_")
-                or key.startswith("auth_button_")
-                or key.startswith("btn_")
-            ):
-                continue
-            # Preserve OAuth client info (needed for token exchange)
-            if key.startswith("oauth_client_"):
-                # OAuth client info should be serializable (it's from JSON responses)
-                try:
-                    json.dumps(value)
-                    filtered_session_state[key] = value
-                    continue
-                except (TypeError, ValueError):
-                    logger.warning(f"OAuth client info not serializable for key: {key}")
-                    continue
-            # Only store simple serializable data
+
             try:
-                json.dumps(value)  # Test if it's serializable
+                json.dumps(value)
                 filtered_session_state[key] = value
             except (TypeError, ValueError):
-                logger.debug(f"Skipping non-serializable session key: {key}")
+                logger.debug(f"Skipping non-serializable OAuth recovery key: {key}")
                 continue
         
         session_data = {
@@ -444,20 +445,13 @@ def store_session_for_oauth(server_name: str, state: str) -> str:
             "session_state": filtered_session_state
         }
         
-        # Use OAuth state as the key (it's already unique and secure)
         temp_file = os.path.join(tempfile.gettempdir(), f"peak_oauth_session_{state}.json")
-        with open(temp_file, 'w') as f:
+        fd = os.open(temp_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, 'w') as f:
             json.dump(session_data, f, default=str)  # default=str handles non-serializable objects
         
         logger.info(f"Stored OAuth session state for {server_name} with state: {state}")
         logger.debug(f"Session data keys stored: {list(filtered_session_state.keys())}")
-        
-        # Check if OAuth client info was included
-        oauth_client_keys = [k for k in filtered_session_state.keys() if k.startswith("oauth_client_")]
-        if oauth_client_keys:
-            logger.debug(f"OAuth client info included in session storage: {oauth_client_keys}")
-        else:
-            logger.debug(f"No OAuth client info found in session state during storage")
         
         return state
         
@@ -521,7 +515,8 @@ def store_oauth_state_persistent(state: str, server_name: str):
             "timestamp": time.time(),
             "user_session_id": get_user_session_id()
         }
-        with open(state_file, 'w') as f:
+        fd = os.open(state_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, 'w') as f:
             json.dump(state_data, f)
         logger.info(f"Stored OAuth state persistently: {state} -> {server_name}")
     except Exception as e:
@@ -631,7 +626,17 @@ def get_mcp_auth_status(server_name: str, server_config: MCPServerConfig) -> Tup
     
     if auth_key in st.session_state:
         auth_data = st.session_state[auth_key]
-        logger.info(f"[AUTH STATUS] Found auth data for {server_name}: {auth_data}")
+        if isinstance(auth_data, dict):
+            auth_keys = sorted(list(auth_data.keys()))
+            present_sensitive = sorted(
+                [key for key in auth_keys if key in SENSITIVE_AUTH_FIELDS and bool(auth_data.get(key))]
+            )
+            logger.info(
+                f"[AUTH STATUS] Found auth data for {server_name} "
+                f"(keys={auth_keys}, sensitive_fields_present={present_sensitive})"
+            )
+        else:
+            logger.info(f"[AUTH STATUS] Found non-dict auth data for {server_name}: {type(auth_data).__name__}")
         
         # Check for OAuth2 access token
         if auth_data.get("access_token"):
