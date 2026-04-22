@@ -415,7 +415,14 @@ def store_session_for_oauth(server_name: str, state: str) -> str:
         # Do not persist general session state, which may contain credentials.
         filtered_session_state = {}
         allowed_exact_keys = {"user_session_id"}
-        allowed_prefixes = ("oauth_client_", "oauth_state_", "oauth_server_for_state_")
+        allowed_prefixes = (
+            "oauth_client_",
+            "oauth_state_",
+            "oauth_server_for_state_",
+            "oauth_endpoints_",   # token_endpoint needed for token exchange post-redirect
+            "oauth_discovery_",   # discovery metadata needed to verify OAuth support
+            "MCP.",               # existing access tokens for other servers
+        )
 
         for key, value in st.session_state.items():
             if key not in allowed_exact_keys and not key.startswith(allowed_prefixes):
