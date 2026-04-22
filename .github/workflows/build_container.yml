@@ -121,9 +121,16 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create manifest list and push
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
         working-directory: /tmp/digests
         run: |
           ${GITHUB_WORKSPACE}/scripts/docker_create_manifest_list.py "${{ env.REGISTRY_IMAGE }}" "$DOCKER_METADATA_OUTPUT_JSON"
+      - name: Create manifest list and push (dry run)
+        if: github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/')
+        working-directory: /tmp/digests
+        run: |
+          ${GITHUB_WORKSPACE}/scripts/docker_create_manifest_list.py "${{ env.REGISTRY_IMAGE }}" "$DOCKER_METADATA_OUTPUT_JSON" --dry-run
       - name: Inspect image
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
         run: |
           docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}
