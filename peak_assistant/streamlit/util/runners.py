@@ -64,7 +64,7 @@ async def run_researcher(debug_agents: bool = False):
     )
 
     previous_messages.insert(-1, TextMessage(
-        content=f"The current report draft is: {st.session_state['Research_document']}\n", source="user"
+        content=f"The current report draft is: {st.session_state['Research_document']}\n", source="research_agent"
     ))
 
     # Get user_id from session state for MCP OAuth authentication
@@ -105,7 +105,7 @@ async def run_local_data(debug_agents: bool = False):
     )
 
     previous_messages.insert(-1, TextMessage(
-        content=f"The current report draft is: {st.session_state['Local_Data_document']}\n", source="user"
+        content=f"The current report draft is: {st.session_state['Local_Data_document']}\n", source="local_data_agent"
     ))
 
     # Get user_id from session state for MCP OAuth authentication
@@ -166,7 +166,7 @@ async def run_hypothesis_refiner(debug_agents: bool = False):
         current_hypothesis = st.session_state["Hypothesis"]
 
     previous_messages.insert(-1, TextMessage(
-        content=f"The current hypothesis is: {current_hypothesis}\n", source="user"
+        content=f"The current hypothesis is: {current_hypothesis}\n", source="hypothesis_refiner_agent"
     ))
 
     try:
