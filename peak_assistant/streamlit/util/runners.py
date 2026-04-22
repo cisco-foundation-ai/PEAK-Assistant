@@ -143,7 +143,7 @@ async def run_hypothesis_generator():
     st.session_state["generated_hypotheses"] = hypotheses
     return True
 
-async def run_hypothesis_refiner(debug_agents: bool = True):
+async def run_hypothesis_refiner(debug_agents: bool = False):
 
     debug_agents_opts = dict()
     if debug_agents:

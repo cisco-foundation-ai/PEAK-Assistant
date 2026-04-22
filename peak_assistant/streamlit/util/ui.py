@@ -37,6 +37,7 @@ def peak_assistant_chat(
     allow_upload: bool = False,
     agent_runner: Callable = None,
     run_button_label: str = None,
+    debug_agents: bool = True,
 ):
     """
     Creates a two-column UI with a chat history and a document editor.
@@ -123,7 +124,7 @@ def peak_assistant_chat(
                 # Show the spinner in the chat area
                 with new_message_container.container():
                     with st.spinner("Please wait...", show_time=True):
-                        await agent_runner(debug_agents=True)
+                        await agent_runner(debug_agents=debug_agents)
 
                 # Record the end time
                 end_time = dt.now()
@@ -180,7 +181,7 @@ def peak_assistant_chat(
                         with st.chat_message("user"):
                             st.markdown(text_prompt)
                         with st.spinner("Please wait...", show_time=True):
-                            await agent_runner(debug_agents=True)
+                            await agent_runner(debug_agents=debug_agents)
 
                     # Record the end time
                     end_time = dt.now()

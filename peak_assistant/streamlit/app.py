@@ -308,6 +308,7 @@ with hypothesis_refinement_tab:
             default_prompt=f"Your original hypothesis was: :green[{current_hypothesis}]", 
             allow_upload=False,
             agent_runner=run_hypothesis_refiner,
+            debug_agents=False,
             run_button_label="Refine Hypothesis"
         )
 
