@@ -198,6 +198,8 @@ When `auth_module` is specified, the `api_key` field becomes optional in the `co
 
 The auth module must expose an async function `get_credentials(config)` that returns a dict with at least `api_key`.
 
+For security, auth modules must be explicitly allowlisted via `PEAK_AUTH_MODULE_ALLOWLIST` (comma-separated exact module names or package prefixes like `my_auth.plugins.*`).
+
 **📖 For complete documentation on implementing custom authentication, see [CUSTOM_AUTHENTICATION.md](CUSTOM_AUTHENTICATION.md).**
 
 ### OpenAI Provider Type

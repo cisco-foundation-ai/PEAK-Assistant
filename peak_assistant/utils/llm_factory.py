@@ -34,10 +34,35 @@ Configuration:
 from __future__ import annotations
 
 import importlib
+import os
 from typing import Optional, Any, Type
 from pathlib import Path
 
 from .model_config_loader import get_loader, ModelConfigError
+
+
+def _is_auth_module_allowed(auth_module: str) -> bool:
+    """Check whether an auth module is explicitly allowed via environment config.
+
+    Allowed entries are read from PEAK_AUTH_MODULE_ALLOWLIST as a comma-separated list
+    of exact module names or package prefixes ending in .* (for example
+    "my_auth.enterprise,my_auth.plugins.*").
+    """
+    allowlist = os.environ.get("PEAK_AUTH_MODULE_ALLOWLIST", "")
+    patterns = [entry.strip() for entry in allowlist.split(",") if entry.strip()]
+
+    if not patterns:
+        return False
+
+    for pattern in patterns:
+        if pattern.endswith(".*"):
+            prefix = pattern[:-2]
+            if auth_module == prefix or auth_module.startswith(f"{prefix}."):
+                return True
+        elif auth_module == pattern:
+            return True
+
+    return False
 
 
 async def _get_auth_module_credentials(auth_module: str, config: dict) -> dict:
@@ -56,6 +81,12 @@ async def _get_auth_module_credentials(auth_module: str, config: dict) -> dict:
     Raises:
         ModelConfigError: If module cannot be loaded or doesn't have required function
     """
+    if not _is_auth_module_allowed(auth_module):
+        raise ModelConfigError(
+            "Custom auth module is not allowlisted. Configure PEAK_AUTH_MODULE_ALLOWLIST "
+            "with trusted module names before using auth_module."
+        )
+
     try:
         module = importlib.import_module(auth_module)
     except ImportError as e:

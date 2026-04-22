@@ -50,6 +50,7 @@ Add `auth_module` to your Azure provider in `model_config.json`:
 - `api_key` is **not required** when `auth_module` is specified
 - All fields in `config` are passed to your auth module's `get_credentials()` function
 - Use environment variable interpolation (`${VAR}`) for secrets
+- Set `PEAK_AUTH_MODULE_ALLOWLIST` to trusted module paths (for example: `my_auth.enterprise_oauth,my_auth.plugins.*`)
 
 ### Environment Variables
 
