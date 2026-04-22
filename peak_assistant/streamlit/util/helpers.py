@@ -195,11 +195,12 @@ def convert_chat_history_to_text_messages(chat_history: List[Dict[str, Any]]) ->
         for msg in chat_history
     ]
 
-def convert_chat_history_to_user_messages(chat_history: List[Dict[str, Any]]) -> List[TextMessage]:
-    """Converts a Streamlit chat history (list of dicts) to a list of TextMessage objects."""
+def convert_chat_history_to_user_messages(chat_history: List[Dict[str, Any]]) -> List[UserMessage]:
+    """Converts only user-authored chat entries into UserMessage objects."""
     return [
         UserMessage(content=msg["content"], source=msg["role"])
         for msg in chat_history
+        if msg.get("role") == "user"
     ]
 
 def switch_tabs(tab_index: int = 0):
