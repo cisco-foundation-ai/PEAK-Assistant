@@ -1026,8 +1026,15 @@ async def test_factory_anthropic_with_optional_params(temp_config_file):
 # Auth Module Tests
 # ============================================================================
 
+@pytest.fixture
+def allow_auth_modules(monkeypatch):
+    """Allowlist auth modules for tests that exercise custom auth loading."""
+    def _allow(*patterns: str) -> None:
+        monkeypatch.setenv("PEAK_AUTH_MODULE_ALLOWLIST", ",".join(patterns))
+    return _allow
+
 @pytest.mark.asyncio
-async def test_factory_azure_with_auth_module(temp_config_file, tmp_path, monkeypatch):
+async def test_factory_azure_with_auth_module(temp_config_file, tmp_path, allow_auth_modules):
     """Test Azure provider with custom auth_module."""
     # Create a temporary auth module
     auth_module_dir = tmp_path / "custom_auth"
@@ -1047,6 +1054,7 @@ async def get_credentials(config):
     sys.path.insert(0, str(tmp_path))
     
     try:
+        allow_auth_modules("custom_auth.my_oauth")
         config_file = temp_config_file({
             "version": "1",
             "providers": {
@@ -1077,8 +1085,9 @@ async def get_credentials(config):
 
 
 @pytest.mark.asyncio
-async def test_factory_azure_auth_module_missing_module(temp_config_file):
+async def test_factory_azure_auth_module_missing_module(temp_config_file, allow_auth_modules):
     """Test that missing auth_module raises appropriate error."""
+    allow_auth_modules("nonexistent.module")
     config_file = temp_config_file({
         "version": "1",
         "providers": {
@@ -1103,7 +1112,7 @@ async def test_factory_azure_auth_module_missing_module(temp_config_file):
 
 
 @pytest.mark.asyncio
-async def test_factory_azure_auth_module_missing_function(temp_config_file, tmp_path):
+async def test_factory_azure_auth_module_missing_function(temp_config_file, tmp_path, allow_auth_modules):
     """Test that auth_module without get_credentials function raises error."""
     # Create a module without get_credentials
     auth_module_dir = tmp_path / "bad_auth"
@@ -1119,6 +1128,7 @@ def other_function():
     sys.path.insert(0, str(tmp_path))
     
     try:
+        allow_auth_modules("bad_auth.no_func")
         config_file = temp_config_file({
             "version": "1",
             "providers": {
@@ -1145,7 +1155,7 @@ def other_function():
 
 
 @pytest.mark.asyncio
-async def test_factory_azure_auth_module_returns_invalid(temp_config_file, tmp_path):
+async def test_factory_azure_auth_module_returns_invalid(temp_config_file, tmp_path, allow_auth_modules):
     """Test that auth_module returning invalid data raises error."""
     # Create a module that returns wrong type
     auth_module_dir = tmp_path / "invalid_auth"
@@ -1160,6 +1170,7 @@ async def get_credentials(config):
     sys.path.insert(0, str(tmp_path))
     
     try:
+        allow_auth_modules("invalid_auth.wrong_return")
         config_file = temp_config_file({
             "version": "1",
             "providers": {
@@ -1186,7 +1197,7 @@ async def get_credentials(config):
 
 
 @pytest.mark.asyncio
-async def test_factory_azure_auth_module_missing_api_key(temp_config_file, tmp_path):
+async def test_factory_azure_auth_module_missing_api_key(temp_config_file, tmp_path, allow_auth_modules):
     """Test that auth_module returning dict without api_key raises error."""
     # Create a module that returns dict without api_key
     auth_module_dir = tmp_path / "nokey_auth"
@@ -1201,6 +1212,7 @@ async def get_credentials(config):
     sys.path.insert(0, str(tmp_path))
     
     try:
+        allow_auth_modules("nokey_auth.no_api_key")
         config_file = temp_config_file({
             "version": "1",
             "providers": {
@@ -1227,7 +1239,7 @@ async def get_credentials(config):
 
 
 @pytest.mark.asyncio
-async def test_factory_azure_auth_module_receives_config(temp_config_file, tmp_path):
+async def test_factory_azure_auth_module_receives_config(temp_config_file, tmp_path, allow_auth_modules):
     """Test that auth_module receives the provider config."""
     # Create a module that echoes back config values
     auth_module_dir = tmp_path / "echo_auth"
@@ -1245,6 +1257,7 @@ async def get_credentials(config):
     sys.path.insert(0, str(tmp_path))
     
     try:
+        allow_auth_modules("echo_auth.echo")
         config_file = temp_config_file({
             "version": "1",
             "providers": {
@@ -1269,6 +1282,32 @@ async def get_credentials(config):
         assert client.kwargs["api_key"] == "token-for-my-app-id"
     finally:
         sys.path.remove(str(tmp_path))
+
+
+@pytest.mark.asyncio
+async def test_factory_azure_auth_module_requires_allowlist(temp_config_file):
+    """Test that auth_module loading is denied when not allowlisted."""
+    config_file = temp_config_file({
+        "version": "1",
+        "providers": {
+            "azure-oauth": {
+                "type": "azure",
+                "auth_module": "some.module",
+                "config": {
+                    "endpoint": "https://example.azure.openai.com/",
+                    "api_version": "2025-04-01-preview"
+                }
+            }
+        },
+        "defaults": {
+            "provider": "azure-oauth",
+            "model": "gpt-4o",
+            "deployment": "gpt-4o-deployment"
+        }
+    })
+
+    with pytest.raises(ModelConfigError, match="not allowlisted"):
+        await llm_factory.get_model_client(config_path=config_file)
 
 
 def test_loader_azure_allows_missing_api_key_with_auth_module(temp_config_file):
