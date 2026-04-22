@@ -63,8 +63,6 @@ def main(
         "--server.address", host,
         "--server.port", str(port),
         "--server.headless", "true",  # Don't auto-open browser in server mode
-        "--server.enableCORS", "false",
-        "--server.enableXsrfProtection", "false"
     ]
     
     # Add TLS if certificates exist
