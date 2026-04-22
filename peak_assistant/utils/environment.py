@@ -41,18 +41,28 @@ class ConfigInterpolationError(Exception):
 
 
 def find_dotenv_file() -> Optional[str]:
-    """Search for a .env file in current directory and parent directories.
-    
+    """Search for a .env file starting from the current directory up to the project root.
+
+    The search stops at the directory containing pyproject.toml (the project root) to
+    prevent loading .env files from unrelated ancestor directories, which could allow
+    an attacker who controls a parent directory to inject configuration values.
+
     Returns:
-        Path to .env file if found, None otherwise
+        Path to .env file if found within the project root boundary, None otherwise
     """
     current_dir = Path.cwd()
-    while current_dir != current_dir.parent:  # Stop at root directory
+    while True:
         env_path = current_dir / ".env"
         if env_path.exists():
             return str(env_path)
-        current_dir = current_dir.parent
-    return None  # No .env file found
+        # Stop here if this is the project root (contains pyproject.toml)
+        if (current_dir / "pyproject.toml").exists():
+            break
+        parent = current_dir.parent
+        if parent == current_dir:  # Reached filesystem root without finding pyproject.toml
+            break
+        current_dir = parent
+    return None
 
 
 def load_env_defaults() -> None:
