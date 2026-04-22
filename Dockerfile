@@ -22,12 +22,10 @@
 
 FROM python:3.13-slim
 
-# MCP servers commonly need NodeJS and npm/npx, so make sure 
+# MCP servers commonly need NodeJS and npm/npx, so make sure
 # they are installed. Do it early for better layer caching.
 RUN apt-get update && \
-    apt-get install -y curl && \
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y nodejs && \
+    apt-get install -y --no-install-recommends nodejs npm && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
