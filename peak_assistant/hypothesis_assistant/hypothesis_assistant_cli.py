@@ -24,12 +24,12 @@
 
 import os
 import argparse
+from pathlib import Path
 from dotenv import load_dotenv
 import asyncio
 
 from autogen_core.models import UserMessage, SystemMessage
 
-from ..utils import find_dotenv_file
 from ..utils.llm_factory import get_model_client
 
 
@@ -231,12 +231,12 @@ def main():
             exit(1)
         load_dotenv(dotenv_path)
     else:
-        # Search for .env file
-        dotenv_path = find_dotenv_file()
-        if dotenv_path:
+        # Only load .env from the current working directory
+        dotenv_path = Path.cwd() / ".env"
+        if dotenv_path.exists():
             load_dotenv(dotenv_path)
         else:
-            print("Warning: No .env file found in current or parent directories")
+            print("Warning: No .env file found in current directory")
 
     # Read the contents of the research document
     try:
