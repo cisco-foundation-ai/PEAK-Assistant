@@ -32,7 +32,7 @@ Add `auth_module` to your Azure provider in `model_config.json`:
   "providers": {
     "azure-enterprise": {
       "type": "azure",
-      "auth_module": "my_auth.enterprise_oauth",
+      "auth_module": "peak_assistant.auth_modules.enterprise_oauth",
       "config": {
         "endpoint": "${AZURE_OPENAI_ENDPOINT}",
         "api_version": "2025-04-01-preview",
@@ -46,7 +46,7 @@ Add `auth_module` to your Azure provider in `model_config.json`:
 ```
 
 **Key points:**
-- `auth_module` is a Python module path (e.g., `my_package.my_module`)
+- `auth_module` must be a Python module path under `peak_assistant.auth_modules.*`
 - `api_key` is **not required** when `auth_module` is specified
 - All fields in `config` are passed to your auth module's `get_credentials()` function
 - Use environment variable interpolation (`${VAR}`) for secrets

@@ -39,6 +39,8 @@ from pathlib import Path
 
 from .model_config_loader import get_loader, ModelConfigError
 
+TRUSTED_AUTH_MODULE_PREFIX = "peak_assistant.auth_modules."
+
 
 async def _get_auth_module_credentials(auth_module: str, config: dict) -> dict:
     """Load credentials from an external auth module.
@@ -56,6 +58,12 @@ async def _get_auth_module_credentials(auth_module: str, config: dict) -> dict:
     Raises:
         ModelConfigError: If module cannot be loaded or doesn't have required function
     """
+    if not auth_module.startswith(TRUSTED_AUTH_MODULE_PREFIX):
+        raise ModelConfigError(
+            f"Auth module '{auth_module}' is not allowed. "
+            f"Only modules under '{TRUSTED_AUTH_MODULE_PREFIX}*' are supported."
+        )
+
     try:
         module = importlib.import_module(auth_module)
     except ImportError as e:

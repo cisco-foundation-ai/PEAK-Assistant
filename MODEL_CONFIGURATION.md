@@ -173,7 +173,7 @@ The following agent names are used in the PEAK Assistant codebase.
 For Azure OpenAI deployments behind an authentication gateway (e.g., OAuth2 gateways, enterprise proxies), you can provide a custom authentication module instead of a static API key.
 
 **Optional field:**
-- `auth_module` (string): Python module path to a custom authentication module
+- `auth_module` (string): Python module path to a custom authentication module under `peak_assistant.auth_modules.*`
 
 When `auth_module` is specified, the `api_key` field becomes optional in the `config` section. The auth module provides credentials at runtime.
 
@@ -183,7 +183,7 @@ When `auth_module` is specified, the `api_key` field becomes optional in the `co
   "providers": {
     "azure-enterprise": {
       "type": "azure",
-      "auth_module": "my_auth.enterprise_oauth",
+      "auth_module": "peak_assistant.auth_modules.enterprise_oauth",
       "config": {
         "endpoint": "${AZURE_OPENAI_ENDPOINT}",
         "api_version": "2025-04-01-preview",

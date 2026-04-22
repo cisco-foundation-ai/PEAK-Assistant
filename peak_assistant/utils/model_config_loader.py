@@ -44,6 +44,8 @@ from typing import Any, Dict, Optional
 
 from peak_assistant.utils import interpolate_env_vars, ConfigInterpolationError
 
+TRUSTED_AUTH_MODULE_PREFIX = "peak_assistant.auth_modules."
+
 
 class ModelConfigError(Exception):
     """Raised when model configuration is invalid or missing."""
@@ -230,6 +232,17 @@ class ModelConfigLoader:
         if provider_type == "azure":
             # api_key is optional if auth_module is specified
             has_auth_module = "auth_module" in provider_config
+            if has_auth_module:
+                auth_module = provider_config["auth_module"]
+                if not isinstance(auth_module, str):
+                    raise ModelConfigError(
+                        f"Provider '{provider_name}' (azure): 'auth_module' must be a string"
+                    )
+                if not auth_module.startswith(TRUSTED_AUTH_MODULE_PREFIX):
+                    raise ModelConfigError(
+                        f"Provider '{provider_name}' (azure): 'auth_module' must be under "
+                        f"'{TRUSTED_AUTH_MODULE_PREFIX}*'"
+                    )
             required = ["endpoint", "api_version"]
             if not has_auth_module:
                 required.append("api_key")

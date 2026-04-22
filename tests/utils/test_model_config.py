@@ -1029,9 +1029,10 @@ async def test_factory_anthropic_with_optional_params(temp_config_file):
 @pytest.mark.asyncio
 async def test_factory_azure_with_auth_module(temp_config_file, tmp_path, monkeypatch):
     """Test Azure provider with custom auth_module."""
-    # Create a temporary auth module
-    auth_module_dir = tmp_path / "custom_auth"
-    auth_module_dir.mkdir()
+    # Create a temporary trusted auth module namespace
+    auth_module_dir = tmp_path / "peak_assistant" / "auth_modules"
+    auth_module_dir.mkdir(parents=True)
+    (tmp_path / "peak_assistant" / "__init__.py").write_text("")
     (auth_module_dir / "__init__.py").write_text("")
     (auth_module_dir / "my_oauth.py").write_text('''
 async def get_credentials(config):
@@ -1052,7 +1053,7 @@ async def get_credentials(config):
             "providers": {
                 "azure-oauth": {
                     "type": "azure",
-                    "auth_module": "custom_auth.my_oauth",
+                    "auth_module": "peak_assistant.auth_modules.my_oauth",
                     "config": {
                         "endpoint": "https://example.azure.openai.com/",
                         "api_version": "2025-04-01-preview"
@@ -1084,7 +1085,7 @@ async def test_factory_azure_auth_module_missing_module(temp_config_file):
         "providers": {
             "azure-oauth": {
                 "type": "azure",
-                "auth_module": "nonexistent.module",
+                "auth_module": "peak_assistant.auth_modules.nonexistent",
                 "config": {
                     "endpoint": "https://example.azure.openai.com/",
                     "api_version": "2025-04-01-preview"
@@ -1103,11 +1104,38 @@ async def test_factory_azure_auth_module_missing_module(temp_config_file):
 
 
 @pytest.mark.asyncio
+async def test_factory_azure_auth_module_rejects_untrusted_namespace(temp_config_file):
+    """Test that auth_module outside trusted namespace is rejected."""
+    config_file = temp_config_file({
+        "version": "1",
+        "providers": {
+            "azure-oauth": {
+                "type": "azure",
+                "auth_module": "custom_auth.my_oauth",
+                "config": {
+                    "endpoint": "https://example.azure.openai.com/",
+                    "api_version": "2025-04-01-preview"
+                }
+            }
+        },
+        "defaults": {
+            "provider": "azure-oauth",
+            "model": "gpt-4o",
+            "deployment": "gpt-4o-deployment"
+        }
+    })
+
+    with pytest.raises(ModelConfigError, match="must be under"):
+        await llm_factory.get_model_client(config_path=config_file)
+
+
+@pytest.mark.asyncio
 async def test_factory_azure_auth_module_missing_function(temp_config_file, tmp_path):
     """Test that auth_module without get_credentials function raises error."""
     # Create a module without get_credentials
-    auth_module_dir = tmp_path / "bad_auth"
-    auth_module_dir.mkdir()
+    auth_module_dir = tmp_path / "peak_assistant" / "auth_modules"
+    auth_module_dir.mkdir(parents=True)
+    (tmp_path / "peak_assistant" / "__init__.py").write_text("")
     (auth_module_dir / "__init__.py").write_text("")
     (auth_module_dir / "no_func.py").write_text('''
 # This module is missing the required get_credentials function
@@ -1124,7 +1152,7 @@ def other_function():
             "providers": {
                 "azure-oauth": {
                     "type": "azure",
-                    "auth_module": "bad_auth.no_func",
+                    "auth_module": "peak_assistant.auth_modules.no_func",
                     "config": {
                         "endpoint": "https://example.azure.openai.com/",
                         "api_version": "2025-04-01-preview"
@@ -1148,8 +1176,9 @@ def other_function():
 async def test_factory_azure_auth_module_returns_invalid(temp_config_file, tmp_path):
     """Test that auth_module returning invalid data raises error."""
     # Create a module that returns wrong type
-    auth_module_dir = tmp_path / "invalid_auth"
-    auth_module_dir.mkdir()
+    auth_module_dir = tmp_path / "peak_assistant" / "auth_modules"
+    auth_module_dir.mkdir(parents=True)
+    (tmp_path / "peak_assistant" / "__init__.py").write_text("")
     (auth_module_dir / "__init__.py").write_text("")
     (auth_module_dir / "wrong_return.py").write_text('''
 async def get_credentials(config):
@@ -1165,7 +1194,7 @@ async def get_credentials(config):
             "providers": {
                 "azure-oauth": {
                     "type": "azure",
-                    "auth_module": "invalid_auth.wrong_return",
+                    "auth_module": "peak_assistant.auth_modules.wrong_return",
                     "config": {
                         "endpoint": "https://example.azure.openai.com/",
                         "api_version": "2025-04-01-preview"
@@ -1189,8 +1218,9 @@ async def get_credentials(config):
 async def test_factory_azure_auth_module_missing_api_key(temp_config_file, tmp_path):
     """Test that auth_module returning dict without api_key raises error."""
     # Create a module that returns dict without api_key
-    auth_module_dir = tmp_path / "nokey_auth"
-    auth_module_dir.mkdir()
+    auth_module_dir = tmp_path / "peak_assistant" / "auth_modules"
+    auth_module_dir.mkdir(parents=True)
+    (tmp_path / "peak_assistant" / "__init__.py").write_text("")
     (auth_module_dir / "__init__.py").write_text("")
     (auth_module_dir / "no_api_key.py").write_text('''
 async def get_credentials(config):
@@ -1206,7 +1236,7 @@ async def get_credentials(config):
             "providers": {
                 "azure-oauth": {
                     "type": "azure",
-                    "auth_module": "nokey_auth.no_api_key",
+                    "auth_module": "peak_assistant.auth_modules.no_api_key",
                     "config": {
                         "endpoint": "https://example.azure.openai.com/",
                         "api_version": "2025-04-01-preview"
@@ -1230,8 +1260,9 @@ async def get_credentials(config):
 async def test_factory_azure_auth_module_receives_config(temp_config_file, tmp_path):
     """Test that auth_module receives the provider config."""
     # Create a module that echoes back config values
-    auth_module_dir = tmp_path / "echo_auth"
-    auth_module_dir.mkdir()
+    auth_module_dir = tmp_path / "peak_assistant" / "auth_modules"
+    auth_module_dir.mkdir(parents=True)
+    (tmp_path / "peak_assistant" / "__init__.py").write_text("")
     (auth_module_dir / "__init__.py").write_text("")
     (auth_module_dir / "echo.py").write_text('''
 async def get_credentials(config):
@@ -1250,7 +1281,7 @@ async def get_credentials(config):
             "providers": {
                 "azure-oauth": {
                     "type": "azure",
-                    "auth_module": "echo_auth.echo",
+                    "auth_module": "peak_assistant.auth_modules.echo",
                     "config": {
                         "endpoint": "https://example.azure.openai.com/",
                         "api_version": "2025-04-01-preview",
@@ -1278,7 +1309,7 @@ def test_loader_azure_allows_missing_api_key_with_auth_module(temp_config_file):
         "providers": {
             "azure-oauth": {
                 "type": "azure",
-                "auth_module": "some.module",
+                "auth_module": "peak_assistant.auth_modules.some",
                 "config": {
                     "endpoint": "https://example.azure.openai.com/",
                     "api_version": "2025-04-01-preview"
@@ -1298,7 +1329,7 @@ def test_loader_azure_allows_missing_api_key_with_auth_module(temp_config_file):
     
     # Should not raise - api_key is optional when auth_module is present
     provider_config = loader.get_provider_config("azure-oauth")
-    assert provider_config["auth_module"] == "some.module"
+    assert provider_config["auth_module"] == "peak_assistant.auth_modules.some"
     assert "api_key" not in provider_config["config"]
 
 
