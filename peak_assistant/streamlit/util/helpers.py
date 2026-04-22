@@ -75,14 +75,15 @@ def validate_and_escape_oauth_url(url: str) -> Optional[str]:
             return None
         
         # Must have a valid host
-        if not parsed.netloc:
+        if not parsed.netloc or not parsed.hostname:
             logger.warning("OAuth URL rejected: missing host")
             return None
         
-        # http only allowed for localhost (strip port for comparison)
-        host_without_port = parsed.netloc.split(':')[0]
-        if parsed.scheme.lower() == 'http' and host_without_port not in localhost_hosts:
-            logger.warning(f"OAuth URL rejected: http not allowed for non-localhost host '{host_without_port}'")
+        # http only allowed for localhost development.
+        # Use parsed.hostname so userinfo/port cannot bypass host checks.
+        host = parsed.hostname.lower()
+        if parsed.scheme.lower() == 'http' and host not in localhost_hosts:
+            logger.warning(f"OAuth URL rejected: http not allowed for non-localhost host '{host}'")
             return None
         
         # HTML-escape to prevent attribute breakout in rendered HTML

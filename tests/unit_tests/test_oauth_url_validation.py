@@ -129,6 +129,18 @@ class TestMaliciousUrls:
         url = "http://evil.localhost/callback"
         result = validate_and_escape_oauth_url(url)
         assert result is None
+
+    def test_http_userinfo_host_bypass_rejected(self):
+        """HTTP URL with userinfo must validate actual hostname, not username"""
+        url = "http://localhost:pw@evil.com/callback"
+        result = validate_and_escape_oauth_url(url)
+        assert result is None
+
+    def test_http_userinfo_with_localhost_host_accepted(self):
+        """HTTP URL is allowed when parsed hostname is localhost"""
+        url = "http://user:pw@localhost:8501/callback"
+        result = validate_and_escape_oauth_url(url)
+        assert result is not None
     
     def test_empty_url_rejected(self):
         """Empty URL must be rejected"""
