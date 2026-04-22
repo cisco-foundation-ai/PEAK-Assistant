@@ -47,7 +47,7 @@ from .helpers import convert_chat_history_to_text_messages, convert_chat_history
 from .hypothesis_helpers import get_current_hypothesis
 
 
-async def run_researcher(debug_agents: bool = True):
+async def run_researcher(debug_agents: bool = False):
 
     debug_agents_opts = dict()
     if debug_agents:
@@ -88,7 +88,7 @@ async def run_researcher(debug_agents: bool = True):
 
     return True
 
-async def run_local_data(debug_agents: bool = True):
+async def run_local_data(debug_agents: bool = False):
 
     debug_agents_opts = dict()
     if debug_agents:
@@ -143,7 +143,7 @@ async def run_hypothesis_generator():
     st.session_state["generated_hypotheses"] = hypotheses
     return True
 
-async def run_hypothesis_refiner(debug_agents: bool = True):
+async def run_hypothesis_refiner(debug_agents: bool = False):
 
     debug_agents_opts = dict()
     if debug_agents:

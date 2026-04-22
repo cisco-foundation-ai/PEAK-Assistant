@@ -95,7 +95,7 @@ python tests/integration/test_streamlit_workflow.py "PowerShell Empire" -vv
 # With debug output (DEBUG level)
 python tests/integration/test_streamlit_workflow.py "PowerShell Empire" -vvv
 
-# Enable agent callback logging (creates msgs.txt and results.txt)
+# Enable agent callback logging (creates msgs.txt and results.txt) — off by default
 python tests/integration/test_streamlit_workflow.py "PowerShell Empire" --debug-agents
 
 # With local context file
