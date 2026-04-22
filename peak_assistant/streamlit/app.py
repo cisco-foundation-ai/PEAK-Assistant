@@ -913,6 +913,11 @@ with agent_config_tab:
 if debug_tab:
     with debug_tab:
         with st.expander("Environment Variables"):
-            st.write(os.environ)
+            st.caption("Environment variable names only (values hidden to avoid leaking secrets).")
+            st.write(sorted(os.environ.keys()))
         with st.expander("Session State"):
-            st.write(st.session_state)
+            st.caption("Session state keys and value types only (values hidden to avoid leaking sensitive data).")
+            st.write({
+                key: type(value).__name__
+                for key, value in st.session_state.items()
+            })
