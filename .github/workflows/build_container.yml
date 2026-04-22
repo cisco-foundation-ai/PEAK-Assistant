@@ -88,8 +88,6 @@ jobs:
     needs:
       - build
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
       - name: Download digests
         uses: actions/download-artifact@v4
         with:
@@ -123,7 +121,33 @@ jobs:
       - name: Create manifest list and push
         working-directory: /tmp/digests
         run: |
-          ${GITHUB_WORKSPACE}/scripts/docker_create_manifest_list.py "${{ env.REGISTRY_IMAGE }}" "$DOCKER_METADATA_OUTPUT_JSON"
+          python3 -c '
+          import json
+          import os
+          import subprocess
+          import sys
+
+          registry_image = sys.argv[1]
+          docker_metadata_output_json = sys.argv[2]
+
+          docker_meta = json.loads(docker_metadata_output_json)
+          tags = [arg for tag in docker_meta.get("tags", []) for arg in ("-t", tag)]
+          digests = [
+              f"{registry_image}@sha256:{digest}"
+              for digest in os.listdir(".")
+              if os.path.isfile(digest)
+          ]
+
+          if not digests:
+              raise SystemExit("Error: No digest files found in current directory")
+          if not tags:
+              raise SystemExit("Error: No tags found in metadata")
+
+          subprocess.run(
+              ["docker", "buildx", "imagetools", "create", *tags, *digests],
+              check=True,
+          )
+          ' "${{ env.REGISTRY_IMAGE }}" "$DOCKER_METADATA_OUTPUT_JSON"
       - name: Inspect image
         run: |
           docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}
