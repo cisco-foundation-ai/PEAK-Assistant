@@ -5,10 +5,11 @@ name: "Build container"
   workflow_dispatch:
   push:
   pull_request:
-  
+
+# Minimal workflow-level permissions: only read code.
+# publish-capable permissions are granted at the job level.
 permissions:
-  packages: write
-  contents: write
+  contents: read
 
 env:
   PLATFORM_PAIR: linux_amd64 # this should be overridden later
@@ -18,6 +19,9 @@ concurrency:
 
 jobs:
   build:
+    permissions:
+      packages: write
+      contents: read
     strategy:
       fail-fast: true
       matrix:
@@ -55,13 +59,27 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Login to GitHub Container Registry
+        # Only log in when we are actually going to push (main branch push events only)
+        if: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', 'main') }}
         # https://github.com/docker/login-action/#github-container-registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build (no push)
+        # PRs and non-main branches: build only to validate the image, do not push
+        if: ${{ github.event_name != 'push' || github.ref != format('refs/heads/{0}', 'main') }}
+        uses: docker/build-push-action@v6
+        with:
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: ${{ matrix.platform }}
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
       - name: Build and push
+        # Only push on main branch push events
+        if: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', 'main') }}
         id: build
         uses: docker/build-push-action@v6
         with:
@@ -71,12 +89,14 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Export digest
+        if: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', 'main') }}
         run: |
           mkdir -p /tmp/digests
           digest="${{ steps.build.outputs.digest }}"
           touch "/tmp/digests/${digest#sha256:}"
 
       - name: Upload digest
+        if: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', 'main') }}
         uses: actions/upload-artifact@v4
         with:
           name: digests-${{ env.PLATFORM_PAIR }}
@@ -84,9 +104,14 @@ jobs:
           if-no-files-found: error
           retention-days: 1
   merge:
+    # Only run the merge/publish job on main branch push events
+    if: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', 'main') }}
     runs-on: ubuntu-latest
     needs:
       - build
+    permissions:
+      packages: write
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -121,9 +146,38 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create manifest list and push
+        # Inline manifest creation: avoids executing a PR-controlled script
+        # in a job that holds packages:write permission.
         working-directory: /tmp/digests
         run: |
-          ${GITHUB_WORKSPACE}/scripts/docker_create_manifest_list.py "${{ env.REGISTRY_IMAGE }}" "$DOCKER_METADATA_OUTPUT_JSON"
+          python3 << 'PYEOF'
+          import json
+          import os
+          import subprocess
+          import sys
+
+          registry_image = os.environ["REGISTRY_IMAGE"]
+          docker_meta = json.loads(os.environ["DOCKER_METADATA_OUTPUT_JSON"])
+          tags = [arg for tag in docker_meta.get("tags", []) for arg in ("-t", tag)]
+          digests = [
+              f"{registry_image}@sha256:{digest}"
+              for digest in os.listdir(".")
+              if os.path.isfile(digest)
+          ]
+
+          if not digests:
+              raise SystemExit("Error: No digest files found in current directory")
+          if not tags:
+              raise SystemExit("Error: No tags found in metadata")
+
+          subprocess.run(
+              ["docker", "buildx", "imagetools", "create", *tags, *digests],
+              check=True,
+          )
+          PYEOF
+        env:
+          REGISTRY_IMAGE: ${{ env.REGISTRY_IMAGE }}
+          DOCKER_METADATA_OUTPUT_JSON: ${{ env.DOCKER_METADATA_OUTPUT_JSON }}
       - name: Inspect image
         run: |
           docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:${{ steps.meta.outputs.version }}
