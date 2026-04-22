@@ -179,7 +179,8 @@ def main() -> None:
             # the research team for further refinement
             messages = [
                 TextMessage(
-                    content=f"The current report draft is: {report}\n", source="user"
+                    content=f"The current report draft is: {report}\n",
+                    source="summarizer_agent",
                 ),
                 TextMessage(content=f"User feedback: {feedback}\n", source="user"),
             ]
