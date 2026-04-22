@@ -27,6 +27,16 @@ Logging callbacks for the PEAK Assistant agents
 from autogen_agentchat.messages import TextMessage
 from autogen_agentchat.base import TaskResult
 
+LOG_PREVIEW_CHARS = 50
+
+
+def _content_preview(content: str, max_chars: int = LOG_PREVIEW_CHARS) -> str:
+    """Return a bounded preview of message content to avoid logging secrets."""
+    if len(content) <= max_chars:
+        return content
+    return f"{content[:max_chars]}...(truncated)"
+
+
 def preprocess_messages_logging(
     msgs: list[TextMessage], 
     agent_id: str = "[UNIDENTIFIED]",
@@ -40,7 +50,7 @@ Agent ID: {agent_id}
 Timestamp: {msg.created_at}
 Source:{msg.source}
 Content length:{len(msg.content)}
-Content:{msg.content}
+Content preview:{_content_preview(msg.content)}
 -----------END TextMessage------------------------------
 """
             f.write(log_msg)
@@ -64,7 +74,7 @@ Agent ID: {agent_id}
 Timestamp: {msg.created_at}
 Source:{msg.source}
 Content length:{len(msg.content)}
-Content:{msg.content}
+Content preview:{_content_preview(msg.content)}
 Model usage:{msg.models_usage}
 -----------END TaskResult------------------------------
 """
