@@ -325,7 +325,7 @@ pip install rich              # Optional, for formatted console output
 
    **Option A: Using .env file (recommended)**
    
-   Create a `.env` file in your working directory or any parent directory:
+   Create a `.env` file in your working directory or any parent directory up to the project root:
    ```bash
    # .env file
    ANTHROPIC_API_KEY=your_api_key_here
@@ -350,7 +350,7 @@ pip install rich              # Optional, for formatted console output
 python hypothesis_evaluator.py hypotheses.txt -c model_config.json
 ```
 
-The evaluator will search for a `.env` file in the current directory and parent directories, loading any environment variables it finds. This makes it easy to use `${ENV_VAR}` interpolation in your `model_config.json`.
+The evaluator will search for a `.env` file in the current directory and parent directories up to the project root (the directory containing `pyproject.toml`), loading any environment variables it finds. This makes it easy to use `${ENV_VAR}` interpolation in your `model_config.json`.
 
 ## Examples
 

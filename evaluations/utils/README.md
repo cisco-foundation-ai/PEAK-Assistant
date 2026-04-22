@@ -56,7 +56,7 @@ load_environment(quiet=True)
 ```
 
 **Features:**
-- Automatic .env file discovery (searches up directory tree)
+- Automatic .env file discovery (searches up the directory tree, stopping at the project root — the directory containing `pyproject.toml`)
 - Status messages to stderr (can be suppressed with `quiet=True`)
 - Enables `${ENV_VAR}` interpolation in model_config.json
 
