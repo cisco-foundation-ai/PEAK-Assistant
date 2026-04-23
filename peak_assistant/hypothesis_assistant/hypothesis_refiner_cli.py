@@ -481,21 +481,25 @@ def main() -> None:
     messages: List[TextMessage] = list()
     current_hypothesis = args.hypothesis
     while True:
-        # Run the hypothesizer asynchronously
-        response = asyncio.run(
-            refiner(
-                hypothesis=current_hypothesis,
-                local_context=local_context or "",
-                research_document=research_data,
-                local_data_document=local_data or "",
-                verbose=args.verbose,
-                previous_run=messages,
-                msg_preprocess_callback=preprocess_messages_logging,
-                msg_preprocess_kwargs={"agent_id": "hypothesis-refiner"},
-                msg_postprocess_callback=postprocess_messages_logging,
-                msg_postprocess_kwargs={"agent_id": "hypothesis-refiner"},
+        try:
+            # Run the hypothesizer asynchronously
+            response = asyncio.run(
+                refiner(
+                    hypothesis=current_hypothesis,
+                    local_context=local_context or "",
+                    research_document=research_data,
+                    local_data_document=local_data or "",
+                    verbose=args.verbose,
+                    previous_run=messages,
+                    msg_preprocess_callback=preprocess_messages_logging,
+                    msg_preprocess_kwargs={"agent_id": "hypothesis-refiner"},
+                    msg_postprocess_callback=postprocess_messages_logging,
+                    msg_postprocess_kwargs={"agent_id": "hypothesis-refiner"},
+                )
             )
-        )
+        except Exception as e:
+            print(f"Error refining hypothesis: {e}", file=sys.stderr)
+            sys.exit(1)
 
         # Extract the refined hypothesis using the centralized extractor
         current_hypothesis, acceptance_msg = extract_refined_hypothesis(response, original_hypothesis=current_hypothesis)
