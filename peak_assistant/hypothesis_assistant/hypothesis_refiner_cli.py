@@ -25,6 +25,7 @@
 import os
 import sys
 import argparse
+import traceback
 from typing import List, Optional
 from dotenv import load_dotenv
 import asyncio
@@ -354,24 +355,19 @@ Provide feedback organized by criterion name. Only include criteria that scored 
             msgs=messages, **(msg_preprocess_kwargs or {})
         )
 
-    try:
-        # Run the team asynchronously
-        if verbose:
-            result = await Console(team.run_stream(task=messages), output_stats=True)
-        else:
-            result = await team.run(task=messages)
+    # Run the team asynchronously
+    if verbose:
+        result = await Console(team.run_stream(task=messages), output_stats=True)
+    else:
+        result = await team.run(task=messages)
 
-        # Postprocess the result
-        if msg_postprocess_callback:
-            result = msg_postprocess_callback(
-                result=result, **(msg_postprocess_kwargs or {})
-            )
+    # Postprocess the result
+    if msg_postprocess_callback:
+        result = msg_postprocess_callback(
+            result=result, **(msg_postprocess_kwargs or {})
+        )
 
-        # Access the content from the CreateResult object
-        return result  # Use the correct attribute to access the generated content
-    except Exception as e:
-        print(f"Error while refining hypotheses: {e}")
-        raise Exception("An error occurred while refining the hypothesis.") from e
+    return result
 
 
 def main() -> None:
@@ -497,17 +493,23 @@ def main() -> None:
 
     while True:
         # Run the hypothesizer asynchronously
-        response = asyncio.run(
-            refiner(
-                hypothesis=current_hypothesis,
-                local_context=local_context or "",
-                research_document=research_data,
-                local_data_document=local_data or "",
-                verbose=args.verbose,
-                previous_run=messages,
-                **debug_agents_opts,
+        try:
+            response = asyncio.run(
+                refiner(
+                    hypothesis=current_hypothesis,
+                    local_context=local_context or "",
+                    research_document=research_data,
+                    local_data_document=local_data or "",
+                    verbose=args.verbose,
+                    previous_run=messages,
+                    **debug_agents_opts,
+                )
             )
-        )
+        except Exception as e:
+            print(f"Error refining hypothesis: {e}", file=sys.stderr)
+            if args.verbose:
+                traceback.print_exc()
+            sys.exit(1)
 
         # Extract the refined hypothesis using the centralized extractor
         current_hypothesis, acceptance_msg = extract_refined_hypothesis(response, original_hypothesis=current_hypothesis)
