@@ -43,8 +43,10 @@ coverage-html: coverage
 	open htmlcov/index.html || echo "Open htmlcov/index.html in your browser to view the coverage report."
 
 .PHONY: container-local
+DOCKER_TAG := $(shell git branch --show-current | tr -c '[:alnum:]._-' '-')
+
 container-local:
-	docker buildx build -t ghcr.io/cisco-foundation-ai/peak-assistant:$(shell git branch --show-current) --load .
+	docker buildx build -t ghcr.io/cisco-foundation-ai/peak-assistant:$(DOCKER_TAG) --load .
 
 
 .PHONY: container-run
@@ -56,4 +58,4 @@ container-run: container-local
 		--mount "type=bind,src=$(PWD)/.env,target=/home/peakassistant/.env" \
 		--mount "type=bind,src=$(PWD)/mcp_servers.json,target=/home/peakassistant/mcp_servers.json" \
 		-p "127.0.0.1:8501:8501" \
-		ghcr.io/cisco-foundation-ai/peak-assistant:$(shell git branch --show-current)
+		ghcr.io/cisco-foundation-ai/peak-assistant:$(DOCKER_TAG)
