@@ -957,13 +957,27 @@ class MCPClientManager:
         # Create stdio server parameters
         # Fix: Ensure args is properly formatted for StdioServerParams
         args_list = config.args or []
+        timeout_seconds = 30.0
+        try:
+            timeout_seconds = float(config.timeout)
+        except (TypeError, ValueError):
+            logger.warning(
+                "Invalid timeout value %r for stdio server %s; using default timeout %.1f seconds",
+                config.timeout,
+                server_name,
+                timeout_seconds,
+            )
+
         server_params = StdioServerParams(
             command=config.command,
             args=args_list,
             env=env,
-            read_timeout_seconds=float(config.timeout)
+            read_timeout_seconds=timeout_seconds
         )
-        logger.debug(f"Created StdioServerParams with command: {config.command}, args: {args_list}, read_timeout_seconds: {float(config.timeout)}, env keys: {list(env.keys()) if env else 'None'}")
+        logger.debug(
+            f"Created StdioServerParams with command: {config.command}, args: {args_list}, "
+            f"read_timeout_seconds: {timeout_seconds}, env keys: {list(env.keys()) if env else 'None'}"
+        )
         
         # Create workbench
         # Fix: Pass server_params directly, not as a list
