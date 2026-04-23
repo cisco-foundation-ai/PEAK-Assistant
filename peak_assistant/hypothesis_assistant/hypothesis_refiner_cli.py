@@ -25,7 +25,7 @@
 import os
 import sys
 import argparse
-from typing import List
+from typing import List, Optional
 from dotenv import load_dotenv
 import asyncio
 
@@ -51,7 +51,7 @@ async def refiner(
     research_document: str,
     local_data_document: str,
     verbose: bool = False,
-    previous_run: list = list(),
+    previous_run: Optional[list] = None,
     msg_preprocess_callback=None,
     msg_preprocess_kwargs=None,
     msg_postprocess_callback=None,

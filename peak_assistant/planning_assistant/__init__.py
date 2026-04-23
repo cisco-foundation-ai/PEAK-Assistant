@@ -20,6 +20,8 @@
 #
 # SPDX-License-Identifier: MIT
 
+from typing import Optional
+
 from autogen_agentchat.messages import TextMessage
 from autogen_agentchat.agents import AssistantAgent
 from autogen_agentchat.teams import RoundRobinGroupChat
@@ -38,7 +40,7 @@ async def plan_hunt(
     data_discovery: str,
     local_context: str,
     verbose: bool = False,
-    previous_run: list = list(),
+    previous_run: Optional[list] = None,
     msg_preprocess_callback=None,
     msg_preprocess_kwargs=None,
     msg_postprocess_callback=None,
