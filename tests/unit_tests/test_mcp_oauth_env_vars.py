@@ -96,7 +96,7 @@ async def test_oauth_with_token_and_user_id_env_vars(monkeypatch, client_manager
 
 @pytest.mark.asyncio
 async def test_oauth_missing_required_user_id(monkeypatch, client_manager):
-    """Test that missing user ID returns empty headers with warning"""
+    """Test that missing user ID fails auth header generation"""
     monkeypatch.setenv("PEAK_MCP_TEST_SERVER_TOKEN", "test_token_123")
     # Don't set USER_ID
     
@@ -112,8 +112,8 @@ async def test_oauth_missing_required_user_id(monkeypatch, client_manager):
     
     headers = await client_manager._get_auth_headers(config)
     
-    # Should return empty when user ID required but missing
-    assert headers == {}
+    # Should fail when user ID required but missing
+    assert headers is None
 
 
 @pytest.mark.asyncio
@@ -133,7 +133,7 @@ async def test_oauth_no_env_vars_no_streamlit(client_manager):
     
     headers = await client_manager._get_auth_headers(config)
     
-    assert headers == {}
+    assert headers is None
 
 
 @pytest.mark.asyncio
