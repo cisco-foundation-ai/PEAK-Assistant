@@ -20,6 +20,8 @@
 #
 # SPDX-License-Identifier: MIT
 
+from typing import Optional
+
 from autogen_agentchat.base import TaskResult
 from autogen_agentchat.messages import TextMessage
 from autogen_agentchat.agents import AssistantAgent
@@ -38,7 +40,7 @@ async def identify_data_sources(
     able_info: str,
     local_context: str,
     verbose: bool = False,
-    previous_run: list = list(),
+    previous_run: Optional[list] = None,
     mcp_server_group: str = "data_discovery",
     msg_preprocess_callback=None,
     msg_preprocess_kwargs=None,

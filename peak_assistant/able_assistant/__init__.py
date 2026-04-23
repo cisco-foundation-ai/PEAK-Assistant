@@ -20,7 +20,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-from typing import List
+from typing import List, Optional
 
 from autogen_core.models import UserMessage, SystemMessage
 
@@ -32,7 +32,7 @@ async def able_table(
     research_document: str,
     local_data_document: str,
     local_context: str,
-    previous_run: list[SystemMessage | UserMessage] = list(),
+    previous_run: Optional[list[SystemMessage | UserMessage]] = None,
 ) -> str:
     """
     Generate a PEAK ABLE table based on the given hypothesis and research document.
