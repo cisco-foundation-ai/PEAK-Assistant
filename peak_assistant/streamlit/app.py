@@ -351,10 +351,10 @@ with data_discovery_tab:
         if st.session_state["last_hypothesis_for_data_discovery"] != current_hypothesis:
             st.session_state["last_hypothesis_for_data_discovery"] = current_hypothesis
             # Clear the data sources document to show run button
-            if "Data Sources_document" in st.session_state:
-                del st.session_state["Data Sources_document"]
-            if "Data Sources_messages" in st.session_state:
-                del st.session_state["Data Sources_messages"]
+            if "Discovery_document" in st.session_state:
+                del st.session_state["Discovery_document"]
+            if "Discovery_messages" in st.session_state:
+                del st.session_state["Discovery_messages"]
         
         peak_assistant_chat(
             title="Data Discovery",
