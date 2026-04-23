@@ -1003,7 +1003,7 @@ class MCPClientManager:
         
         # Create HTTP client with authentication
         headers = await self._get_auth_headers(config, user_id)
-        if headers is False:
+        if headers is None:
             return False
         
         # Store the connection (user-specific or system-level)
@@ -1018,19 +1018,19 @@ class MCPClientManager:
         logger.info(f"Connected to HTTP server: {server_name}" + (f" for user {user_id}" if user_id else ""))
         return True
 
-    async def _get_auth_headers(self, config: MCPServerConfig, user_id: Optional[str] = None) -> Dict[str, str]:
+    async def _get_auth_headers(self, config: MCPServerConfig, user_id: Optional[str] = None) -> Optional[Dict[str, str]]:
         """Get authentication headers for a server"""
         headers = {}
         if config.auth:
             if config.auth.type == AuthType.BEARER:
                 if not config.auth.token:
                     logger.error(f"No token specified for bearer auth on {config.name}")
-                    return {}
+                    return None
                 headers["Authorization"] = f"Bearer {config.auth.token}"
             elif config.auth.type == AuthType.API_KEY:
                 if not config.auth.api_key or not config.auth.header_name:
                     logger.error(f"API key or header name not specified for {config.name}")
-                    return {}
+                    return None
                 headers[config.auth.header_name] = config.auth.api_key
             elif config.auth.type in [AuthType.OAUTH2_CLIENT_CREDENTIALS, AuthType.OAUTH2_AUTHORIZATION_CODE]:
                 # Priority 1: Check Streamlit session state (for web UI)
@@ -1067,19 +1067,19 @@ class MCPClientManager:
                                         # Check if user ID is required
                                         if config.auth.requires_user_auth:
                                             logger.error(f"User ID is required for user-based OAuth on {config.name}")
-                                            return {}
+                                            return None
                                 else:
                                     logger.error(f"No access token in Streamlit session state for {config.name}")
-                                    return {}
+                                    return None
                             else:
                                 logger.error(f"No OAuth data found in Streamlit session state for {config.name}")
-                                return {}
+                                return None
                         else:
                             logger.error(f"Streamlit session state not available")
-                            return {}
+                            return None
                     except Exception as e:
                         logger.error(f"Failed to get Streamlit OAuth headers for {config.name}: {e}")
-                        return {}
+                        return None
                 else:
                     # Priority 2: Check environment variables (for CLI/automation)
                     # Only used when NOT running in Streamlit
@@ -1111,7 +1111,7 @@ class MCPClientManager:
                                     f"  Alternatively, authenticate via Streamlit web interface.\n"
                                     f"  Server will be skipped."
                                 )
-                                return {}
+                                return None
                         
                         return headers
                     
@@ -1137,7 +1137,7 @@ class MCPClientManager:
                         f"  Alternatively, authenticate via Streamlit web interface.\n"
                         f"  Server will be skipped."
                     )
-                    return {}
+                    return None
         
         return headers
     
