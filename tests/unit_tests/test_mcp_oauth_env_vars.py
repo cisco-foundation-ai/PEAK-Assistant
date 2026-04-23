@@ -206,3 +206,37 @@ async def test_no_auth_returns_empty_headers(client_manager):
     headers = await client_manager._get_auth_headers(config)
     
     assert headers == {}
+
+
+@pytest.mark.asyncio
+async def test_http_connection_fails_when_auth_configured_but_headers_missing(client_manager):
+    """HTTP connection should fail when configured auth cannot produce headers."""
+    config = MCPServerConfig(
+        name="invalid-bearer-server",
+        transport=TransportType.HTTP,
+        url="https://example.com",
+        auth=AuthConfig(
+            type=AuthType.BEARER,
+            token=None,
+        ),
+    )
+
+    connected = await client_manager._connect_http_server("invalid-bearer-server", config)
+
+    assert connected is False
+    assert "invalid-bearer-server" not in client_manager.active_clients
+
+
+@pytest.mark.asyncio
+async def test_http_connection_without_auth_still_succeeds(client_manager):
+    """HTTP connection without auth config should continue to allow empty headers."""
+    config = MCPServerConfig(
+        name="no-auth-http-server",
+        transport=TransportType.HTTP,
+        url="https://example.com",
+    )
+
+    connected = await client_manager._connect_http_server("no-auth-http-server", config)
+
+    assert connected is True
+    assert client_manager.active_clients["no-auth-http-server"]["headers"] == {}

@@ -989,7 +989,8 @@ class MCPClientManager:
         
         # Create HTTP client with authentication
         headers = await self._get_auth_headers(config, user_id)
-        if headers is False:
+        if config.auth and not headers:
+            logger.error(f"Failed to get auth headers for {server_name}")
             return False
         
         # Store the connection (user-specific or system-level)
