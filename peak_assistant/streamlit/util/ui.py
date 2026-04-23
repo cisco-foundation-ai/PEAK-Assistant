@@ -123,7 +123,7 @@ def peak_assistant_chat(
                 # Show the spinner in the chat area
                 with new_message_container.container():
                     with st.spinner("Please wait...", show_time=True):
-                        await agent_runner(debug_agents=True)
+                        await agent_runner(debug_agents=False)
 
                 # Record the end time
                 end_time = dt.now()
@@ -180,7 +180,7 @@ def peak_assistant_chat(
                         with st.chat_message("user"):
                             st.markdown(text_prompt)
                         with st.spinner("Please wait...", show_time=True):
-                            await agent_runner(debug_agents=True)
+                            await agent_runner(debug_agents=False)
 
                     # Record the end time
                     end_time = dt.now()
