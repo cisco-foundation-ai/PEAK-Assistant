@@ -156,13 +156,10 @@ if "code" in query_params and "state" in query_params:
         logger.debug(f"Received state: {state}")
         logger.debug(f"Available OAuth states: {[k for k in st.session_state.keys() if k.startswith('oauth_state_')]}")
 
-# Read the local context file if it's not already in the session state.
+# Local context should be empty by default to avoid unintentionally sending
+# sensitive data from disk to external LLM providers.
 if "local_context" not in st.session_state:
-    # Find and load our local context file (used for the agents)
-    with open("context.txt", "r", encoding="utf-8") as file:
-        local_context = file.read()
-
-    st.session_state["local_context"] = local_context
+    st.session_state["local_context"] = ""
 
 # Use the full page instead of a narrow central column
 st.set_page_config(
