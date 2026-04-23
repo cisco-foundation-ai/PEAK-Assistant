@@ -296,7 +296,12 @@ async def hypothesizer(
     """
     try:
         user_input = ""
-        result = await async_hypothesizer(user_input, research_document, local_context, local_data_search_results)
+        result = await async_hypothesizer(
+            user_input=user_input,
+            research_document=research_document,
+            local_data_document=local_data_search_results,
+            local_context=local_context,
+        )
         return embeddable_object(data=result)
     except Exception as e:
         return embeddable_object(data=f"Error during hypothesis generation: {str(e)}")
