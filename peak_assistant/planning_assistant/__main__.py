@@ -95,6 +95,11 @@ def main() -> None:
         action="store_true",
         help="Skip user feedback and automatically accept the generated hunt plan"
     )
+    parser.add_argument(
+        "--debug-agents",
+        action="store_true",
+        help="Enable agent debug logging to msgs.txt and results.txt"
+    )
     args = parser.parse_args()
 
     # Load environment variables
@@ -177,6 +182,16 @@ def main() -> None:
             exit(1)
 
     messages: List[TextMessage] = list()
+    debug_agents_opts = dict()
+
+    if args.debug_agents:
+        debug_agents_opts = {
+            "msg_preprocess_callback": preprocess_messages_logging,
+            "msg_preprocess_kwargs": {"agent_id": "hunt-planner"},
+            "msg_postprocess_callback": postprocess_messages_logging,
+            "msg_postprocess_kwargs": {"agent_id": "hunt-planner"},
+        }
+
     while True:
         # Run the hypothesizer asynchronously
         data_sources = asyncio.run(
@@ -189,10 +204,7 @@ def main() -> None:
                 local_context=local_context or "",
                 verbose=args.verbose,
                 previous_run=messages,
-                msg_preprocess_callback=preprocess_messages_logging,
-                msg_preprocess_kwargs={"agent_id": "hunt-planner"},
-                msg_postprocess_callback=postprocess_messages_logging,
-                msg_postprocess_kwargs={"agent_id": "hunt-planner"},
+                **debug_agents_opts,
             )
         )
 

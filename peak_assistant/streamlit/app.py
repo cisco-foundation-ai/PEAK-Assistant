@@ -156,13 +156,12 @@ if "code" in query_params and "state" in query_params:
         logger.debug(f"Received state: {state}")
         logger.debug(f"Available OAuth states: {[k for k in st.session_state.keys() if k.startswith('oauth_state_')]}")
 
-# Read the local context file if it's not already in the session state.
+# Initialize local context for this user session.
+#
+# Do not auto-load server-side files into every session because this can
+# disclose local context through downstream LLM prompts.
 if "local_context" not in st.session_state:
-    # Find and load our local context file (used for the agents)
-    with open("context.txt", "r", encoding="utf-8") as file:
-        local_context = file.read()
-
-    st.session_state["local_context"] = local_context
+    st.session_state["local_context"] = ""
 
 # Use the full page instead of a narrow central column
 st.set_page_config(
@@ -351,10 +350,10 @@ with data_discovery_tab:
         if st.session_state["last_hypothesis_for_data_discovery"] != current_hypothesis:
             st.session_state["last_hypothesis_for_data_discovery"] = current_hypothesis
             # Clear the data sources document to show run button
-            if "Data Sources_document" in st.session_state:
-                del st.session_state["Data Sources_document"]
-            if "Data Sources_messages" in st.session_state:
-                del st.session_state["Data Sources_messages"]
+            if "Discovery_document" in st.session_state:
+                del st.session_state["Discovery_document"]
+            if "Discovery_messages" in st.session_state:
+                del st.session_state["Discovery_messages"]
         
         peak_assistant_chat(
             title="Data Discovery",

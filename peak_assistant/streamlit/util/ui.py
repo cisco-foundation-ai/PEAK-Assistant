@@ -37,7 +37,7 @@ def peak_assistant_chat(
     allow_upload: bool = False,
     agent_runner: Callable = None,
     run_button_label: str = None,
-    debug_agents: bool = True,
+    debug_agents: bool = False,
 ):
     """
     Creates a two-column UI with a chat history and a document editor.
