@@ -21,7 +21,8 @@
 # SPDX-License-Identifier: MIT
 
 from typing import List, Dict, Any, Optional, Tuple
-from autogen_agentchat.messages import TextMessage, UserMessage
+from autogen_agentchat.messages import TextMessage
+from autogen_core.models import UserMessage
 import streamlit as st
 import hashlib
 import html
