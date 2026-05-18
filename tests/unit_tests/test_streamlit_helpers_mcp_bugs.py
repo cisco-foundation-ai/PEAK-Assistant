@@ -24,7 +24,7 @@
 Tests for Streamlit helpers MCP configuration bugs.
 
 Bug 1: load_mcp_server_configs() does not interpolate ${ENV_VAR} patterns.
-Bug 2: test_mcp_connection() does not include system env vars in subprocess.
+Bug 2: test_mcp_connection() leaks full process env to subprocesses.
 """
 
 import json
@@ -139,12 +139,13 @@ class TestLoadMcpServerConfigsInterpolation:
 
 
 class TestMcpConnectionSubprocessEnv:
-    """Bug 2: test_mcp_connection() should pass full system env to subprocess"""
+    """Bug 2: test_mcp_connection() should avoid leaking full process env"""
 
     @pytest.mark.asyncio
     async def test_subprocess_env_includes_system_path(self, monkeypatch):
-        """StdioServerParams.env should contain both custom and system env vars"""
+        """StdioServerParams.env should contain custom env and safe default vars"""
         monkeypatch.setenv("PATH", "/usr/bin:/usr/local/bin")
+        monkeypatch.setenv("UNRELATED_OAUTH_CLIENT_SECRET", "oauth-secret-not-for-mcp")
 
         config = MCPServerConfig(
             name="test-server",
@@ -175,11 +176,13 @@ class TestMcpConnectionSubprocessEnv:
         assert params.env["CUSTOM_KEY"] == "custom_val"
         assert "PATH" in params.env
         assert params.env["PATH"] == "/usr/bin:/usr/local/bin"
+        assert "UNRELATED_OAUTH_CLIENT_SECRET" not in params.env
 
     @pytest.mark.asyncio
-    async def test_subprocess_env_with_no_config_env_gets_system_env(self, monkeypatch):
-        """Even with env=None in config, subprocess should get system env"""
+    async def test_subprocess_env_with_no_config_env_gets_safe_default_env(self, monkeypatch):
+        """Even with env=None in config, subprocess should only get safe defaults"""
         monkeypatch.setenv("PATH", "/usr/bin:/usr/local/bin")
+        monkeypatch.setenv("PEAK_GLOBAL_SECRET", "global-secret-not-for-mcp")
 
         config = MCPServerConfig(
             name="test-server",
@@ -206,3 +209,5 @@ class TestMcpConnectionSubprocessEnv:
         assert success is True
         params = captured_params["server_params"]
         assert "PATH" in params.env
+        assert params.env["PATH"] == "/usr/bin:/usr/local/bin"
+        assert "PEAK_GLOBAL_SECRET" not in params.env

@@ -23,7 +23,6 @@
 from typing import List, Dict, Any, Optional, Tuple
 from autogen_agentchat.messages import TextMessage, UserMessage
 import streamlit as st
-import hashlib
 import html
 import json
 import os
@@ -31,7 +30,7 @@ import secrets
 import tempfile
 import time
 import logging
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse
 from pathlib import Path
 
 # Import MCP configuration classes from centralized location
@@ -53,6 +52,39 @@ SENSITIVE_AUTH_FIELDS = {
     "api_key",
     "token",
 }
+
+MCP_SUBPROCESS_DEFAULT_ENV_VARS = (
+    "PATH",
+    "HOME",
+    "USER",
+    "LOGNAME",
+    "SHELL",
+    "TMPDIR",
+    "TEMP",
+    "TMP",
+    "SystemRoot",
+    "COMSPEC",
+    "PATHEXT",
+)
+
+
+def build_mcp_subprocess_env(server_env: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+    """Build a minimal environment for stdio MCP subprocesses.
+
+    Streamlit loads .env secrets into the process environment, so copying all of
+    os.environ into test subprocesses can expose unrelated LLM API keys, OAuth
+    secrets, and other PEAK credentials to untrusted MCP packages. Keep only the
+    small set of platform defaults needed to locate and run local commands, then
+    add the explicit per-server environment from mcp_servers.json.
+    """
+    env = {
+        key: os.environ[key]
+        for key in MCP_SUBPROCESS_DEFAULT_ENV_VARS
+        if key in os.environ
+    }
+    if server_env:
+        env.update(server_env)
+    return env
 
 
 def validate_and_escape_oauth_url(url: str) -> Optional[str]:
@@ -725,10 +757,8 @@ async def test_mcp_connection(server_name: str, server_config: MCPServerConfig) 
             try:
                 from autogen_ext.tools.mcp import McpWorkbench, StdioServerParams
                 
-                # Build complete subprocess environment (mirrors CLI in mcp_config.py)
-                env = os.environ.copy()
-                if server_config.env:
-                    env.update(server_config.env)
+                # Build a minimal subprocess environment plus explicit server env.
+                env = build_mcp_subprocess_env(server_config.env)
 
                 server_params = StdioServerParams(
                     command=server_config.command,
@@ -1147,7 +1177,7 @@ def get_agent_config_data() -> List[Dict[str, str]]:
                 try:
                     provider_config = loader.get_provider_config(provider_name)
                     provider_type = provider_config["type"]
-                except:
+                except Exception:
                     provider_type = "unknown"
                 
                 agent_data.append({
